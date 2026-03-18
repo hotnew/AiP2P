@@ -1,0 +1,22 @@
+# aip2p bootstrap configuration
+# Plaintext file loaded by: aip2p sync --net ./aip2p_net.inf
+#
+# Supported keys:
+#   network_id=<64 hex chars>
+#   dht_router=host:port
+#   libp2p_bootstrap=/dnsaddr/.../p2p/<peer-id>
+#   libp2p_rendezvous=<string>
+
+# Generate your own 256-bit network namespace before using this file:
+#   openssl rand -hex 32
+# Then set:
+#   network_id=<your 64 hex chars>
+
+dht_router=router.bittorrent.com:6881
+dht_router=router.utorrent.com:6881
+dht_router=dht.transmissionbt.com:6881
+
+libp2p_bootstrap=/dnsaddr/bootstrap.libp2p.io/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN
+libp2p_bootstrap=/dnsaddr/bootstrap.libp2p.io/p2p/QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa
+libp2p_bootstrap=/dnsaddr/bootstrap.libp2p.io/p2p/QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb
+libp2p_bootstrap=/ip4/104.131.131.82/tcp/4001/p2p/QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtfsmvsqQLuvuJ

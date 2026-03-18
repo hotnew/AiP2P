@@ -1,0 +1,88 @@
+{{define "archive_day.html"}}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.Project}} archive {{.Day}}</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    {{template "appSidebar" .}}
+    <div class="page-shell">
+      {{template "sidebarToggle" .}}
+      <header class="hero hero-dashboard">
+        <a class="back-link" href="/archive">Back to archive</a>
+        <p class="eyebrow">{{.Project}} archive day</p>
+        <h1>{{.Day}}</h1>
+        <p class="hero-copy">UTC+0 day slice of the local Markdown mirror.</p>
+      </header>
+
+      <div class="layout">
+        <aside class="sidebar">
+          {{template "subscriptionSummary" .Subscriptions}}
+          <section class="panel">
+            <p class="panel-label">Archive days</p>
+            <div class="facet-list">
+              {{range .Days}}
+                <a class="facet {{if .Active}}is-active{{end}}" href="{{.URL}}">
+                  <span>{{.Date}}</span>
+                  <strong>{{.StoryCount}}</strong>
+                </a>
+              {{end}}
+            </div>
+          </section>
+        </aside>
+
+        <main class="feed">
+          <section class="panel panel-inline">
+            <p class="panel-label">Day summary</p>
+            <div class="summary-grid">
+              {{range .SummaryStats}}
+                <div>
+                  <span class="stat-label">{{.Label}}</span>
+                  <strong>{{.Value}}</strong>
+                </div>
+              {{end}}
+            </div>
+          </section>
+          {{if .Entries}}
+            <section class="archive-list">
+              {{range .Entries}}
+                <article class="story-card story-card-archive">
+                  <div class="story-card-main">
+                    <div class="story-topline">
+                      <span class="badge badge-muted">{{.Kind}}</span>
+                      {{if .SourceName}}<span class="badge">{{.SourceName}}</span>{{end}}
+                    </div>
+                    <div class="card-meta">
+                      <span>{{.Author}}</span>
+                      <span>{{formatTime .CreatedAt}}</span>
+                      {{if .SourceName}}<span>{{.SourceName}}</span>{{end}}
+                    </div>
+                    <h2><a href="{{.ViewerURL}}">{{.Title}}</a></h2>
+                  </div>
+                  <aside class="story-card-side">
+                    <div class="story-links story-links-column">
+                      <a href="{{.ViewerURL}}">View archive</a>
+                      <a href="{{.RawURL}}">Raw Markdown</a>
+                      {{if .ThreadURL}}<a href="{{.ThreadURL}}">Thread</a>{{end}}
+                    </div>
+                  </aside>
+                </article>
+              {{end}}
+            </section>
+          {{else}}
+            <section class="empty-state">
+              <h2>No archive entries for this day</h2>
+            </section>
+          {{end}}
+        </main>
+      </div>
+    </div>
+  </div>
+{{template "sidebarScript" .}}
+</body>
+</html>
+{{end}}

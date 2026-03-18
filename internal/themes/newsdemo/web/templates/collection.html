@@ -1,0 +1,132 @@
+{{define "collection.html"}}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.Kind}}: {{.Name}}</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    {{template "appSidebar" .}}
+    <div class="page-shell">
+      {{template "sidebarToggle" .}}
+      <header class="hero hero-dashboard">
+        <a class="back-link" href="{{.DirectoryURL}}">Back to {{.Kind | printf "%ss"}}</a>
+        <p class="eyebrow">{{.Project}} {{.Kind}}</p>
+        <div class="hero-heading">
+          <div>
+            <h1>{{compactIdentity .Name}}</h1>
+            {{if isPublicKeyish .Name}}
+              <details class="identity-reveal identity-reveal-hero">
+                <summary>View full key</summary>
+                <div class="identity-reveal-body">
+                  <code class="identity-code">{{.Name}}</code>
+                  <button class="button-link button-link-muted identity-copy-button" type="button" data-copy-text="{{.Name}}">Copy</button>
+                </div>
+              </details>
+            {{end}}
+            <p class="hero-copy">This view narrows the local bundle index to a single {{lower .Kind}} while keeping related replies and reactions visible.</p>
+          </div>
+          <div class="hero-actions">
+            <a class="button-link button-link-muted" href="{{.APIPath}}">JSON API</a>
+            {{if .ExternalURL}}<a class="button-link" href="{{.ExternalURL}}" target="_blank" rel="noreferrer">Open source site</a>{{end}}
+          </div>
+        </div>
+        <div class="hero-stats hero-stats-wide">
+          <div class="hero-stat-card">
+            <span class="stat-label">Indexed in scope</span>
+            <strong>{{.TotalPostCount}}</strong>
+          </div>
+          <div class="hero-stat-card">
+            <span class="stat-label">Snapshot</span>
+            <strong>{{formatTime .Now}}</strong>
+          </div>
+        </div>
+        <form class="search-bar" method="get" action="{{.Path}}">
+          <input type="search" name="q" value="{{.Options.Query}}" placeholder="Search within {{compactIdentity .Name}}">
+          {{if .Options.Channel}}<input type="hidden" name="channel" value="{{.Options.Channel}}">{{end}}
+          {{if .Options.Sort}}<input type="hidden" name="sort" value="{{.Options.Sort}}">{{end}}
+          {{if .Options.Window}}<input type="hidden" name="window" value="{{.Options.Window}}">{{end}}
+          {{if gt .Options.PageSize 0}}<input type="hidden" name="page_size" value="{{.Options.PageSize}}">{{end}}
+          <button type="submit">Search</button>
+        </form>
+      </header>
+
+      <div class="layout">
+        <aside class="sidebar">
+          <section class="panel">
+            <p class="panel-label">{{.SideLabel}}</p>
+            <div class="facet-list">
+              {{range .SideFacets}}
+                <a class="facet {{if .Active}}is-active{{end}}" href="{{.URL}}">
+                  <span>{{.Name}}</span>
+                  {{if gt .Count 0}}<strong>{{.Count}}</strong>{{end}}
+                </a>
+              {{end}}
+            </div>
+          </section>
+
+          <section class="panel">
+            <p class="panel-label">Time range</p>
+            <div class="facet-list">
+              {{range .WindowOptions}}
+                <a class="facet {{if .Active}}is-active{{end}}" href="{{.URL}}">{{.Name}}</a>
+              {{end}}
+            </div>
+          </section>
+
+          <section class="panel">
+            <p class="panel-label">Sort</p>
+            <div class="facet-list">
+              {{range .SortOptions}}
+                <a class="facet {{if .Active}}is-active{{end}}" href="{{.URL}}">{{.Name}}</a>
+              {{end}}
+            </div>
+          </section>
+
+        </aside>
+
+        <main class="feed">
+          <section class="panel panel-inline">
+            <p class="panel-label">Current slice</p>
+            <div class="summary-grid">
+              {{range .SummaryStats}}
+                <div>
+                  <span class="stat-label">{{.Label}}</span>
+                  <strong>{{.Value}}</strong>
+                </div>
+              {{end}}
+            </div>
+            {{if .ActiveFilters}}
+              <div class="active-filters">
+                {{range .ActiveFilters}}
+                  <a class="filter-chip" href="{{.URL}}">{{.Label}}</a>
+                {{end}}
+                <a class="filter-chip clear-chip" href="{{.Path}}">Clear all</a>
+              </div>
+            {{end}}
+          </section>
+          {{if .Posts}}
+            {{template "paginationControls" .}}
+            <section class="story-list">
+              {{range .Posts}}
+                {{template "postCard" .}}
+              {{end}}
+            </section>
+            {{template "paginationControls" .}}
+          {{else}}
+            <section class="empty-state">
+              <h2>No matching stories in this scope</h2>
+              <p>Adjust the query, time range, or channel facets and try again.</p>
+            </section>
+          {{end}}
+        </main>
+      </div>
+    </div>
+  </div>
+{{template "sidebarScript" .}}
+</body>
+</html>
+{{end}}

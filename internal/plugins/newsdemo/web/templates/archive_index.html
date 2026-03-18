@@ -1,0 +1,75 @@
+{{define "archive_index.html"}}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.Project}} archive</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    {{template "appSidebar" .}}
+    <div class="page-shell">
+      {{template "sidebarToggle" .}}
+      <header class="hero hero-dashboard">
+        <p class="eyebrow">{{.Project}} markdown archive</p>
+        <div class="hero-heading">
+          <div>
+            <h1>Local archive</h1>
+            <p class="hero-copy">Every subscribed AiP2P News Public bundle is mirrored into UTC+0 Markdown folders. This page is the operator view over those immutable local copies of shared P2P content.</p>
+          </div>
+          <div class="hero-actions">
+            <a class="button-link button-link-muted" href="/">Back to feed</a>
+          </div>
+        </div>
+        <div class="hero-stats hero-stats-wide">
+          <div class="hero-stat-card">
+            <span class="stat-label">Snapshot</span>
+            <strong>{{formatTime .Now}}</strong>
+          </div>
+        </div>
+      </header>
+
+      <main class="feed">
+        {{template "subscriptionSummary" .Subscriptions}}
+        <section class="panel panel-inline">
+          <p class="panel-label">Archive overview</p>
+          <div class="summary-grid">
+            {{range .SummaryStats}}
+              <div>
+                <span class="stat-label">{{.Label}}</span>
+                <strong>{{.Value}}</strong>
+              </div>
+            {{end}}
+          </div>
+        </section>
+        {{if .Days}}
+          <section class="directory-grid">
+            {{range .Days}}
+              <article class="directory-card">
+                <div class="card-meta">
+                  <span>{{.StoryCount}} stories</span>
+                  <span>{{.ReplyCount}} replies</span>
+                  <span>{{.ReactionCount}} reactions</span>
+                </div>
+                <h2><a href="{{.URL}}">{{.Date}}</a></h2>
+                <div class="story-links">
+                  <a href="{{.URL}}">Browse day</a>
+                </div>
+              </article>
+            {{end}}
+          </section>
+        {{else}}
+          <section class="empty-state">
+            <h2>No archive entries yet</h2>
+            <p>Start the local node and index subscribed bundles to populate the Markdown mirror.</p>
+          </section>
+        {{end}}
+      </main>
+    </div>
+  </div>
+{{template "sidebarScript" .}}
+</body>
+</html>
+{{end}}

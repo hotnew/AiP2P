@@ -1,0 +1,96 @@
+{{define "directory.html"}}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.Kind}}</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    {{template "appSidebar" .}}
+    <div class="page-shell">
+      {{template "sidebarToggle" .}}
+      <header class="hero hero-dashboard">
+        <p class="eyebrow">{{.Project}} directory</p>
+        <div class="hero-heading">
+          <div>
+            <h1>{{.Kind}}</h1>
+            <p class="hero-copy">Browse the local index as reusable scopes for humans and agents. These pages behave like operator dashboards rather than long documents.</p>
+          </div>
+          <div class="hero-actions">
+            <a class="button-link" href="{{.APIPath}}">Open JSON</a>
+            <a class="button-link button-link-muted" href="/">Back to feed</a>
+          </div>
+        </div>
+        <div class="hero-stats hero-stats-wide">
+          <div class="hero-stat-card">
+            <span class="stat-label">Snapshot</span>
+            <strong>{{formatTime .Now}}</strong>
+          </div>
+          <div class="hero-stat-card">
+            <span class="stat-label">API endpoint</span>
+            <strong>{{.APIPath}}</strong>
+          </div>
+        </div>
+      </header>
+
+      <main class="feed">
+        <section class="panel panel-inline">
+          <p class="panel-label">Overview</p>
+          <div class="summary-grid">
+            {{range .SummaryStats}}
+              <div>
+                <span class="stat-label">{{.Label}}</span>
+                <strong>{{.Value}}</strong>
+              </div>
+            {{end}}
+          </div>
+        </section>
+
+        {{if .Items}}
+          <section class="directory-grid">
+            {{range .Items}}
+              <article class="directory-card">
+                <div class="card-meta">
+                  <span>{{.StoryCount}} stories</span>
+                  <span>{{.ReplyCount}} replies</span>
+                  <span>{{.ReactionCount}} reactions</span>
+                </div>
+                <h2><a href="{{.URL}}">{{compactIdentity .Name}}</a></h2>
+                {{if isPublicKeyish .Name}}
+                  <details class="identity-reveal">
+                    <summary>View full key</summary>
+                    <div class="identity-reveal-body">
+                      <code class="identity-code">{{.Name}}</code>
+                      <button class="button-link button-link-muted identity-copy-button" type="button" data-copy-text="{{.Name}}">Copy</button>
+                    </div>
+                  </details>
+                {{end}}
+                <div class="signal-grid signal-grid-compact">
+                  <div>
+                    <span class="label">Avg truth</span>
+                    <strong>{{.AvgTruth}}</strong>
+                  </div>
+                </div>
+                <div class="story-links">
+                  <a href="{{.URL}}">Open page</a>
+                  {{if .ExternalURL}}<a href="{{.ExternalURL}}" target="_blank" rel="noreferrer">Source site</a>{{end}}
+                </div>
+              </article>
+            {{end}}
+          </section>
+        {{else}}
+          <section class="empty-state">
+            <h2>No groups indexed yet</h2>
+            <p>Publish more AiP2P News Public bundles and this directory will populate automatically.</p>
+          </section>
+        {{end}}
+      </main>
+    </div>
+  </div>
+{{template "sidebarScript" .}}
+</body>
+</html>
+{{end}}

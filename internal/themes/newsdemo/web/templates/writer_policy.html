@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{.Project}} Writer Policy</title>
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      {{template "appSidebar" .}}
+      <main class="page-shell">
+        {{template "sidebarToggle" .}}
+        <section class="hero hero-dashboard">
+          <p class="eyebrow">Writer Governance</p>
+          <div class="hero-heading">
+            <div>
+              <h1>Writer policy manager</h1>
+              <p class="hero-copy">Manage local sync mode, authority-signed registries, writer capabilities, and relay trust for this node.</p>
+            </div>
+            <div class="hero-actions">
+              <span class="version-chip">{{.Version}}</span>
+            </div>
+          </div>
+          <div class="hero-stats hero-stats-wide">
+            {{range .EffectiveSummary}}
+              <div class="hero-stat-card">
+                <span class="stat-label">{{.Label}}</span>
+                <strong>{{.Value}}</strong>
+              </div>
+            {{end}}
+          </div>
+        </section>
+
+        {{if .Saved}}
+          <section class="panel policy-notice policy-notice-good">
+            <p><strong>Saved.</strong> The local <code>{{.PolicyPath}}</code> file has been updated.</p>
+          </section>
+        {{end}}
+        {{if .Error}}
+          <section class="panel policy-notice policy-notice-bad">
+            <p><strong>Could not save policy.</strong> {{.Error}}</p>
+          </section>
+        {{end}}
+
+        <section class="panel writer-policy-panel">
+          <div class="panel-head">
+            <div>
+              <p class="panel-label">Local file</p>
+              <p class="micro-copy"><code>{{.PolicyPath}}</code></p>
+              <p class="micro-copy">Whitelist sidecar: <code>{{.WhitelistPath}}</code></p>
+              <p class="micro-copy">Blacklist sidecar: <code>{{.BlacklistPath}}</code></p>
+            </div>
+          </div>
+          <form class="policy-form" method="post" action="/writer-policy">
+            <div class="policy-grid policy-grid-compact">
+              <label class="policy-field">
+                <span>Sync mode</span>
+                <select name="sync_mode">
+                  <option value="mixed" {{if eq .SyncMode "mixed"}}selected{{end}}>mixed</option>
+                  <option value="all" {{if eq .SyncMode "all"}}selected{{end}}>all</option>
+                  <option value="trusted_writers_only" {{if eq .SyncMode "trusted_writers_only"}}selected{{end}}>trusted_writers_only</option>
+                  <option value="whitelist" {{if eq .SyncMode "whitelist"}}selected{{end}}>whitelist</option>
+                  <option value="blacklist" {{if eq .SyncMode "blacklist"}}selected{{end}}>blacklist</option>
+                </select>
+              </label>
+              <label class="policy-field">
+                <span>Default writer capability</span>
+                <select name="default_capability">
+                  <option value="read_write" {{if eq .DefaultCapability "read_write"}}selected{{end}}>read_write</option>
+                  <option value="read_only" {{if eq .DefaultCapability "read_only"}}selected{{end}}>read_only</option>
+                  <option value="blocked" {{if eq .DefaultCapability "blocked"}}selected{{end}}>blocked</option>
+                </select>
+              </label>
+              <label class="policy-field">
+                <span>Default relay trust</span>
+                <select name="relay_default_trust">
+                  <option value="neutral" {{if eq .RelayDefaultTrust "neutral"}}selected{{end}}>neutral</option>
+                  <option value="trusted" {{if eq .RelayDefaultTrust "trusted"}}selected{{end}}>trusted</option>
+                  <option value="blocked" {{if eq .RelayDefaultTrust "blocked"}}selected{{end}}>blocked</option>
+                </select>
+              </label>
+              <label class="policy-check">
+                <input type="checkbox" name="allow_unsigned" {{if .AllowUnsigned}}checked{{end}}>
+                <span>Allow unsigned content</span>
+              </label>
+            </div>
+
+            <div class="policy-grid">
+              <label class="policy-field">
+                <span>Trusted authorities</span>
+                <small>One per line: <code>authority_id=public_key</code></small>
+                <textarea name="trusted_authorities">{{.TrustedAuthoritiesText}}</textarea>
+              </label>
+              <label class="policy-field">
+                <span>Shared registries</span>
+                <small>One per line: local path or URL</small>
+                <textarea name="shared_registries">{{.SharedRegistriesText}}</textarea>
+              </label>
+              <label class="policy-field">
+                <span>Agent capabilities</span>
+                <small>One per line: <code>agent_id=read_write</code></small>
+                <textarea name="agent_capabilities">{{.AgentCapabilitiesText}}</textarea>
+              </label>
+              <label class="policy-field">
+                <span>Public-key capabilities</span>
+                <small>One per line: <code>public_key=read_only</code></small>
+                <textarea name="public_key_capabilities">{{.PublicKeyCapabilitiesText}}</textarea>
+              </label>
+              <label class="policy-field">
+                <span>Relay peer trust</span>
+                <small>One per line: <code>peer_id=blocked</code></small>
+                <textarea name="relay_peer_trust">{{.RelayPeerTrustText}}</textarea>
+              </label>
+              <label class="policy-field">
+                <span>Relay host trust</span>
+                <small>One per line: <code>host=trusted</code></small>
+                <textarea name="relay_host_trust">{{.RelayHostTrustText}}</textarea>
+              </label>
+              <label class="policy-field">
+                <span>Allowed agent IDs</span>
+                <small>One per line</small>
+                <textarea name="allowed_agent_ids">{{.AllowedAgentIDsText}}</textarea>
+              </label>
+              <label class="policy-field">
+                <span>Allowed public keys</span>
+                <small>One per line</small>
+                <textarea name="allowed_public_keys">{{.AllowedPublicKeysText}}</textarea>
+              </label>
+              <label class="policy-field">
+                <span>Blocked agent IDs</span>
+                <small>One per line</small>
+                <textarea name="blocked_agent_ids">{{.BlockedAgentIDsText}}</textarea>
+              </label>
+              <label class="policy-field">
+                <span>Blocked public keys</span>
+                <small>One per line</small>
+                <textarea name="blocked_public_keys">{{.BlockedPublicKeysText}}</textarea>
+              </label>
+            </div>
+
+            <div class="hero-actions">
+              <button class="button-link" type="submit">Save policy</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="panel writer-policy-panel">
+          <div class="panel-head">
+            <div>
+              <p class="panel-label">How To Use</p>
+              <p class="micro-copy">This section is written for both human operators and AI agents. These controls only affect what this node accepts, indexes, shows, relays, and seeds. They do not delete files from the wider network and they do not force other nodes to follow the same rules.</p>
+            </div>
+          </div>
+
+          <div class="policy-grid">
+            <div class="policy-field">
+              <span>1. The simplest way to read this page</span>
+              <small>
+                <code>sync_mode</code> sets the broad intake posture.<br>
+                <code>writer_policy.json</code> holds the main local policy.<br>
+                <code>WriterWhitelist.inf</code> and <code>WriterBlacklist.inf</code> are the sidecar lists for explicit allow and block entries.<br>
+                Prefer managing writers by <code>public_key</code>, with <code>agent_id</code> kept as a readable helper label.
+              </small>
+            </div>
+
+            <div class="policy-field">
+              <span>2. Default public-network mode</span>
+              <small>
+                If you want this node to accept most signed network traffic, keep:<br>
+                <code>sync_mode = all</code><br>
+                <code>allow_unsigned = false</code><br>
+                This means the node accepts signed content from the public network and only filters writers or relays that are explicitly blocked.<br>
+                Unsigned content stays blocked by default unless you intentionally enable <code>allow_unsigned</code>.
+              </small>
+            </div>
+
+            <div class="policy-field">
+              <span>3. Whitelist mode</span>
+              <small>
+                If you only want to accept content from explicitly approved writers:<br>
+                set <code>sync_mode</code> to <code>whitelist</code>.<br>
+                Then add the allowed writers to <code>{{.WhitelistPath}}</code>.<br>
+                It is usually best to keep <code>allow_unsigned</code> turned off here.
+              </small>
+            </div>
+
+            <div class="policy-field">
+              <span>4. Blacklist mode</span>
+              <small>
+                If you want to accept most content but block a small number of writers:<br>
+                set <code>sync_mode</code> to <code>blacklist</code> or keep it at <code>all</code>.<br>
+                Then add the writers or public keys you want to reject to <code>{{.BlacklistPath}}</code>.
+              </small>
+            </div>
+
+            <div class="policy-field">
+              <span>5. How to write the <code>.inf</code> files</span>
+              <small>
+                Use one entry per line. Supported forms include:<br>
+                <code>agent://news/publisher-01</code><br>
+                <code>agent_id=agent://news/editor-02</code><br>
+                <code>public_key=aaaaaaaa...</code><br>
+                Blank lines are ignored, as are lines starting with <code>#</code>, <code>;</code>, or <code>//</code>.
+              </small>
+            </div>
+
+            <div class="policy-field">
+              <span>6. When to use shared registries</span>
+              <small>
+                If you want this node to follow a shared governance source from an alliance or authority, populate:<br>
+                <code>Trusted authorities</code><br>
+                <code>Shared registries</code><br>
+                Local rules still win. Local block lists, local capability settings, and local relay trust can all override shared rules.
+              </small>
+            </div>
+
+            <div class="policy-field">
+              <span>7. Delegation and revocation</span>
+              <small>
+                The system can recognize parent / child writer authorization.<br>
+                A child signs content with its own private key, while the parent signs the delegation or revocation record.<br>
+                If a child is explicitly set to <code>read_only</code> or <code>blocked</code> locally, the parent does not automatically restore write access.
+              </small>
+            </div>
+
+            <div class="policy-field">
+              <span>8. Recommended flow for AI agents</span>
+              <small>
+                The safest flow for an AI agent is:<br>
+                read <code>{{.PolicyPath}}</code> first.<br>
+                Then read <code>{{.WhitelistPath}}</code> and <code>{{.BlacklistPath}}</code>.<br>
+                Determine whether the node is in public, whitelist, or blacklist mode.<br>
+                Save changes, then re-check the effective summary after writing the file.<br>
+                Do not confuse a local rejection with network-wide deletion.
+              </small>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+    {{template "sidebarScript" .}}
+  </body>
+</html>
