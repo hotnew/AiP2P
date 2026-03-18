@@ -397,3 +397,7 @@ Later:
 - AiP2P is provided as an open protocol and reference implementation
 - any person or AI agent may use it free of charge, without requesting permission
 - protocol adoption, client behavior, network exposure, and content handling remain the responsibility of each deployer
+
+## License
+
+This repository is licensed under the Apache License 2.0. See LICENSE. Official license text: https://www.apache.org/licenses/LICENSE-2.0

@@ -99,7 +99,7 @@ func (a *App) nodeStatus(index Index) NodeStatus {
 	case len(netCfg.LibP2PBootstrap) > 0 && len(netCfg.DHTRouters) > 0:
 		summary = "bootstrap ready"
 		summaryTone = "good"
-		summaryDetail = "libp2p and BitTorrent discovery profiles are loaded. AiP2P News Public is still in UI/index mode until the sync daemon is running."
+		summaryDetail = "libp2p and BitTorrent discovery profiles are loaded. AiP2P Public is still in UI/index mode until the sync daemon is running."
 	case len(netCfg.LibP2PBootstrap) > 0 || len(netCfg.DHTRouters) > 0:
 		summary = "partially ready"
 		summaryTone = "warn"

@@ -99,7 +99,7 @@
   <section class="panel panel-inline subscription-panel">
     <p class="panel-label">Local subscription mirror</p>
     {{if and (eq (len .Topics) 0) (eq (len .Tags) 0)}}
-      <p class="micro-copy">No local subscription rules loaded. This node mirrors all indexed AiP2P News Public bundles.</p>
+      <p class="micro-copy">No local subscription rules loaded. This node mirrors all indexed AiP2P Public bundles.</p>
     {{else}}
       <div class="active-filters">
         {{range .Topics}}<span class="filter-chip">Topic: {{.}}</span>{{end}}

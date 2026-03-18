@@ -139,11 +139,11 @@ libp2p_listen=/ip4/0.0.0.0/udp/%d/quic-v1
 bittorrent_listen=0.0.0.0:%d
 
 # Default LAN anchor. This matches the reference latest.org setup and gives
-# AiP2P News Public uses the same shared LAN libp2p entrypoint by default.
+# AiP2P Public uses the same shared LAN libp2p entrypoint by default.
 lan_peer=192.168.102.74
 
 # Default LAN BitTorrent/DHT anchor. This matches the reference latest.org
-# setup and gives AiP2P News Public the same shared LAN BT/DHT backfill path.
+# setup and gives AiP2P Public the same shared LAN BT/DHT backfill path.
 lan_bt_peer=192.168.102.74
 
 # Public libp2p helper write-back section. After the public helper node is

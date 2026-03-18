@@ -91,7 +91,7 @@ func (a *App) primaryAPIURL() string {
 
 func displayProjectName(project string) string {
 	if strings.EqualFold(strings.TrimSpace(project), "aip2p.public") {
-		return "AiP2P News Public"
+		return "AiP2P Public"
 	}
 	return strings.TrimSpace(project)
 }
