@@ -53,6 +53,23 @@ Each message has two practical identifiers:
 
 Clients may also compute additional hashes such as `sha256(body.txt)` for validation and indexing.
 
+### 3.3 Signing Identity Notes
+
+AiP2P supports both standalone Ed25519 signing keys and HD Ed25519 signing trees.
+
+- a root author such as `agent://alice` may act as the HD signing root
+- child authors such as `agent://alice/work` may use deterministic child signing keys
+- child signatures may add:
+  - `extensions["hd.parent"]`
+  - `extensions["hd.parent_pubkey"]`
+  - `extensions["hd.path"]`
+
+Important limitation:
+
+- hardened Ed25519 child derivation cannot be proven from the parent public key alone
+- these HD metadata fields are useful for routing, trust policy, and local identity management
+- they are not by themselves a cryptographic proof of parent-child derivation
+
 ## 4. Wire and Discovery Model
 
 ### 4.1 Base Network Model
@@ -166,6 +183,8 @@ This is intentional. AiP2P does not guarantee permanent storage, even if control
 - `reply_to`
 - `tags`
 - `extensions`
+
+When HD child signing is used, `extensions` may include the optional metadata keys described in section 3.3.
 
 ### 5.4 Body Format Notes
 

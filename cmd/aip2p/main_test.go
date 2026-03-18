@@ -213,6 +213,173 @@ func TestRunPublishWritesSignedMessage(t *testing.T) {
 	}
 }
 
+func TestRunIdentityCreateHDAndDerive(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	masterPath := filepath.Join(root, "alice.json")
+	childPath := filepath.Join(root, "alice-work.json")
+
+	if err := run([]string{
+		"identity",
+		"create-hd",
+		"--agent-id", "agent://news/root-01",
+		"--author", "agent://alice",
+		"--out", masterPath,
+	}); err != nil {
+		t.Fatalf("run(identity create-hd) error = %v", err)
+	}
+	master, err := aip2p.LoadAgentIdentity(masterPath)
+	if err != nil {
+		t.Fatalf("LoadAgentIdentity(master) error = %v", err)
+	}
+	if !master.HDEnabled {
+		t.Fatal("expected HD master identity")
+	}
+	if master.Mnemonic == "" {
+		t.Fatal("expected mnemonic to be stored in master file")
+	}
+	if master.DerivationPath != "m/0'" {
+		t.Fatalf("master path = %q", master.DerivationPath)
+	}
+
+	if err := run([]string{
+		"identity",
+		"derive",
+		"--identity-file", masterPath,
+		"--author", "agent://alice/work",
+		"--out", childPath,
+	}); err != nil {
+		t.Fatalf("run(identity derive) error = %v", err)
+	}
+	child, err := aip2p.LoadAgentIdentity(childPath)
+	if err != nil {
+		t.Fatalf("LoadAgentIdentity(child) error = %v", err)
+	}
+	if child.Parent != "agent://alice" {
+		t.Fatalf("child parent = %q", child.Parent)
+	}
+	if child.Mnemonic != "" {
+		t.Fatal("expected derived child file to omit mnemonic")
+	}
+	if child.PrivateKey != "" {
+		t.Fatal("expected derived child file to omit private key")
+	}
+	if child.DerivationPath == "" {
+		t.Fatal("expected child derivation path")
+	}
+}
+
+func TestRunPublishWithHDMasterSignsChildAuthor(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	store := filepath.Join(root, "store")
+	if _, err := aip2p.OpenStore(store); err != nil {
+		t.Fatalf("OpenStore error = %v", err)
+	}
+	master, err := aip2p.RecoverHDIdentity(
+		"agent://news/root-01",
+		"agent://alice",
+		"abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+		time.Now().UTC(),
+	)
+	if err != nil {
+		t.Fatalf("RecoverHDIdentity error = %v", err)
+	}
+	identityPath := filepath.Join(root, "alice.json")
+	if err := aip2p.SaveAgentIdentity(identityPath, master); err != nil {
+		t.Fatalf("SaveAgentIdentity error = %v", err)
+	}
+	if err := run([]string{
+		"publish",
+		"--store", store,
+		"--identity-file", identityPath,
+		"--author", "agent://alice/work",
+		"--kind", "post",
+		"--channel", "aip2p.public/world",
+		"--title", "HD child post",
+		"--body", "hello from hd child",
+		"--extensions-json", `{"project":"aip2p.public"}`,
+	}); err != nil {
+		t.Fatalf("run(publish) error = %v", err)
+	}
+	entries, err := os.ReadDir(filepath.Join(store, "data"))
+	if err != nil {
+		t.Fatalf("ReadDir error = %v", err)
+	}
+	msg, _, err := aip2p.LoadMessage(filepath.Join(store, "data", entries[0].Name()))
+	if err != nil {
+		t.Fatalf("LoadMessage error = %v", err)
+	}
+	if msg.Origin == nil {
+		t.Fatal("expected signed origin")
+	}
+	if msg.Origin.PublicKey == master.PublicKey {
+		t.Fatal("expected child public key instead of root public key")
+	}
+	if msg.Extensions["hd.parent"] != "agent://alice" {
+		t.Fatalf("hd.parent = %#v", msg.Extensions["hd.parent"])
+	}
+}
+
+func TestRunIdentityRegistryAddListRemove(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	registryPath := filepath.Join(root, "identity_registry.json")
+
+	if err := run([]string{
+		"identity",
+		"registry",
+		"add",
+		"--registry", registryPath,
+		"--author", "agent://alice",
+		"--pubkey", "aabbcc",
+		"--trust-level", "trusted",
+	}); err != nil {
+		t.Fatalf("run(identity registry add) error = %v", err)
+	}
+
+	registry, err := aip2p.LoadIdentityRegistry(registryPath)
+	if err != nil {
+		t.Fatalf("LoadIdentityRegistry error = %v", err)
+	}
+	entry, ok := registry.Get("agent://alice")
+	if !ok {
+		t.Fatal("expected alice entry in registry")
+	}
+	if entry.TrustLevel != "trusted" {
+		t.Fatalf("trust_level = %q", entry.TrustLevel)
+	}
+
+	if err := run([]string{
+		"identity",
+		"registry",
+		"list",
+		"--registry", registryPath,
+	}); err != nil {
+		t.Fatalf("run(identity registry list) error = %v", err)
+	}
+
+	if err := run([]string{
+		"identity",
+		"registry",
+		"remove",
+		"--registry", registryPath,
+		"--author", "agent://alice",
+	}); err != nil {
+		t.Fatalf("run(identity registry remove) error = %v", err)
+	}
+	registry, err = aip2p.LoadIdentityRegistry(registryPath)
+	if err != nil {
+		t.Fatalf("LoadIdentityRegistry(after remove) error = %v", err)
+	}
+	if _, ok := registry.Get("agent://alice"); ok {
+		t.Fatal("expected alice entry to be removed")
+	}
+}
+
 func writeMainTestFile(t *testing.T, root, rel, content string) {
 	t.Helper()
 	path := filepath.Join(root, rel)

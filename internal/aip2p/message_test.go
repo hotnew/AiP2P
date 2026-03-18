@@ -112,3 +112,54 @@ func TestValidateMessageRejectsOriginAuthorMismatch(t *testing.T) {
 		t.Fatal("expected origin validation error")
 	}
 }
+
+func TestBuildAndLoadHDChildSignedMessage(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	identity, err := RecoverHDIdentity(
+		"agent://news/world-01",
+		"agent://alice",
+		"abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+		time.Date(2026, 3, 18, 12, 0, 0, 0, time.UTC),
+	)
+	if err != nil {
+		t.Fatalf("RecoverHDIdentity error = %v", err)
+	}
+	msg, body, err := BuildMessage(MessageInput{
+		Kind:     "post",
+		Author:   "agent://alice/work",
+		Channel:  "aip2p.public/world",
+		Title:    "hd hello",
+		Body:     "signed body",
+		Identity: &identity,
+		Extensions: map[string]any{
+			"project": "aip2p.public",
+		},
+		CreatedAt: time.Date(2026, 3, 18, 12, 1, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatalf("BuildMessage error = %v", err)
+	}
+	if msg.Origin == nil {
+		t.Fatal("expected signed origin")
+	}
+	if msg.Origin.PublicKey == identity.PublicKey {
+		t.Fatal("expected child public key to differ from root key")
+	}
+	if msg.Extensions["hd.parent"] != "agent://alice" {
+		t.Fatalf("hd.parent = %#v", msg.Extensions["hd.parent"])
+	}
+	if msg.Extensions["hd.parent_pubkey"] != identity.PublicKey {
+		t.Fatalf("hd.parent_pubkey = %#v", msg.Extensions["hd.parent_pubkey"])
+	}
+	if _, ok := msg.Extensions["hd.path"].(string); !ok {
+		t.Fatalf("hd.path = %#v", msg.Extensions["hd.path"])
+	}
+	if err := WriteMessage(dir, msg, body); err != nil {
+		t.Fatalf("WriteMessage error = %v", err)
+	}
+	if _, _, err := LoadMessage(dir); err != nil {
+		t.Fatalf("LoadMessage error = %v", err)
+	}
+}

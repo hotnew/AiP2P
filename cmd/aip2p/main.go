@@ -101,7 +101,9 @@ func runPublish(args []string) error {
 	if strings.TrimSpace(*author) == "" {
 		return errors.New("author is required; set --author or store author in identity-file")
 	}
-	if strings.TrimSpace(identity.Author) != "" && strings.TrimSpace(*author) != strings.TrimSpace(identity.Author) {
+	if strings.TrimSpace(identity.Author) != "" &&
+		strings.TrimSpace(*author) != strings.TrimSpace(identity.Author) &&
+		!(identity.HDEnabled && strings.TrimSpace(identity.Mnemonic) != "") {
 		return errors.New("author does not match identity-file author")
 	}
 
@@ -137,13 +139,39 @@ func runPublish(args []string) error {
 
 func runIdentity(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: aip2p identity init [flags]")
+		return errors.New("usage: aip2p identity <init|create-hd|derive|list|recover> [flags]")
 	}
 	switch args[0] {
 	case "init":
 		return runIdentityInit(args[1:])
+	case "create-hd":
+		return runIdentityCreateHD(args[1:])
+	case "derive":
+		return runIdentityDerive(args[1:])
+	case "list":
+		return runIdentityList(args[1:])
+	case "recover":
+		return runIdentityRecover(args[1:])
+	case "registry":
+		return runIdentityRegistry(args[1:])
 	default:
-		return errors.New("usage: aip2p identity init [flags]")
+		return errors.New("usage: aip2p identity <init|create-hd|derive|list|recover|registry> [flags]")
+	}
+}
+
+func runIdentityRegistry(args []string) error {
+	if len(args) == 0 {
+		return errors.New("usage: aip2p identity registry <add|list|remove> [flags]")
+	}
+	switch args[0] {
+	case "add":
+		return runIdentityRegistryAdd(args[1:])
+	case "list":
+		return runIdentityRegistryList(args[1:])
+	case "remove":
+		return runIdentityRegistryRemove(args[1:])
+	default:
+		return errors.New("usage: aip2p identity registry <add|list|remove> [flags]")
 	}
 }
 
@@ -183,6 +211,241 @@ func runIdentityInit(args []string) error {
 		"public_key": identity.PublicKey,
 		"created_at": identity.CreatedAt,
 		"file":       outputPath,
+	})
+}
+
+func runIdentityCreateHD(args []string) error {
+	fs := flag.NewFlagSet("identity create-hd", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	agentID := fs.String("agent-id", "", "stable agent id")
+	author := fs.String("author", "", "root author for this HD identity")
+	out := fs.String("out", "", "identity file output path; defaults to ~/.aip2p-public/identities/<sanitized-author>.json")
+	force := fs.Bool("force", false, "overwrite output file if it exists")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	outputPath, err := defaultIdentityOutputPath(*author, *out)
+	if err != nil {
+		return err
+	}
+	if !*force {
+		if _, err := os.Stat(outputPath); err == nil {
+			return fmt.Errorf("identity file already exists: %s", outputPath)
+		}
+	}
+	if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil {
+		return err
+	}
+	identity, err := aip2p.NewHDMasterIdentity(*agentID, *author, "", time.Now().UTC())
+	if err != nil {
+		return err
+	}
+	if err := aip2p.SaveAgentIdentity(outputPath, identity); err != nil {
+		return err
+	}
+	return writeJSON(identitySummary(identity, outputPath))
+}
+
+func runIdentityRecover(args []string) error {
+	fs := flag.NewFlagSet("identity recover", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	agentID := fs.String("agent-id", "", "stable agent id")
+	author := fs.String("author", "", "root author for this HD identity")
+	mnemonic := fs.String("mnemonic", "", "BIP39 mnemonic to recover")
+	out := fs.String("out", "", "identity file output path; defaults to ~/.aip2p-public/identities/<sanitized-author>.json")
+	force := fs.Bool("force", false, "overwrite output file if it exists")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	outputPath, err := defaultIdentityOutputPath(*author, *out)
+	if err != nil {
+		return err
+	}
+	if !*force {
+		if _, err := os.Stat(outputPath); err == nil {
+			return fmt.Errorf("identity file already exists: %s", outputPath)
+		}
+	}
+	if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil {
+		return err
+	}
+	identity, err := aip2p.RecoverHDIdentity(*agentID, *author, *mnemonic, time.Now().UTC())
+	if err != nil {
+		return err
+	}
+	if err := aip2p.SaveAgentIdentity(outputPath, identity); err != nil {
+		return err
+	}
+	return writeJSON(identitySummary(identity, outputPath))
+}
+
+func runIdentityDerive(args []string) error {
+	fs := flag.NewFlagSet("identity derive", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	identityFile := fs.String("identity-file", "", "path to the HD master identity JSON file")
+	author := fs.String("author", "", "child author to derive, for example agent://alice/work")
+	out := fs.String("out", "", "child identity metadata output path")
+	force := fs.Bool("force", false, "overwrite output file if it exists")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if strings.TrimSpace(*identityFile) == "" {
+		return errors.New("identity-file is required")
+	}
+	parentIdentity, err := aip2p.LoadAgentIdentity(strings.TrimSpace(*identityFile))
+	if err != nil {
+		return err
+	}
+	childIdentity, err := aip2p.DeriveChildIdentity(parentIdentity, *author, time.Now().UTC())
+	if err != nil {
+		return err
+	}
+	outputPath, err := defaultIdentityOutputPath(childIdentity.Author, *out)
+	if err != nil {
+		return err
+	}
+	if !*force {
+		if _, err := os.Stat(outputPath); err == nil {
+			return fmt.Errorf("identity file already exists: %s", outputPath)
+		}
+	}
+	if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil {
+		return err
+	}
+	if err := aip2p.SaveAgentIdentity(outputPath, childIdentity); err != nil {
+		return err
+	}
+	return writeJSON(identitySummary(childIdentity, outputPath))
+}
+
+func runIdentityList(args []string) error {
+	fs := flag.NewFlagSet("identity list", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	dir := fs.String("dir", "", "identity directory; defaults to ~/.aip2p-public/identities")
+	parent := fs.String("parent", "", "optional root or parent author filter")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	identityDir, err := defaultIdentityDir(*dir)
+	if err != nil {
+		return err
+	}
+	entries, err := os.ReadDir(identityDir)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return writeJSON([]map[string]any{})
+		}
+		return err
+	}
+	items := make([]map[string]any, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+			continue
+		}
+		path := filepath.Join(identityDir, entry.Name())
+		identity, err := aip2p.LoadAgentIdentity(path)
+		if err != nil {
+			continue
+		}
+		if !identityMatchesParentFilter(identity, *parent) {
+			continue
+		}
+		items = append(items, identitySummary(identity, path))
+	}
+	return writeJSON(items)
+}
+
+func runIdentityRegistryAdd(args []string) error {
+	fs := flag.NewFlagSet("identity registry add", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	registryPath := fs.String("registry", "", "registry file path; defaults to ~/.aip2p-public/identity_registry.json")
+	author := fs.String("author", "", "root author to register")
+	pubkey := fs.String("pubkey", "", "master public key")
+	trustLevel := fs.String("trust-level", "known", "trust level: trusted, known, unknown")
+	notes := fs.String("notes", "", "optional notes")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	path, err := defaultIdentityRegistryPath(*registryPath)
+	if err != nil {
+		return err
+	}
+	registry, err := aip2p.LoadIdentityRegistry(path)
+	if err != nil {
+		return err
+	}
+	if err := registry.Add(*author, *pubkey, *trustLevel, *notes, time.Now().UTC()); err != nil {
+		return err
+	}
+	if err := registry.Save(path); err != nil {
+		return err
+	}
+	entry, _ := registry.Get(*author)
+	return writeJSON(map[string]any{
+		"author":        *author,
+		"master_pubkey": entry.MasterPubKey,
+		"trust_level":   entry.TrustLevel,
+		"added_at":      entry.AddedAt,
+		"notes":         entry.Notes,
+		"registry_file": path,
+	})
+}
+
+func runIdentityRegistryList(args []string) error {
+	fs := flag.NewFlagSet("identity registry list", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	registryPath := fs.String("registry", "", "registry file path; defaults to ~/.aip2p-public/identity_registry.json")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	path, err := defaultIdentityRegistryPath(*registryPath)
+	if err != nil {
+		return err
+	}
+	registry, err := aip2p.LoadIdentityRegistry(path)
+	if err != nil {
+		return err
+	}
+	items := make([]map[string]any, 0, len(registry.Entries))
+	for author, entry := range registry.Entries {
+		items = append(items, map[string]any{
+			"author":        author,
+			"master_pubkey": entry.MasterPubKey,
+			"trust_level":   entry.TrustLevel,
+			"added_at":      entry.AddedAt,
+			"notes":         entry.Notes,
+		})
+	}
+	return writeJSON(map[string]any{
+		"registry_file": path,
+		"entries":       items,
+	})
+}
+
+func runIdentityRegistryRemove(args []string) error {
+	fs := flag.NewFlagSet("identity registry remove", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	registryPath := fs.String("registry", "", "registry file path; defaults to ~/.aip2p-public/identity_registry.json")
+	author := fs.String("author", "", "root author to remove")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	path, err := defaultIdentityRegistryPath(*registryPath)
+	if err != nil {
+		return err
+	}
+	registry, err := aip2p.LoadIdentityRegistry(path)
+	if err != nil {
+		return err
+	}
+	removed := registry.Remove(*author)
+	if err := registry.Save(path); err != nil {
+		return err
+	}
+	return writeJSON(map[string]any{
+		"author":        *author,
+		"removed":       removed,
+		"registry_file": path,
 	})
 }
 
@@ -762,19 +1025,15 @@ func defaultIdentityOutputPath(agentID, explicitOut string) (string, error) {
 	if explicitOut != "" {
 		return explicitOut, nil
 	}
+	identityDir, err := defaultIdentityDir("")
+	if err != nil {
+		return "", err
+	}
 	agentID = strings.TrimSpace(agentID)
 	if agentID == "" {
 		return "", errors.New("agent-id is required")
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	home = strings.TrimSpace(home)
-	if home == "" {
-		return "", errors.New("user home directory is empty")
-	}
-	return filepath.Join(home, ".aip2p-public", "identities", sanitizeAgentIDForFilename(agentID)+".json"), nil
+	return filepath.Join(identityDir, sanitizeAgentIDForFilename(agentID)+".json"), nil
 }
 
 func sanitizeAgentIDForFilename(agentID string) string {
@@ -801,6 +1060,66 @@ func sanitizeAgentIDForFilename(agentID string) string {
 		return "identity"
 	}
 	return value
+}
+
+func defaultIdentityDir(explicitDir string) (string, error) {
+	explicitDir = strings.TrimSpace(explicitDir)
+	if explicitDir != "" {
+		return explicitDir, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	home = strings.TrimSpace(home)
+	if home == "" {
+		return "", errors.New("user home directory is empty")
+	}
+	return filepath.Join(home, ".aip2p-public", "identities"), nil
+}
+
+func defaultIdentityRegistryPath(explicitPath string) (string, error) {
+	explicitPath = strings.TrimSpace(explicitPath)
+	if explicitPath != "" {
+		return explicitPath, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	home = strings.TrimSpace(home)
+	if home == "" {
+		return "", errors.New("user home directory is empty")
+	}
+	return filepath.Join(home, ".aip2p-public", "identity_registry.json"), nil
+}
+
+func identitySummary(identity aip2p.AgentIdentity, path string) map[string]any {
+	return map[string]any{
+		"agent_id":             identity.AgentID,
+		"author":               identity.Author,
+		"key_type":             identity.KeyType,
+		"public_key":           identity.PublicKey,
+		"created_at":           identity.CreatedAt,
+		"file":                 path,
+		"hd_enabled":           identity.HDEnabled,
+		"master_public_key":    identity.MasterPubKey,
+		"derivation_path":      identity.DerivationPath,
+		"parent":               identity.Parent,
+		"parent_public_key":    identity.ParentPublicKey,
+		"has_signing_material": strings.TrimSpace(identity.PrivateKey) != "" || strings.TrimSpace(identity.Mnemonic) != "",
+	}
+}
+
+func identityMatchesParentFilter(identity aip2p.AgentIdentity, parent string) bool {
+	parent = strings.TrimSpace(parent)
+	if parent == "" {
+		return true
+	}
+	if identity.Author == parent || identity.Parent == parent {
+		return true
+	}
+	return strings.HasPrefix(identity.Author, parent+"/")
 }
 
 func parseFlagSetInterspersed(fs *flag.FlagSet, args []string) error {

@@ -20,6 +20,7 @@ const (
 )
 
 type WriterSyncMode string
+type WriterTrustMode string
 
 const (
 	WriterSyncModeMixed              WriterSyncMode = "mixed"
@@ -27,10 +28,14 @@ const (
 	WriterSyncModeTrustedWritersOnly WriterSyncMode = "trusted_writers_only"
 	WriterSyncModeWhitelist          WriterSyncMode = "whitelist"
 	WriterSyncModeBlacklist          WriterSyncMode = "blacklist"
+
+	WriterTrustModeExact             WriterTrustMode = "exact"
+	WriterTrustModeParentAndChildren WriterTrustMode = "parent_and_children"
 )
 
 type WriterPolicy struct {
 	SyncMode              WriterSyncMode              `json:"sync_mode,omitempty"`
+	TrustMode             WriterTrustMode             `json:"trust_mode,omitempty"`
 	AllowUnsigned         bool                        `json:"allow_unsigned"`
 	DefaultCapability     WriterCapability            `json:"default_capability,omitempty"`
 	AgentCapabilities     map[string]WriterCapability `json:"agent_capabilities,omitempty"`
@@ -90,6 +95,7 @@ func LoadWriterPolicy(path string) (WriterPolicy, error) {
 func defaultWriterPolicy() WriterPolicy {
 	policy := WriterPolicy{
 		SyncMode:          WriterSyncModeAll,
+		TrustMode:         WriterTrustModeExact,
 		AllowUnsigned:     false,
 		DefaultCapability: WriterCapabilityReadWrite,
 		RelayDefaultTrust: RelayTrustNeutral,
@@ -103,6 +109,7 @@ func (p *WriterPolicy) normalize() {
 		return
 	}
 	p.SyncMode = normalizeWriterSyncMode(p.SyncMode, WriterSyncModeAll)
+	p.TrustMode = normalizeWriterTrustMode(p.TrustMode, WriterTrustModeExact)
 	p.DefaultCapability = normalizeWriterCapability(p.DefaultCapability, WriterCapabilityReadWrite)
 	p.AllowedAgentIDs = uniqueFold(p.AllowedAgentIDs)
 	p.AllowedPublicKeys = normalizeHexList(p.AllowedPublicKeys)
@@ -125,6 +132,7 @@ func (p WriterPolicy) Empty() bool {
 	p.normalize()
 	return p.AllowUnsigned &&
 		p.SyncMode == WriterSyncModeAll &&
+		p.TrustMode == WriterTrustModeExact &&
 		p.DefaultCapability == WriterCapabilityReadWrite &&
 		len(p.AgentCapabilities) == 0 &&
 		len(p.PublicKeyCapabilities) == 0 &&
@@ -186,6 +194,33 @@ func (p WriterPolicy) capabilityForOriginWithDelegation(origin *MessageOrigin, s
 	return p.originDecision(origin, scope, store).Capability
 }
 
+func (p WriterPolicy) acceptsMessageWithDelegation(msg Message, scope string, store DelegationStore) bool {
+	p.normalize()
+	if isUnsignedOrigin(msg.Origin) {
+		return p.AllowUnsigned
+	}
+
+	decision := p.messageDecision(msg, scope, store)
+	if decision.Capability == WriterCapabilityBlocked {
+		return false
+	}
+
+	switch p.SyncMode {
+	case WriterSyncModeAll:
+		return true
+	case WriterSyncModeBlacklist:
+		return true
+	case WriterSyncModeWhitelist:
+		return decision.ExplicitReadWrite
+	case WriterSyncModeTrustedWritersOnly:
+		return decision.Capability == WriterCapabilityReadWrite
+	case WriterSyncModeMixed:
+		fallthrough
+	default:
+		return decision.Capability == WriterCapabilityReadWrite
+	}
+}
+
 func (p WriterPolicy) originDecision(origin *MessageOrigin, scope string, store DelegationStore) WriterOriginDecision {
 	p.normalize()
 	if isUnsignedOrigin(origin) {
@@ -222,6 +257,24 @@ func (p WriterPolicy) originDecision(origin *MessageOrigin, scope string, store 
 			decision.Capability = parent.Capability
 		}
 		if parent.ExplicitReadWrite {
+			decision.ExplicitReadWrite = true
+		}
+	}
+	return decision
+}
+
+func (p WriterPolicy) messageDecision(msg Message, scope string, store DelegationStore) WriterOriginDecision {
+	decision := p.originDecision(msg.Origin, scope, store)
+	author := strings.TrimSpace(msg.Author)
+	if author == "" {
+		return decision
+	}
+	if matchesWriterAuthorPolicy(author, p.BlockedAgentIDs, p.TrustMode) {
+		return WriterOriginDecision{Capability: WriterCapabilityBlocked}
+	}
+	if p.hasLegacyWhitelist() && matchesWriterAuthorPolicy(author, p.AllowedAgentIDs, p.TrustMode) {
+		if decision.Capability != WriterCapabilityBlocked {
+			decision.Capability = WriterCapabilityReadWrite
 			decision.ExplicitReadWrite = true
 		}
 	}
@@ -378,6 +431,17 @@ func normalizeWriterCapability(value, fallback WriterCapability) WriterCapabilit
 	}
 }
 
+func normalizeWriterTrustMode(value, fallback WriterTrustMode) WriterTrustMode {
+	switch WriterTrustMode(strings.ToLower(strings.TrimSpace(string(value)))) {
+	case WriterTrustModeExact:
+		return WriterTrustModeExact
+	case WriterTrustModeParentAndChildren:
+		return WriterTrustModeParentAndChildren
+	default:
+		return fallback
+	}
+}
+
 func normalizeCapabilityMap(items map[string]WriterCapability, hexKeys bool) map[string]WriterCapability {
 	if len(items) == 0 {
 		return nil
@@ -402,6 +466,26 @@ func normalizeCapabilityMap(items map[string]WriterCapability, hexKeys bool) map
 
 func normalizeFoldKey(value string) string {
 	return strings.ToLower(strings.TrimSpace(value))
+}
+
+func matchesWriterAuthorPolicy(author string, entries []string, mode WriterTrustMode) bool {
+	author = normalizeFoldKey(author)
+	if author == "" {
+		return false
+	}
+	for _, entry := range entries {
+		entry = normalizeFoldKey(entry)
+		if entry == "" {
+			continue
+		}
+		if author == entry {
+			return true
+		}
+		if mode == WriterTrustModeParentAndChildren && strings.HasPrefix(author, entry+"/") {
+			return true
+		}
+	}
+	return false
 }
 
 func normalizeHexList(items []string) []string {
@@ -559,7 +643,7 @@ func ApplyWriterPolicyWithDelegations(index Index, project string, policy Writer
 	for _, bundle := range index.Bundles {
 		switch bundle.Message.Kind {
 		case "post":
-			if !policy.acceptsOriginWithDelegation(bundle.Message.Origin, bundle.Message.Kind, store) {
+			if !policy.acceptsMessageWithDelegation(bundle.Message, bundle.Message.Kind, store) {
 				continue
 			}
 			allowed[strings.ToLower(bundle.InfoHash)] = struct{}{}
@@ -569,7 +653,7 @@ func ApplyWriterPolicyWithDelegations(index Index, project string, policy Writer
 	for _, bundle := range index.Bundles {
 		switch bundle.Message.Kind {
 		case "reply":
-			if !policy.acceptsOriginWithDelegation(bundle.Message.Origin, bundle.Message.Kind, store) {
+			if !policy.acceptsMessageWithDelegation(bundle.Message, bundle.Message.Kind, store) {
 				continue
 			}
 			if bundle.Message.ReplyTo != nil {
@@ -578,7 +662,7 @@ func ApplyWriterPolicyWithDelegations(index Index, project string, policy Writer
 				}
 			}
 		case "reaction":
-			if !policy.acceptsOriginWithDelegation(bundle.Message.Origin, bundle.Message.Kind, store) {
+			if !policy.acceptsMessageWithDelegation(bundle.Message, bundle.Message.Kind, store) {
 				continue
 			}
 			subject := strings.ToLower(nestedString(bundle.Message.Extensions, "subject", "infohash"))

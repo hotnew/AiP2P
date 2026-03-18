@@ -148,6 +148,90 @@ func TestApplyWriterPolicyWhitelistAcceptsOnlyExplicitWriters(t *testing.T) {
 	}
 }
 
+func TestApplyWriterPolicyParentAndChildrenTrustsChildAuthorWhenRootWhitelisted(t *testing.T) {
+	t.Parallel()
+
+	postChild := Bundle{
+		InfoHash: "post-child",
+		Message: Message{
+			Kind:   "post",
+			Title:  "Child",
+			Author: "agent://alice/work",
+			Origin: &MessageOrigin{
+				AgentID:   "agent://news/root-01",
+				PublicKey: "aaaa",
+			},
+			Extensions: map[string]any{
+				"project":          "aip2p.public",
+				"hd.parent":        "agent://alice",
+				"hd.parent_pubkey": "root-key",
+				"hd.path":          "m/0'/1'",
+			},
+		},
+	}
+	postOther := Bundle{
+		InfoHash: "post-other",
+		Message: Message{
+			Kind:   "post",
+			Title:  "Other",
+			Author: "agent://bob/work",
+			Origin: &MessageOrigin{
+				AgentID:   "agent://news/root-02",
+				PublicKey: "bbbb",
+			},
+			Extensions: map[string]any{"project": "aip2p.public"},
+		},
+	}
+
+	index := buildIndex([]Bundle{postChild, postOther}, "aip2p.public")
+	policy := WriterPolicy{
+		SyncMode:          WriterSyncModeWhitelist,
+		TrustMode:         WriterTrustModeParentAndChildren,
+		DefaultCapability: WriterCapabilityReadWrite,
+		AllowedAgentIDs:   []string{"agent://alice"},
+	}
+
+	filtered := ApplyWriterPolicy(index, "aip2p.public", policy)
+	if len(filtered.Posts) != 1 {
+		t.Fatalf("posts len = %d, want 1", len(filtered.Posts))
+	}
+	if filtered.Posts[0].InfoHash != "post-child" {
+		t.Fatalf("post = %q, want post-child", filtered.Posts[0].InfoHash)
+	}
+}
+
+func TestApplyWriterPolicyBlacklistOverridesParentAndChildrenTrust(t *testing.T) {
+	t.Parallel()
+
+	postChild := Bundle{
+		InfoHash: "post-child",
+		Message: Message{
+			Kind:   "post",
+			Title:  "Child",
+			Author: "agent://alice/spam-bot",
+			Origin: &MessageOrigin{
+				AgentID:   "agent://news/root-01",
+				PublicKey: "aaaa",
+			},
+			Extensions: map[string]any{"project": "aip2p.public"},
+		},
+	}
+
+	index := buildIndex([]Bundle{postChild}, "aip2p.public")
+	policy := WriterPolicy{
+		SyncMode:          WriterSyncModeWhitelist,
+		TrustMode:         WriterTrustModeParentAndChildren,
+		DefaultCapability: WriterCapabilityReadWrite,
+		AllowedAgentIDs:   []string{"agent://alice"},
+		BlockedAgentIDs:   []string{"agent://alice/spam-bot"},
+	}
+
+	filtered := ApplyWriterPolicy(index, "aip2p.public", policy)
+	if len(filtered.Posts) != 0 {
+		t.Fatalf("posts len = %d, want 0", len(filtered.Posts))
+	}
+}
+
 func TestApplyWriterPolicyAllModeKeepsSignedReadOnlyWritersUnlessBlocked(t *testing.T) {
 	t.Parallel()
 

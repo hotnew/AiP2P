@@ -94,10 +94,11 @@ func BuildMessage(in MessageInput) (Message, []byte, error) {
 		Extensions: cloneMap(in.Extensions),
 	}
 	if in.Identity != nil {
-		origin, err := BuildSignedOrigin(msg, *in.Identity)
+		origin, signedExtensions, err := BuildSignedOrigin(msg, *in.Identity)
 		if err != nil {
 			return Message{}, nil, err
 		}
+		msg.Extensions = signedExtensions
 		msg.Origin = origin
 	}
 	return msg, bodyBytes, nil
