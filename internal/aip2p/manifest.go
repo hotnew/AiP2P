@@ -299,7 +299,7 @@ func hasLocalTorrent(store *Store, infoHash string) bool {
 	if strings.TrimSpace(infoHash) == "" {
 		return false
 	}
-	_, err := os.Stat(store.TorrentPath(infoHash))
+	_, err := store.ExistingTorrentPath(infoHash)
 	return err == nil
 }
 
@@ -308,8 +308,8 @@ func hasCompleteLocalBundle(store *Store, infoHash string) bool {
 	if infoHash == "" {
 		return false
 	}
-	torrentPath := store.TorrentPath(infoHash)
-	if _, err := os.Stat(torrentPath); err != nil {
+	torrentPath, err := store.ExistingTorrentPath(infoHash)
+	if err != nil {
 		return false
 	}
 	mi, err := metainfo.LoadFromFile(torrentPath)

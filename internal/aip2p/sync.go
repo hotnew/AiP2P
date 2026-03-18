@@ -395,15 +395,7 @@ func (r *syncRuntime) announceLocalBundles(ctx context.Context, logf func(string
 }
 
 func (r *syncRuntime) seedLocalTorrents(logf func(string, ...any)) error {
-	entries, err := os.ReadDir(r.store.TorrentDir)
-	if err != nil {
-		return err
-	}
-	for _, entry := range entries {
-		if entry.IsDir() || filepath.Ext(entry.Name()) != ".torrent" {
-			continue
-		}
-		infoHash := strings.ToLower(strings.TrimSuffix(entry.Name(), ".torrent"))
+	return r.store.WalkTorrentFiles(func(infoHash, path string) error {
 		r.mu.Lock()
 		_, seen := r.seeded[infoHash]
 		if !seen {
@@ -411,9 +403,8 @@ func (r *syncRuntime) seedLocalTorrents(logf func(string, ...any)) error {
 		}
 		r.mu.Unlock()
 		if seen {
-			continue
+			return nil
 		}
-		path := filepath.Join(r.store.TorrentDir, entry.Name())
 		if _, err := r.torrentClient.AddTorrentFromFile(path); err != nil {
 			r.mu.Lock()
 			delete(r.seeded, infoHash)
@@ -423,8 +414,8 @@ func (r *syncRuntime) seedLocalTorrents(logf func(string, ...any)) error {
 		if logf != nil {
 			logf("seeding: %s", infoHash)
 		}
-	}
-	return nil
+		return nil
+	})
 }
 
 func (r *syncRuntime) handleAnnouncement(announcement SyncAnnouncement) (bool, error) {
@@ -1049,7 +1040,16 @@ func syncRef(ctx context.Context, client *torrent.Client, store *Store, ref Sync
 		}
 	}
 	if ref.InfoHash != "" && hasLocalTorrent(store, ref.InfoHash) {
-		t, err = addTorrentFileWithTrackers(client, store.TorrentPath(ref.InfoHash), trackers)
+		torrentPath, pathErr := store.ExistingTorrentPath(ref.InfoHash)
+		if pathErr != nil {
+			return SyncItemResult{
+				Ref:      ref.Raw,
+				InfoHash: ref.InfoHash,
+				Status:   "failed",
+				Message:  fmt.Sprintf("locate existing torrent file: %v", pathErr),
+			}
+		}
+		t, err = addTorrentFileWithTrackers(client, torrentPath, trackers)
 		if err != nil {
 			return SyncItemResult{
 				Ref:      ref.Raw,
@@ -1130,7 +1130,7 @@ func syncRef(ctx context.Context, client *torrent.Client, store *Store, ref Sync
 	if !reserveDailyQuota(dayCounts, msg.CreatedAt, rules.MaxItemsPerDay) {
 		t.Drop()
 		_ = os.RemoveAll(contentDir)
-		_ = os.Remove(store.TorrentPath(infoHash))
+		_ = store.RemoveTorrent(infoHash)
 		return SyncItemResult{
 			Ref:      ref.Raw,
 			InfoHash: infoHash,
@@ -1158,6 +1158,9 @@ func syncRef(ctx context.Context, client *torrent.Client, store *Store, ref Sync
 func writeTorrentFile(path string, mi metainfo.MetaInfo) error {
 	if _, err := os.Stat(path); err == nil {
 		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
 	}
 	file, err := os.Create(path)
 	if err != nil {

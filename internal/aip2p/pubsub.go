@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -398,30 +397,25 @@ func normalizeAnnouncement(announcement SyncAnnouncement) SyncAnnouncement {
 }
 
 func localAnnouncements(store *Store) ([]SyncAnnouncement, error) {
-	entries, err := os.ReadDir(store.TorrentDir)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]SyncAnnouncement, 0, len(entries))
-	for _, entry := range entries {
-		if entry.IsDir() || filepath.Ext(entry.Name()) != ".torrent" {
-			continue
-		}
-		refPath := filepath.Join(store.TorrentDir, entry.Name())
+	var out []SyncAnnouncement
+	if err := store.WalkTorrentFiles(func(_ string, refPath string) error {
 		mi, err := metainfo.LoadFromFile(refPath)
 		if err != nil {
-			continue
+			return nil
 		}
 		info, err := mi.UnmarshalInfo()
 		if err != nil {
-			continue
+			return nil
 		}
 		contentDir := filepath.Join(store.DataDir, info.BestName())
 		msg, _, err := LoadMessage(contentDir)
 		if err != nil {
-			continue
+			return nil
 		}
 		out = append(out, buildAnnouncement(msg, mi, info))
+		return nil
+	}); err != nil {
+		return nil, err
 	}
 	sort.Slice(out, func(i, j int) bool {
 		return out[i].CreatedAt < out[j].CreatedAt

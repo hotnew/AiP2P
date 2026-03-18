@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"aip2p.org/internal/aip2p"
 )
 
 func (a *App) nodeStatus(index Index) NodeStatus {
@@ -17,8 +19,9 @@ func (a *App) nodeStatus(index Index) NodeStatus {
 		storeTone = "warn"
 	}
 	torrentCount := 0
-	if matches, err := filepath.Glob(filepath.Join(a.storeRoot, "torrents", "*.torrent")); err == nil {
-		torrentCount = len(matches)
+	store := &aip2p.Store{TorrentDir: filepath.Join(a.storeRoot, "torrents")}
+	if count, err := store.TorrentCount(); err == nil {
+		torrentCount = count
 	}
 	netCfg, netErr := a.networkBootstrap()
 	syncStatus, syncErr := a.syncRuntimeStatus()

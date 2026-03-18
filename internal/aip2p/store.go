@@ -1,7 +1,9 @@
 package aip2p
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -47,7 +49,93 @@ func (s *Store) NewContentDir(title string, now time.Time) string {
 }
 
 func (s *Store) TorrentPath(infoHash string) string {
-	return filepath.Join(s.TorrentDir, strings.ToLower(infoHash)+".torrent")
+	infoHash = normalizeInfoHash(infoHash)
+	if len(infoHash) < 4 {
+		return s.legacyTorrentPath(infoHash)
+	}
+	return filepath.Join(s.TorrentDir, infoHash[:2], infoHash[2:4], infoHash+".torrent")
+}
+
+func (s *Store) ExistingTorrentPath(infoHash string) (string, error) {
+	infoHash = normalizeInfoHash(infoHash)
+	if infoHash == "" {
+		return "", os.ErrNotExist
+	}
+	paths := []string{s.TorrentPath(infoHash)}
+	if legacy := s.legacyTorrentPath(infoHash); legacy != paths[0] {
+		paths = append(paths, legacy)
+	}
+	for _, path := range paths {
+		if _, err := os.Stat(path); err == nil {
+			return path, nil
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return "", err
+		}
+	}
+	return "", os.ErrNotExist
+}
+
+func (s *Store) RemoveTorrent(infoHash string) error {
+	infoHash = normalizeInfoHash(infoHash)
+	if infoHash == "" {
+		return nil
+	}
+	paths := []string{s.TorrentPath(infoHash)}
+	if legacy := s.legacyTorrentPath(infoHash); legacy != paths[0] {
+		paths = append(paths, legacy)
+	}
+	for _, path := range paths {
+		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Store) WalkTorrentFiles(fn func(infoHash, path string) error) error {
+	if _, err := os.Stat(s.TorrentDir); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	seen := map[string]struct{}{}
+	return filepath.WalkDir(s.TorrentDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() || filepath.Ext(d.Name()) != ".torrent" {
+			return nil
+		}
+		infoHash := normalizeInfoHash(strings.TrimSuffix(d.Name(), ".torrent"))
+		if infoHash == "" {
+			return nil
+		}
+		if _, ok := seen[infoHash]; ok {
+			return nil
+		}
+		seen[infoHash] = struct{}{}
+		return fn(infoHash, path)
+	})
+}
+
+func (s *Store) TorrentCount() (int, error) {
+	count := 0
+	if err := s.WalkTorrentFiles(func(_ string, _ string) error {
+		count++
+		return nil
+	}); err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+func (s *Store) legacyTorrentPath(infoHash string) string {
+	return filepath.Join(s.TorrentDir, normalizeInfoHash(infoHash)+".torrent")
+}
+
+func normalizeInfoHash(infoHash string) string {
+	return strings.ToLower(strings.TrimSpace(infoHash))
 }
 
 func slugify(value string) string {

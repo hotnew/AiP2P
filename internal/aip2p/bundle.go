@@ -49,6 +49,9 @@ func PublishMessage(store *Store, input MessageInput) (PublishResult, error) {
 
 	infoHash := mi.HashInfoBytes().HexString()
 	torrentPath := store.TorrentPath(infoHash)
+	if err := os.MkdirAll(filepath.Dir(torrentPath), 0o755); err != nil {
+		return PublishResult{}, err
+	}
 	file, err := os.Create(torrentPath)
 	if err != nil {
 		return PublishResult{}, err

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"aip2p.org/internal/aip2p"
 	"github.com/anacrolix/torrent/metainfo"
 )
 
@@ -40,25 +41,16 @@ type torrentRef struct {
 }
 
 func loadTorrentRefs(dir string) (map[string]torrentRef, error) {
-	if _, err := os.Stat(dir); err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return map[string]torrentRef{}, nil
-		}
-		return nil, err
-	}
-	matches, err := filepath.Glob(filepath.Join(dir, "*.torrent"))
-	if err != nil {
-		return nil, err
-	}
-	refs := make(map[string]torrentRef, len(matches))
-	for _, path := range matches {
+	refs := map[string]torrentRef{}
+	store := &aip2p.Store{TorrentDir: dir}
+	if err := store.WalkTorrentFiles(func(_ string, path string) error {
 		mi, err := metainfo.LoadFromFile(path)
 		if err != nil {
-			return nil, fmt.Errorf("load torrent %s: %w", path, err)
+			return fmt.Errorf("load torrent %s: %w", path, err)
 		}
 		info, err := mi.UnmarshalInfo()
 		if err != nil {
-			return nil, fmt.Errorf("decode torrent %s: %w", path, err)
+			return fmt.Errorf("decode torrent %s: %w", path, err)
 		}
 		hash := strings.ToLower(mi.HashInfoBytes().HexString())
 		refs[info.Name] = torrentRef{
@@ -67,6 +59,12 @@ func loadTorrentRefs(dir string) (map[string]torrentRef, error) {
 			Name:      info.Name,
 			SizeBytes: info.TotalLength(),
 		}
+		return nil
+	}); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return map[string]torrentRef{}, nil
+		}
+		return nil, err
 	}
 	return refs, nil
 }

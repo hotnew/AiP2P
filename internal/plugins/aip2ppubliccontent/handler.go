@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"aip2p.org/internal/aip2p"
 	newsplugin "aip2p.org/internal/plugins/aip2ppublic"
 )
 
@@ -356,8 +357,9 @@ func handleAPITorrent(app *newsplugin.App, w http.ResponseWriter, r *http.Reques
 		http.NotFound(w, r)
 		return
 	}
-	path := filepath.Join(app.StoreRoot(), "torrents", infoHash+".torrent")
-	if _, err := os.Stat(path); err != nil {
+	store := &aip2p.Store{TorrentDir: filepath.Join(app.StoreRoot(), "torrents")}
+	path, err := store.ExistingTorrentPath(infoHash)
+	if err != nil {
 		if os.IsNotExist(err) {
 			http.NotFound(w, r)
 			return
