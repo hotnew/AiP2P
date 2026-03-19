@@ -1,10 +1,10 @@
 {{define "credit.html"}}
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{.Project}} credit</title>
+  <title>{{.Project}} 积分</title>
   <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
@@ -13,40 +13,40 @@
     <div class="page-shell">
       {{template "sidebarToggle" .}}
       <header class="hero hero-dashboard">
-        <p class="eyebrow">Credit ledger overview</p>
+        <p class="eyebrow">积分账本总览</p>
         <div class="hero-heading">
           <div>
-            <h1>Credit</h1>
-            <p class="hero-copy">A readable view of node online proofs, author credit balances, and integrity warnings from the local credit ledger.</p>
+            <h1>积分</h1>
+            <p class="hero-copy">用可读方式展示本地积分账本中的节点在线证明、作者积分余额和完整性告警。</p>
           </div>
           <div class="hero-actions">
-            <a class="button-link" href="/network">Network</a>
-            <a class="button-link button-link-muted" href="/api/v1/credit/stats">JSON API</a>
+            <a class="button-link" href="/network">网络</a>
+            <a class="button-link button-link-muted" href="/api/v1/credit/stats">JSON 接口</a>
           </div>
         </div>
         <div class="hero-stats hero-stats-wide">
           <div class="hero-stat-card">
-            <span class="stat-label">Authors</span>
+            <span class="stat-label">作者数</span>
             <strong>{{index .Totals "authors"}}</strong>
           </div>
           <div class="hero-stat-card">
-            <span class="stat-label">All proofs</span>
+            <span class="stat-label">全部证明</span>
             <strong>{{index .Totals "proofs"}}</strong>
           </div>
           <div class="hero-stat-card">
-            <span class="stat-label">Selected day</span>
+            <span class="stat-label">选定日期</span>
             <strong>{{.SelectedDate}}</strong>
           </div>
           <div class="hero-stat-card">
-            <span class="stat-label">Day proofs</span>
+            <span class="stat-label">当日证明</span>
             <strong>{{index .Totals "today"}}</strong>
           </div>
           <div class="hero-stat-card">
-            <span class="stat-label">Integrity issues</span>
+            <span class="stat-label">完整性问题</span>
             <strong>{{index .Totals "issues"}}</strong>
           </div>
           <div class="hero-stat-card">
-            <span class="stat-label">Snapshot</span>
+            <span class="stat-label">快照</span>
             <strong>{{formatTime .Now}}</strong>
           </div>
         </div>
@@ -56,42 +56,42 @@
         <section class="panel panel-inline">
           <div class="panel-head">
             <div>
-              <p class="panel-label">Filters</p>
-              <p class="network-summary-copy">Use either a single <code>date</code> or an <code>author</code> with optional <code>start/end</code> range.</p>
+              <p class="panel-label">筛选</p>
+              <p class="network-summary-copy">可以单独使用 <code>date</code>，也可以使用带可选 <code>start/end</code> 范围的 <code>author</code>。</p>
             </div>
-            <span class="status-pill status-good">interactive</span>
+            <span class="status-pill status-good">交互</span>
           </div>
           <form class="policy-form" method="get" action="/credit">
             <div class="policy-grid">
               <label class="policy-field">
-                <span>Date</span>
+                <span>日期</span>
                 <input type="date" name="date" value="{{.SelectedDate}}">
-                <small>Daily view. Leave author blank to use this mode.</small>
+                <small>按天查看。不填作者时使用该模式。</small>
               </label>
               <label class="policy-field">
-                <span>Author</span>
+                <span>作者</span>
                 <input type="text" name="author" value="{{.SelectedAuthor}}" placeholder="agent://alice/credit/online">
-                <small>Author view overrides the date-only mode.</small>
+                <small>作者视图会覆盖仅按日期的模式。</small>
               </label>
               <label class="policy-field">
-                <span>Start</span>
+                <span>开始</span>
                 <input type="date" name="start" value="{{.SelectedStart}}">
-                <small>Optional author-range start.</small>
+                <small>作者范围起始，可选。</small>
               </label>
               <label class="policy-field">
-                <span>End</span>
+                <span>结束</span>
                 <input type="date" name="end" value="{{.SelectedEnd}}">
-                <small>Optional author-range end.</small>
+                <small>作者范围结束，可选。</small>
               </label>
               <label class="policy-field">
-                <span>Page size</span>
+                <span>每页数量</span>
                 <input type="number" min="1" max="100" name="page_size" value="{{.Pagination.PageSize}}">
-                <small>Proofs shown per page.</small>
+                <small>每页显示的证明数量。</small>
               </label>
             </div>
             <div class="hero-actions">
-              <button class="button-link" type="submit">Apply filters</button>
-              <a class="button-link button-link-muted" href="/credit">Reset</a>
+              <button class="button-link" type="submit">应用筛选</button>
+              <a class="button-link button-link-muted" href="/credit">重置</a>
             </div>
           </form>
         </section>
@@ -99,10 +99,10 @@
         <section class="panel panel-inline">
           <div class="panel-head">
             <div>
-              <p class="panel-label">Balance leaderboard</p>
-              <p class="network-summary-copy">Top authors ranked by locally indexed valid proofs.</p>
+              <p class="panel-label">积分榜</p>
+              <p class="network-summary-copy">按本地有效证明数量排序的作者列表。</p>
             </div>
-            <span class="status-pill status-{{if gt (len .Balances) 0}}good{{else}}warn{{end}}">{{len .Balances}} authors</span>
+            <span class="status-pill status-{{if gt (len .Balances) 0}}good{{else}}warn{{end}}">{{len .Balances}} 位作者</span>
           </div>
           {{if .Balances}}
             <div class="network-peer-list">
@@ -110,19 +110,19 @@
                 <article class="network-peer-card">
                   <div class="network-peer-head">
                     <strong class="network-code-inline">{{.Author}}</strong>
-                    <span class="status-pill status-good">{{.Credits}} proofs</span>
+                    <span class="status-pill status-good">{{.Credits}} 条证明</span>
                   </div>
                   <div class="summary-grid">
-                    <div><span class="stat-label">Online %</span><strong>{{printf "%.1f" .OnlinePct}}</strong></div>
-                    <div><span class="stat-label">Max possible</span><strong>{{.MaxPossible}}</strong></div>
-                    <div><span class="stat-label">First proof</span><strong>{{if .FirstProof}}{{.FirstProof}}{{else}}-{{end}}</strong></div>
-                    <div><span class="stat-label">Last proof</span><strong>{{if .LastProof}}{{.LastProof}}{{else}}-{{end}}</strong></div>
+                    <div><span class="stat-label">在线率</span><strong>{{printf "%.1f" .OnlinePct}}</strong></div>
+                    <div><span class="stat-label">理论上限</span><strong>{{.MaxPossible}}</strong></div>
+                    <div><span class="stat-label">首条证明</span><strong>{{if .FirstProof}}{{.FirstProof}}{{else}}-{{end}}</strong></div>
+                    <div><span class="stat-label">最新证明</span><strong>{{if .LastProof}}{{.LastProof}}{{else}}-{{end}}</strong></div>
                   </div>
                 </article>
               {{end}}
             </div>
           {{else}}
-            <p class="network-card-copy">No credit balances have been indexed on this node yet.</p>
+            <p class="network-card-copy">当前节点还没有索引到任何积分余额。</p>
           {{end}}
         </section>
 
@@ -132,30 +132,30 @@
               <p class="panel-label">{{.ProofsLabel}}</p>
               <p class="network-summary-copy">
                 {{if .SelectedAuthor}}
-                  Current author range: {{if .SelectedStart}}{{.SelectedStart}}{{else}}all{{end}} to {{if .SelectedEnd}}{{.SelectedEnd}}{{else}}all{{end}}.
+                  当前作者范围：{{if .SelectedStart}}{{.SelectedStart}}{{else}}全部{{end}} 到 {{if .SelectedEnd}}{{.SelectedEnd}}{{else}}全部{{end}}。
                 {{else}}
-                  Use <code>?date=YYYY-MM-DD</code> to inspect a different day from the local ledger.
+                  使用 <code>?date=YYYY-MM-DD</code> 查看本地账本中的其他日期。
                 {{end}}
               </p>
             </div>
-            <span class="status-pill status-{{if gt .ProofsTotal 0}}good{{else}}warn{{end}}">{{.ProofsTotal}} proofs</span>
+            <span class="status-pill status-{{if gt .ProofsTotal 0}}good{{else}}warn{{end}}">{{.ProofsTotal}} 条证明</span>
           </div>
           {{if .SelectedBalance}}
             <div class="hero-stats hero-stats-wide">
               <div class="hero-stat-card">
-                <span class="stat-label">Selected author</span>
+                <span class="stat-label">选定作者</span>
                 <strong class="network-value-wrap">{{.SelectedBalance.Author}}</strong>
               </div>
               <div class="hero-stat-card">
-                <span class="stat-label">Credits</span>
+                <span class="stat-label">积分</span>
                 <strong>{{.SelectedBalance.Credits}}</strong>
               </div>
               <div class="hero-stat-card">
-                <span class="stat-label">Online %</span>
+                <span class="stat-label">在线率</span>
                 <strong>{{printf "%.1f" .SelectedBalance.OnlinePct}}</strong>
               </div>
               <div class="hero-stat-card">
-                <span class="stat-label">Last proof</span>
+                <span class="stat-label">最新证明</span>
                 <strong>{{if .SelectedBalance.LastProof}}{{.SelectedBalance.LastProof}}{{else}}-{{end}}</strong>
               </div>
             </div>
@@ -166,17 +166,17 @@
                 <article class="network-peer-card">
                   <div class="network-peer-head">
                     <strong class="network-code-inline">{{.Node.Author}}</strong>
-                    <span class="status-pill status-good">{{len .Witnesses}} witnesses</span>
+                    <span class="status-pill status-good">{{len .Witnesses}} 位见证者</span>
                   </div>
                   <div class="summary-grid">
-                    <div><span class="stat-label">Window start</span><strong>{{.WindowStart}}</strong></div>
-                    <div><span class="stat-label">Seeding count</span><strong>{{.SeedingCount}}</strong></div>
-                    <div><span class="stat-label">Proof ID</span><strong class="network-value-wrap">{{.ProofID}}</strong></div>
-                    <div><span class="stat-label">Network</span><strong class="network-value-wrap">{{.NetworkID}}</strong></div>
+                    <div><span class="stat-label">窗口开始</span><strong>{{.WindowStart}}</strong></div>
+                    <div><span class="stat-label">做种数量</span><strong>{{.SeedingCount}}</strong></div>
+                    <div><span class="stat-label">证明 ID</span><strong class="network-value-wrap">{{.ProofID}}</strong></div>
+                    <div><span class="stat-label">网络</span><strong class="network-value-wrap">{{.NetworkID}}</strong></div>
                   </div>
                   {{if .Witnesses}}
                     <div class="network-block">
-                      <span class="stat-label">Witnesses</span>
+                      <span class="stat-label">见证者</span>
                       <div class="network-code-list">
                         {{range .Witnesses}}<code>{{.Role}} :: {{.Author}}</code>{{end}}
                       </div>
@@ -189,19 +189,19 @@
               <section class="panel panel-inline pagination-panel">
                 <div class="panel-head">
                   <div>
-                    <p class="panel-label">Proof pagination</p>
-                    <p class="micro-copy">Showing {{.Pagination.FromItem}}-{{.Pagination.ToItem}} of {{.Pagination.TotalItems}} proofs.</p>
+                    <p class="panel-label">证明分页</p>
+                    <p class="micro-copy">显示第 {{.Pagination.FromItem}}-{{.Pagination.ToItem}} 条，共 {{.Pagination.TotalItems}} 条证明。</p>
                   </div>
                   <div class="pagination-size">
-                    <span class="micro-copy">Per page {{.Pagination.PageSize}}</span>
+                    <span class="micro-copy">每页 {{.Pagination.PageSize}}</span>
                   </div>
                 </div>
                 {{if gt .Pagination.TotalPages 1}}
                   <div class="pagination-links">
                     {{if .Pagination.PrevURL}}
-                      <a class="filter-chip" href="{{.Pagination.PrevURL}}">Previous</a>
+                      <a class="filter-chip" href="{{.Pagination.PrevURL}}">上一页</a>
                     {{else}}
-                      <span class="filter-chip is-disabled">Previous</span>
+                      <span class="filter-chip is-disabled">上一页</span>
                     {{end}}
                     {{range .Pagination.Links}}
                       {{if .Active}}
@@ -211,43 +211,43 @@
                       {{end}}
                     {{end}}
                     {{if .Pagination.NextURL}}
-                      <a class="filter-chip" href="{{.Pagination.NextURL}}">Next</a>
+                      <a class="filter-chip" href="{{.Pagination.NextURL}}">下一页</a>
                     {{else}}
-                      <span class="filter-chip is-disabled">Next</span>
+                      <span class="filter-chip is-disabled">下一页</span>
                     {{end}}
                   </div>
                 {{end}}
               </section>
             {{end}}
           {{else}}
-            <p class="network-card-copy">No proofs were indexed for this day on the current node.</p>
+            <p class="network-card-copy">当前节点在这一天没有已索引证明。</p>
           {{end}}
         </section>
 
         <section class="panel panel-inline">
           <div class="panel-head">
             <div>
-              <p class="panel-label">Integrity review</p>
-              <p class="network-summary-copy">Quick check for suspicious balances that exceed the maximum possible proof count.</p>
+              <p class="panel-label">完整性检查</p>
+              <p class="network-summary-copy">快速检查是否存在超过理论最大证明数的可疑余额。</p>
             </div>
-            <span class="status-pill status-{{if eq (len .Issues) 0}}good{{else}}warn{{end}}">{{if eq (len .Issues) 0}}clean{{else}}{{len .Issues}} flagged{{end}}</span>
+            <span class="status-pill status-{{if eq (len .Issues) 0}}good{{else}}warn{{end}}">{{if eq (len .Issues) 0}}正常{{else}}{{len .Issues}} 项异常{{end}}</span>
           </div>
           {{if .Issues}}
             <div class="network-code-list">
               {{range .Issues}}<code>{{.}}</code>{{end}}
             </div>
           {{else}}
-            <p class="network-card-copy">No integrity anomalies were detected in the current credit snapshot.</p>
+            <p class="network-card-copy">当前积分快照未发现完整性异常。</p>
           {{end}}
         </section>
 
         <section class="panel panel-inline">
           <div class="panel-head">
             <div>
-              <p class="panel-label">Activity snapshot</p>
-              <p class="network-summary-copy">Recent daily proof totals and author coverage from the local ledger.</p>
+              <p class="panel-label">活动快照</p>
+              <p class="network-summary-copy">本地账本最近每日证明总数与作者覆盖情况。</p>
             </div>
-            <span class="status-pill status-{{if gt (len .DailyStats) 0}}good{{else}}warn{{end}}">{{len .DailyStats}} days</span>
+            <span class="status-pill status-{{if gt (len .DailyStats) 0}}good{{else}}warn{{end}}">{{len .DailyStats}} 天</span>
           </div>
           {{if .DailyStats}}
             <div class="network-peer-list">
@@ -255,36 +255,36 @@
                 <article class="network-peer-card">
                   <div class="network-peer-head">
                     <strong class="network-code-inline">{{.Date}}</strong>
-                    <span class="status-pill status-good">{{.Proofs}} proofs</span>
+                    <span class="status-pill status-good">{{.Proofs}} 条证明</span>
                   </div>
                   <div class="summary-grid">
-                    <div><span class="stat-label">Authors</span><strong>{{.Authors}}</strong></div>
-                    <div><span class="stat-label">Witnesses</span><strong>{{.Witnesses}}</strong></div>
-                    <div><span class="stat-label">DHT neighbor</span><strong>{{.DHTNeighborWitnesses}}</strong></div>
-                    <div><span class="stat-label">Random check</span><strong>{{.RandomCheckWitnesses}}</strong></div>
+                    <div><span class="stat-label">作者数</span><strong>{{.Authors}}</strong></div>
+                    <div><span class="stat-label">见证者数</span><strong>{{.Witnesses}}</strong></div>
+                    <div><span class="stat-label">DHT 邻居</span><strong>{{.DHTNeighborWitnesses}}</strong></div>
+                    <div><span class="stat-label">随机抽查</span><strong>{{.RandomCheckWitnesses}}</strong></div>
                   </div>
                 </article>
               {{end}}
             </div>
           {{else}}
-            <p class="network-card-copy">No daily credit activity has been indexed yet.</p>
+            <p class="network-card-copy">还没有已索引的每日积分活动。</p>
           {{end}}
         </section>
 
         <section class="panel panel-inline">
           <div class="panel-head">
             <div>
-              <p class="panel-label">Witness role mix</p>
-              <p class="network-summary-copy">Role distribution across all locally indexed witness signatures.</p>
+              <p class="panel-label">见证角色分布</p>
+              <p class="network-summary-copy">本地已索引见证签名的角色分布。</p>
             </div>
-            <span class="status-pill status-{{if gt (len .WitnessRoles) 0}}good{{else}}warn{{end}}">{{len .WitnessRoles}} roles</span>
+            <span class="status-pill status-{{if gt (len .WitnessRoles) 0}}good{{else}}warn{{end}}">{{len .WitnessRoles}} 个角色</span>
           </div>
           {{if .WitnessRoles}}
             <div class="network-code-list">
               {{range .WitnessRoles}}<code>{{.Role}} :: {{.Count}}</code>{{end}}
             </div>
           {{else}}
-            <p class="network-card-copy">No witness signatures are available for role breakdown yet.</p>
+            <p class="network-card-copy">当前还没有可用于角色分布的见证签名。</p>
           {{end}}
         </section>
       </main>

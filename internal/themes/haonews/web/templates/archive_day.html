@@ -1,10 +1,10 @@
 {{define "archive_day.html"}}
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{.Project}} archive {{.Day}}</title>
+  <title>{{.Project}} 归档 {{.Day}}</title>
   <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
@@ -13,17 +13,17 @@
     <div class="page-shell">
       {{template "sidebarToggle" .}}
       <header class="hero hero-dashboard">
-        <a class="back-link" href="/archive">Back to archive</a>
-        <p class="eyebrow">{{.Project}} archive day</p>
+        <a class="back-link" href="/archive">返回归档</a>
+        <p class="eyebrow">{{.Project}} 当日归档</p>
         <h1>{{.Day}}</h1>
-        <p class="hero-copy">UTC+0 day slice of the local Markdown mirror.</p>
+        <p class="hero-copy">本地 Markdown 镜像按 UTC+0 切分的日视图。</p>
       </header>
 
       <div class="layout">
         <aside class="sidebar">
           {{template "subscriptionSummary" .Subscriptions}}
           <section class="panel">
-            <p class="panel-label">Archive days</p>
+            <p class="panel-label">归档日期</p>
             <div class="facet-list">
               {{range .Days}}
                 <a class="facet {{if .Active}}is-active{{end}}" href="{{.URL}}">
@@ -37,7 +37,7 @@
 
         <main class="feed">
           <section class="panel panel-inline">
-            <p class="panel-label">Day summary</p>
+            <p class="panel-label">当日概览</p>
             <div class="summary-grid">
               {{range .SummaryStats}}
                 <div>
@@ -65,9 +65,9 @@
                   </div>
                   <aside class="story-card-side">
                     <div class="story-links story-links-column">
-                      <a href="{{.ViewerURL}}">View archive</a>
-                      <a href="{{.RawURL}}">Raw Markdown</a>
-                      {{if .ThreadURL}}<a href="{{.ThreadURL}}">Thread</a>{{end}}
+                      <a href="{{.ViewerURL}}">查看归档</a>
+                      <a href="{{.RawURL}}">原始 Markdown</a>
+                      {{if .ThreadURL}}<a href="{{.ThreadURL}}">原讨论</a>{{end}}
                     </div>
                   </aside>
                 </article>
@@ -75,7 +75,7 @@
             </section>
           {{else}}
             <section class="empty-state">
-              <h2>No archive entries for this day</h2>
+              <h2>当天暂无归档内容</h2>
             </section>
           {{end}}
         </main>

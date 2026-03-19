@@ -1,10 +1,10 @@
 {{define "network.html"}}
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{.Project}} network</title>
+  <title>{{.Project}} 网络</title>
   <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
@@ -13,41 +13,41 @@
     <div class="page-shell">
       {{template "sidebarToggle" .}}
       <header class="hero hero-dashboard">
-        <p class="eyebrow">Live network telemetry</p>
+        <p class="eyebrow">实时网络遥测</p>
         <div class="hero-heading">
           <div>
-            <h1>Network</h1>
-            <p class="hero-copy">A dedicated status page for the bundled sync daemon, libp2p reachability, LAN mDNS discovery, and BitTorrent DHT health.</p>
+            <h1>网络</h1>
+            <p class="hero-copy">专门用于查看内置同步守护进程、libp2p 可达性、局域网 mDNS 发现和 BitTorrent DHT 健康状态的页面。</p>
           </div>
           <div class="hero-actions">
-            <a class="button-link" href="/">Back to feed</a>
-            <a class="button-link button-link-muted" href="/api/feed">JSON API</a>
+            <a class="button-link" href="/">返回信息流</a>
+            <a class="button-link button-link-muted" href="/api/feed">JSON 接口</a>
           </div>
         </div>
         <div class="hero-stats hero-stats-wide">
           <div class="hero-stat-card">
-            <span class="stat-label">Overall</span>
+            <span class="stat-label">总览</span>
             <strong>{{.NodeStatus.Summary}}</strong>
           </div>
           <div class="hero-stat-card">
-            <span class="stat-label">Supervisor</span>
-            <strong>{{if .Supervisor.Mode}}{{.Supervisor.Mode}}{{else}}external{{end}}</strong>
+            <span class="stat-label">监管器</span>
+            <strong>{{if eq .Supervisor.Mode "managed"}}受管{{else if .Supervisor.Mode}}{{.Supervisor.Mode}}{{else}}外部{{end}}</strong>
           </div>
           <div class="hero-stat-card">
-            <span class="stat-label">Sync heartbeat</span>
-            <strong>{{if .SyncStatus.UpdatedAt.IsZero}}not yet written{{else}}{{formatTime .SyncStatus.UpdatedAt}}{{end}}</strong>
+            <span class="stat-label">同步心跳</span>
+            <strong>{{if .SyncStatus.UpdatedAt.IsZero}}尚未写入{{else}}{{formatTime .SyncStatus.UpdatedAt}}{{end}}</strong>
           </div>
           <div class="hero-stat-card">
-            <span class="stat-label">Listen</span>
+            <span class="stat-label">监听地址</span>
             <strong>{{.ListenAddr}}</strong>
           </div>
           <div class="hero-stat-card">
-            <span class="stat-label">Mode</span>
-            <strong>{{if .SyncStatus.Mode}}{{.SyncStatus.Mode}}{{else}}ui only{{end}}</strong>
+            <span class="stat-label">模式</span>
+            <strong>{{if .SyncStatus.Mode}}{{.SyncStatus.Mode}}{{else}}仅界面{{end}}</strong>
           </div>
           <div class="hero-stat-card">
-            <span class="stat-label">Network ID</span>
-            <strong class="network-value-wrap">{{if .SyncStatus.NetworkID}}{{.SyncStatus.NetworkID}}{{else}}not yet active{{end}}</strong>
+            <span class="stat-label">网络 ID</span>
+            <strong class="network-value-wrap">{{if .SyncStatus.NetworkID}}{{.SyncStatus.NetworkID}}{{else}}尚未激活{{end}}</strong>
           </div>
         </div>
       </header>
@@ -56,53 +56,53 @@
         <section class="panel panel-inline">
           <div class="panel-head">
             <div>
-              <p class="panel-label">Node operations</p>
-              <p class="network-summary-copy">Managed-node controls, worker lifecycle, heartbeat policy, and LAN anchor wiring.</p>
+              <p class="panel-label">节点运维</p>
+              <p class="network-summary-copy">受管节点控制、工作进程生命周期、心跳策略与局域网锚点配置。</p>
             </div>
-            <span class="status-pill status-{{if eq .Supervisor.Mode "managed"}}good{{else}}warn{{end}}">{{if .Supervisor.Mode}}{{.Supervisor.Mode}}{{else}}external{{end}}</span>
+            <span class="status-pill status-{{if eq .Supervisor.Mode "managed"}}good{{else}}warn{{end}}">{{if eq .Supervisor.Mode "managed"}}受管{{else if .Supervisor.Mode}}{{.Supervisor.Mode}}{{else}}外部{{end}}</span>
           </div>
           <div class="ops-grid">
             <article class="ops-card">
-              <span class="stat-label">Worker mode</span>
-              <strong>{{if .Supervisor.Mode}}{{.Supervisor.Mode}}{{else}}external{{end}}</strong>
-              <p class="micro-copy">{{if eq .Supervisor.Mode "managed"}}hao-newsd is responsible for starting and restarting the sync worker.{{else}}The sync worker is not under hao-newsd supervision.{{end}}</p>
+              <span class="stat-label">工作进程模式</span>
+              <strong>{{if eq .Supervisor.Mode "managed"}}受管{{else if .Supervisor.Mode}}{{.Supervisor.Mode}}{{else}}外部{{end}}</strong>
+              <p class="micro-copy">{{if eq .Supervisor.Mode "managed"}}hao-newsd 负责启动和重启同步工作进程。{{else}}同步工作进程当前不受 hao-newsd 监管。{{end}}</p>
             </article>
             <article class="ops-card">
-              <span class="stat-label">Worker PID</span>
-              <strong>{{if .Supervisor.WorkerPID}}{{.Supervisor.WorkerPID}}{{else if .SyncStatus.PID}}{{.SyncStatus.PID}}{{else}}not running{{end}}</strong>
-              <p class="micro-copy">Live worker pid reported through supervisor state or sync heartbeat.</p>
+              <span class="stat-label">工作进程 PID</span>
+              <strong>{{if .Supervisor.WorkerPID}}{{.Supervisor.WorkerPID}}{{else if .SyncStatus.PID}}{{.SyncStatus.PID}}{{else}}未运行{{end}}</strong>
+              <p class="micro-copy">实时工作进程 PID 来自监管状态或同步心跳。</p>
             </article>
             <article class="ops-card">
-              <span class="stat-label">Restart count</span>
+              <span class="stat-label">重启次数</span>
               <strong>{{.Supervisor.RestartCount}}</strong>
-              <p class="micro-copy">{{if .Supervisor.LastRestartReason}}Last reason: {{.Supervisor.LastRestartReason}}{{else}}No supervisor restart has been recorded yet.{{end}}</p>
+              <p class="micro-copy">{{if .Supervisor.LastRestartReason}}最近原因：{{.Supervisor.LastRestartReason}}{{else}}尚未记录监管器重启。{{end}}</p>
             </article>
             <article class="ops-card">
-              <span class="stat-label">Heartbeat policy</span>
-              <strong>{{if .Supervisor.StaleAfter}}{{.Supervisor.StaleAfter}}{{else}}not managed{{end}}</strong>
-              <p class="micro-copy">Managed mode restarts the worker after this stale interval.</p>
+              <span class="stat-label">心跳策略</span>
+              <strong>{{if .Supervisor.StaleAfter}}{{.Supervisor.StaleAfter}}{{else}}未托管{{end}}</strong>
+              <p class="micro-copy">受管模式会在达到该陈旧阈值后重启工作进程。</p>
             </article>
             <article class="ops-card ops-card-wide">
-              <span class="stat-label">LAN libp2p anchor</span>
+              <span class="stat-label">局域网 libp2p 锚点</span>
               {{if .LANPeers}}
                 <div class="network-code-list">
                   {{range .LANPeers}}<code>{{.}}</code>{{end}}
                 </div>
               {{else}}
-                <strong>not configured</strong>
+                <strong>未配置</strong>
               {{end}}
-              <p class="micro-copy">Used to resolve a plain LAN IP into live libp2p dial addresses.</p>
+              <p class="micro-copy">用于将普通局域网 IP 解析为可拨号的 libp2p 地址。</p>
             </article>
             <article class="ops-card ops-card-wide">
-              <span class="stat-label">LAN BT/DHT anchor</span>
+              <span class="stat-label">局域网 BT/DHT 锚点</span>
               {{if .LANBTAnchors}}
                 <div class="network-code-list">
                   {{range .LANBTAnchors}}<code>{{.Peer}}</code>{{end}}
                 </div>
               {{else}}
-                <strong>not configured</strong>
+                <strong>未配置</strong>
               {{end}}
-              <p class="micro-copy">Used as the preferred LAN backfill source before public DHT routers.</p>
+              <p class="micro-copy">在公共 DHT 路由之前，优先作为局域网回填来源。</p>
             </article>
           </div>
         </section>
@@ -110,7 +110,7 @@
         <section class="panel panel-inline">
           <div class="panel-head">
             <div>
-              <p class="panel-label">Node summary</p>
+              <p class="panel-label">节点概览</p>
               <p class="network-summary-copy">{{.NodeStatus.SummaryDetail}}</p>
             </div>
             <span class="status-pill status-{{.NodeStatus.SummaryTone}}">{{.NodeStatus.Summary}}</span>
@@ -132,20 +132,20 @@
           <section class="panel">
             <div class="panel-head">
               <div>
-                <p class="panel-label">libp2p pubsub</p>
-                <p class="network-card-copy">Live topic joins and announcement relay for magnet/infohash broadcasts.</p>
+                <p class="panel-label">libp2p PubSub</p>
+                <p class="network-card-copy">用于 magnet/infohash 广播的实时 topic 加入和公告中继。</p>
               </div>
-              <span class="status-pill status-{{if .SyncStatus.PubSub.Enabled}}good{{else}}warn{{end}}">{{if .SyncStatus.PubSub.Enabled}}{{len .SyncStatus.PubSub.JoinedTopics}} topics joined{{else}}not running{{end}}</span>
+              <span class="status-pill status-{{if .SyncStatus.PubSub.Enabled}}good{{else}}warn{{end}}">{{if .SyncStatus.PubSub.Enabled}}已加入 {{len .SyncStatus.PubSub.JoinedTopics}} 个 topic{{else}}未运行{{end}}</span>
             </div>
             <div class="summary-grid">
-              <div><span class="stat-label">Published</span><strong>{{.SyncStatus.PubSub.Published}}</strong></div>
-              <div><span class="stat-label">Received</span><strong>{{.SyncStatus.PubSub.Received}}</strong></div>
-              <div><span class="stat-label">Enqueued</span><strong>{{.SyncStatus.PubSub.Enqueued}}</strong></div>
-              <div><span class="stat-label">Last topic</span><strong class="network-value-wrap network-code-inline">{{if .SyncStatus.PubSub.LastTopic}}{{.SyncStatus.PubSub.LastTopic}}{{else}}none yet{{end}}</strong></div>
+              <div><span class="stat-label">已发布</span><strong>{{.SyncStatus.PubSub.Published}}</strong></div>
+              <div><span class="stat-label">已接收</span><strong>{{.SyncStatus.PubSub.Received}}</strong></div>
+              <div><span class="stat-label">已入队</span><strong>{{.SyncStatus.PubSub.Enqueued}}</strong></div>
+              <div><span class="stat-label">最近 topic</span><strong class="network-value-wrap network-code-inline">{{if .SyncStatus.PubSub.LastTopic}}{{.SyncStatus.PubSub.LastTopic}}{{else}}暂无{{end}}</strong></div>
             </div>
             {{if .SyncStatus.PubSub.JoinedTopics}}
               <div class="network-block">
-                <span class="stat-label">Joined topics</span>
+                <span class="stat-label">已加入 topic</span>
                 <div class="network-code-list">
                   {{range .SyncStatus.PubSub.JoinedTopics}}<code>{{.}}</code>{{end}}
                 </div>
@@ -153,7 +153,7 @@
             {{end}}
             {{if .SyncStatus.PubSub.DiscoveryNamespaces}}
               <div class="network-block">
-                <span class="stat-label">Discovery namespaces</span>
+                <span class="stat-label">发现命名空间</span>
                 <div class="network-code-list">
                   {{range .SyncStatus.PubSub.DiscoveryNamespaces}}<code>{{.}}</code>{{end}}
                 </div>
@@ -161,13 +161,13 @@
             {{end}}
             {{if .SyncStatus.PubSub.LastInfoHash}}
               <div class="network-block">
-                <span class="stat-label">Last infohash</span>
+                <span class="stat-label">最近 infohash</span>
                 <code class="network-code-inline">{{.SyncStatus.PubSub.LastInfoHash}}</code>
               </div>
             {{end}}
             {{if .SyncStatus.PubSub.LastError}}
               <details class="network-error-details">
-                <summary>Raw pubsub error</summary>
+                <summary>原始 PubSub 错误</summary>
                 <p class="micro-copy network-error-copy">{{.SyncStatus.PubSub.LastError}}</p>
               </details>
             {{end}}
@@ -177,19 +177,19 @@
             <div class="panel-head">
               <div>
                 <p class="panel-label">libp2p</p>
-                <p class="network-card-copy">Public bootstrap reachability and live overlay metrics.</p>
+                <p class="network-card-copy">公共引导节点可达性与实时覆盖网络指标。</p>
               </div>
-              <span class="status-pill status-{{if gt .SyncStatus.LibP2P.ReachableBootstrap 0}}good{{else}}warn{{end}}">{{.SyncStatus.LibP2P.ReachableBootstrap}}/{{.SyncStatus.LibP2P.ConfiguredBootstrap}} reachable</span>
+              <span class="status-pill status-{{if gt .SyncStatus.LibP2P.ReachableBootstrap 0}}good{{else}}warn{{end}}">{{.SyncStatus.LibP2P.ReachableBootstrap}}/{{.SyncStatus.LibP2P.ConfiguredBootstrap}} 可达</span>
             </div>
             <div class="summary-grid">
-              <div><span class="stat-label">Connected peers</span><strong>{{.SyncStatus.LibP2P.ConnectedPeers}}</strong></div>
-              <div><span class="stat-label">Routing table</span><strong>{{.SyncStatus.LibP2P.RoutingTablePeers}}</strong></div>
+              <div><span class="stat-label">已连接 Peer</span><strong>{{.SyncStatus.LibP2P.ConnectedPeers}}</strong></div>
+              <div><span class="stat-label">路由表</span><strong>{{.SyncStatus.LibP2P.RoutingTablePeers}}</strong></div>
               <div><span class="stat-label">Rendezvous</span><strong>{{.SyncStatus.LibP2P.ConfiguredRendezvous}}</strong></div>
               <div><span class="stat-label">Peer ID</span><strong class="network-value-wrap network-code-inline">{{.SyncStatus.LibP2P.PeerID}}</strong></div>
             </div>
             {{if .SyncStatus.LibP2P.ConfiguredListen}}
               <div class="network-block">
-                <span class="stat-label">Configured listen</span>
+                <span class="stat-label">配置监听地址</span>
                 <div class="network-code-list">
                   {{range .SyncStatus.LibP2P.ConfiguredListen}}<code>{{.}}</code>{{end}}
                 </div>
@@ -197,7 +197,7 @@
             {{end}}
             {{if .SyncStatus.LibP2P.ListenAddrs}}
               <div class="network-block">
-                <span class="stat-label">Active listen addrs</span>
+                <span class="stat-label">实际监听地址</span>
                 <div class="network-code-list">
                   {{range .SyncStatus.LibP2P.ListenAddrs}}<code>{{.}}</code>{{end}}
                 </div>
@@ -209,13 +209,13 @@
                   <article class="network-peer-card">
                     <div class="network-peer-head">
                       <strong class="network-code-inline">{{.PeerID}}</strong>
-                      <span class="status-pill status-{{if .Reachable}}good{{else if .Connected}}warn{{else}}warn{{end}}">{{if .Reachable}}reachable{{else if .Connected}}connected{{else}}offline{{end}}</span>
+                      <span class="status-pill status-{{if .Reachable}}good{{else if .Connected}}warn{{else}}warn{{end}}">{{if .Reachable}}可达{{else if .Connected}}已连接{{else}}离线{{end}}</span>
                     </div>
                     <code class="network-code-inline">{{.Address}}</code>
                     {{if .RTT}}<p class="micro-copy">RTT {{.RTT}}</p>{{end}}
                     {{if .Error}}
                       <details class="network-error-details">
-                        <summary>Raw peer error</summary>
+                        <summary>原始 Peer 错误</summary>
                         <p class="micro-copy network-error-copy">{{.Error}}</p>
                       </details>
                     {{end}}
@@ -228,21 +228,21 @@
           <section class="panel">
             <div class="panel-head">
               <div>
-                <p class="panel-label">LAN mDNS</p>
-                <p class="network-card-copy">Local-network discovery between nodes on the same LAN.</p>
+                <p class="panel-label">局域网 mDNS</p>
+                <p class="network-card-copy">同一局域网内节点之间的本地发现。</p>
               </div>
-              <span class="status-pill status-{{if gt .SyncStatus.LibP2P.MDNS.ConnectedPeers 0}}good{{else}}warn{{end}}">{{.SyncStatus.LibP2P.MDNS.DiscoveredPeers}} discovered</span>
+              <span class="status-pill status-{{if gt .SyncStatus.LibP2P.MDNS.ConnectedPeers 0}}good{{else}}warn{{end}}">发现 {{.SyncStatus.LibP2P.MDNS.DiscoveredPeers}} 个</span>
             </div>
             <div class="summary-grid">
-              <div><span class="stat-label">Service</span><strong>{{if .SyncStatus.LibP2P.MDNS.ServiceName}}{{.SyncStatus.LibP2P.MDNS.ServiceName}}{{else}}not running{{end}}</strong></div>
-              <div><span class="stat-label">Connected</span><strong>{{.SyncStatus.LibP2P.MDNS.ConnectedPeers}}</strong></div>
-              <div><span class="stat-label">Last seen</span><strong>{{formatOptionalTime .SyncStatus.LibP2P.MDNS.LastDiscoveredAt}}</strong></div>
+              <div><span class="stat-label">服务</span><strong>{{if .SyncStatus.LibP2P.MDNS.ServiceName}}{{.SyncStatus.LibP2P.MDNS.ServiceName}}{{else}}未运行{{end}}</strong></div>
+              <div><span class="stat-label">已连接</span><strong>{{.SyncStatus.LibP2P.MDNS.ConnectedPeers}}</strong></div>
+              <div><span class="stat-label">最近发现</span><strong>{{formatOptionalTime .SyncStatus.LibP2P.MDNS.LastDiscoveredAt}}</strong></div>
             </div>
             <p class="network-card-copy">
               {{if gt .SyncStatus.LibP2P.MDNS.DiscoveredPeers 0}}
-                LAN peers have been discovered on this subnet.
+                当前子网已经发现局域网 Peer。
               {{else}}
-                mDNS is enabled, but no second active Hao.News sync node has been discovered on the current LAN yet.
+                mDNS 已开启，但当前局域网还没有发现第二个活跃的 Hao.News 同步节点。
               {{end}}
             </p>
             {{if .SyncStatus.LibP2P.MDNS.Peers}}
@@ -251,12 +251,12 @@
                   <article class="network-peer-card">
                     <div class="network-peer-head">
                       <strong class="network-code-inline">{{.PeerID}}</strong>
-                      <span class="status-pill status-{{if .Connected}}good{{else}}warn{{end}}">{{if .Connected}}connected{{else}}discovered{{end}}</span>
+                      <span class="status-pill status-{{if .Connected}}good{{else}}warn{{end}}">{{if .Connected}}已连接{{else}}已发现{{end}}</span>
                     </div>
                     <code class="network-code-inline">{{.Address}}</code>
                     {{if .Error}}
                       <details class="network-error-details">
-                        <summary>Raw LAN error</summary>
+                        <summary>原始局域网错误</summary>
                         <p class="micro-copy network-error-copy">{{.Error}}</p>
                       </details>
                     {{end}}
@@ -269,8 +269,8 @@
           <section class="panel">
             <div class="panel-head">
               <div>
-                <p class="panel-label">LAN BT/DHT</p>
-                <p class="network-card-copy">LAN anchor for BitTorrent/DHT backfill using `lan_bt_peer`.</p>
+                <p class="panel-label">局域网 BT/DHT</p>
+                <p class="network-card-copy">使用 `lan_bt_peer` 作为 BitTorrent/DHT 局域网回填锚点。</p>
               </div>
               <span class="status-pill status-{{if .LANBTHasMatch}}good{{else}}warn{{end}}">{{.LANBTOverall}}</span>
             </div>
@@ -280,11 +280,11 @@
                   <article class="network-peer-card">
                     <div class="network-peer-head">
                       <strong class="network-code-inline">{{.Peer}}</strong>
-                      <span class="status-pill status-{{if .MatchedNode}}good{{else}}warn{{end}}">{{if .MatchedNode}}port learned{{else if .Error}}query failed{{else}}waiting{{end}}</span>
+                      <span class="status-pill status-{{if .MatchedNode}}good{{else}}warn{{end}}">{{if .MatchedNode}}已获端口{{else if .Error}}查询失败{{else}}等待中{{end}}</span>
                     </div>
                     {{if .MatchedNode}}
                       <div class="network-block">
-                        <span class="stat-label">Matched node</span>
+                        <span class="stat-label">匹配节点</span>
                         <code class="network-code-inline">{{.MatchedNode}}</code>
                       </div>
                     {{end}}
@@ -301,7 +301,7 @@
                 {{end}}
               </div>
             {{else}}
-              <p class="network-card-copy">No `lan_bt_peer` is configured in `hao_news_net.inf`.</p>
+              <p class="network-card-copy"><code>hao_news_net.inf</code> 中尚未配置 `lan_bt_peer`。</p>
             {{end}}
           </section>
         </div>
@@ -311,20 +311,20 @@
             <div class="panel-head">
               <div>
                 <p class="panel-label">BitTorrent DHT</p>
-                <p class="network-card-copy">Assist-layer state for immutable bundle retrieval.</p>
+                <p class="network-card-copy">用于不可变 bundle 获取的辅助层状态。</p>
               </div>
-              <span class="status-pill status-{{if gt .SyncStatus.BitTorrentDHT.GoodNodes 0}}good{{else}}warn{{end}}">{{.SyncStatus.BitTorrentDHT.GoodNodes}} good nodes</span>
+              <span class="status-pill status-{{if gt .SyncStatus.BitTorrentDHT.GoodNodes 0}}good{{else}}warn{{end}}">{{.SyncStatus.BitTorrentDHT.GoodNodes}} 个良好节点</span>
             </div>
             <div class="summary-grid">
-              <div><span class="stat-label">Configured listen</span><strong class="network-value-wrap network-code-inline">{{if .SyncStatus.BitTorrentDHT.ConfiguredListen}}{{.SyncStatus.BitTorrentDHT.ConfiguredListen}}{{else}}auto{{end}}</strong></div>
-              <div><span class="stat-label">Servers</span><strong>{{.SyncStatus.BitTorrentDHT.Servers}}</strong></div>
-              <div><span class="stat-label">Nodes</span><strong>{{.SyncStatus.BitTorrentDHT.Nodes}}</strong></div>
-              <div><span class="stat-label">Good nodes</span><strong>{{.SyncStatus.BitTorrentDHT.GoodNodes}}</strong></div>
-              <div><span class="stat-label">Outstanding tx</span><strong>{{.SyncStatus.BitTorrentDHT.OutstandingTransactions}}</strong></div>
+              <div><span class="stat-label">配置监听地址</span><strong class="network-value-wrap network-code-inline">{{if .SyncStatus.BitTorrentDHT.ConfiguredListen}}{{.SyncStatus.BitTorrentDHT.ConfiguredListen}}{{else}}自动{{end}}</strong></div>
+              <div><span class="stat-label">服务端</span><strong>{{.SyncStatus.BitTorrentDHT.Servers}}</strong></div>
+              <div><span class="stat-label">节点数</span><strong>{{.SyncStatus.BitTorrentDHT.Nodes}}</strong></div>
+              <div><span class="stat-label">良好节点</span><strong>{{.SyncStatus.BitTorrentDHT.GoodNodes}}</strong></div>
+              <div><span class="stat-label">未完成事务</span><strong>{{.SyncStatus.BitTorrentDHT.OutstandingTransactions}}</strong></div>
             </div>
             {{if .SyncStatus.BitTorrentDHT.ListenAddrs}}
               <div class="network-block">
-                <span class="stat-label">Active listen addrs</span>
+                <span class="stat-label">实际监听地址</span>
                 <div class="network-code-list">
                   {{range .SyncStatus.BitTorrentDHT.ListenAddrs}}<code>{{.}}</code>{{end}}
                 </div>
@@ -336,20 +336,20 @@
           <section class="panel">
             <div class="panel-head">
               <div>
-                <p class="panel-label">Sync daemon</p>
-                <p class="network-card-copy">Current runtime and queue activity for the bundled daemon.</p>
+                <p class="panel-label">同步守护进程</p>
+                <p class="network-card-copy">内置守护进程当前的运行状态和队列活动。</p>
               </div>
-              <span class="status-pill status-good">{{if .SyncStatus.PID}}pid {{.SyncStatus.PID}}{{else}}not running{{end}}</span>
+              <span class="status-pill status-good">{{if .SyncStatus.PID}}PID {{.SyncStatus.PID}}{{else}}未运行{{end}}</span>
             </div>
             <div class="summary-grid">
-              <div><span class="stat-label">Queue refs</span><strong>{{.SyncStatus.SyncActivity.QueueRefs}}</strong></div>
-              <div><span class="stat-label">Imported</span><strong>{{.SyncStatus.SyncActivity.Imported}}</strong></div>
-              <div><span class="stat-label">Skipped</span><strong>{{.SyncStatus.SyncActivity.Skipped}}</strong></div>
-              <div><span class="stat-label">Failed</span><strong>{{.SyncStatus.SyncActivity.Failed}}</strong></div>
+              <div><span class="stat-label">队列引用</span><strong>{{.SyncStatus.SyncActivity.QueueRefs}}</strong></div>
+              <div><span class="stat-label">已导入</span><strong>{{.SyncStatus.SyncActivity.Imported}}</strong></div>
+              <div><span class="stat-label">已跳过</span><strong>{{.SyncStatus.SyncActivity.Skipped}}</strong></div>
+              <div><span class="stat-label">失败数</span><strong>{{.SyncStatus.SyncActivity.Failed}}</strong></div>
             </div>
             {{if .Supervisor.Mode}}
               <div class="network-block">
-                <span class="stat-label">Supervisor state</span>
+                <span class="stat-label">监管器状态</span>
                 <div class="network-code-list">
                   <code>mode={{.Supervisor.Mode}}</code>
                   {{if .Supervisor.BinaryPath}}<code>binary={{.Supervisor.BinaryPath}}</code>{{end}}
@@ -360,15 +360,15 @@
             {{end}}
             {{if .SyncStatus.SyncActivity.LastRef}}
               <div class="network-block">
-                <span class="stat-label">Last ref</span>
+                <span class="stat-label">最近引用</span>
                 <code class="network-code-inline">{{.SyncStatus.SyncActivity.LastRef}}</code>
               </div>
             {{end}}
             {{if .SyncStatus.SyncActivity.LastStatus}}
-              <p class="micro-copy">Last result: {{.SyncStatus.SyncActivity.LastStatus}}</p>
+              <p class="micro-copy">最近结果：{{.SyncStatus.SyncActivity.LastStatus}}</p>
             {{end}}
             {{if .Supervisor.LastExit}}
-              <p class="micro-copy network-error-copy">Last worker exit: {{.Supervisor.LastExit}}</p>
+              <p class="micro-copy network-error-copy">最近工作进程退出：{{.Supervisor.LastExit}}</p>
             {{end}}
           </section>
         </div>

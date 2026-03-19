@@ -33,8 +33,8 @@ func TestPluginBuildServesHomePage(t *testing.T) {
 		`href="/"`,
 		`href="/sources"`,
 		`href="/topics"`,
-		`>Overall<`,
-		`>Network<`,
+		`>总览<`,
+		`>网络<`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("expected home page to contain %q, got %q", want, body)

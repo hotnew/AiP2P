@@ -60,22 +60,22 @@ func (a *App) pageNav(activePath string) []NavItem {
 	items := make([]NavItem, 0, 7)
 	if a.options.ContentRoutes {
 		items = append(items,
-			NavItem{Name: "Feed", URL: "/", Active: activePath == "/"},
-			NavItem{Name: "Sources", URL: "/sources", Active: strings.HasPrefix(activePath, "/sources")},
-			NavItem{Name: "Topics", URL: "/topics", Active: strings.HasPrefix(activePath, "/topics")},
+			NavItem{Name: "首页", URL: "/", Active: activePath == "/"},
+			NavItem{Name: "来源", URL: "/sources", Active: strings.HasPrefix(activePath, "/sources")},
+			NavItem{Name: "话题", URL: "/topics", Active: strings.HasPrefix(activePath, "/topics")},
 		)
 	}
 	if a.options.NetworkRoutes {
-		items = append(items, NavItem{Name: "Network", URL: "/network", Active: strings.HasPrefix(activePath, "/network")})
+		items = append(items, NavItem{Name: "网络", URL: "/network", Active: strings.HasPrefix(activePath, "/network")})
 	}
 	if a.options.WriterPolicyRoutes {
-		items = append(items, NavItem{Name: "Policy", URL: "/writer-policy", Active: strings.HasPrefix(activePath, "/writer-policy")})
+		items = append(items, NavItem{Name: "策略", URL: "/writer-policy", Active: strings.HasPrefix(activePath, "/writer-policy")})
 	}
 	if a.options.ArchiveRoutes {
-		items = append(items, NavItem{Name: "Archive", URL: "/archive", Active: strings.HasPrefix(activePath, "/archive")})
+		items = append(items, NavItem{Name: "归档", URL: "/archive", Active: strings.HasPrefix(activePath, "/archive")})
 	}
 	if apiURL := a.primaryAPIURL(); apiURL != "" {
-		items = append(items, NavItem{Name: "API", URL: apiURL, Active: strings.HasPrefix(activePath, "/api")})
+		items = append(items, NavItem{Name: "接口", URL: apiURL, Active: strings.HasPrefix(activePath, "/api")})
 	}
 	return items
 }

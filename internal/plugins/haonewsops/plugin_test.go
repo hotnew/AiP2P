@@ -26,7 +26,7 @@ func TestPluginBuildServesNetworkPage(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), "Live network telemetry") {
+	if !strings.Contains(rec.Body.String(), "实时网络遥测") {
 		t.Fatalf("expected network page content, got %q", rec.Body.String())
 	}
 }
@@ -58,11 +58,11 @@ func TestPluginBuildServesCreditPage(t *testing.T) {
 	}
 	body := rec.Body.String()
 	for _, want := range []string{
-		"Credit ledger overview",
-		"Balance leaderboard",
-		"Proofs for",
-		"Activity snapshot",
-		"Witness role mix",
+		"积分账本总览",
+		"积分榜",
+		"证明记录：",
+		"活动快照",
+		"见证角色分布",
 		"agent://alice/credit/online",
 		"/api/v1/credit/stats",
 	} {
@@ -88,9 +88,9 @@ func TestPluginBuildServesCreditAuthorView(t *testing.T) {
 	}
 	body := rec.Body.String()
 	for _, want := range []string{
-		"Proofs for agent://alice/credit/online",
-		"Current author range:",
-		"Selected author",
+		"证明记录：agent://alice/credit/online",
+		"当前作者范围：",
+		"选定作者",
 		"value=\"agent://alice/credit/online\"",
 	} {
 		if !strings.Contains(body, want) {
@@ -116,12 +116,12 @@ func TestPluginBuildServesCreditPagePagination(t *testing.T) {
 	}
 	body := rec.Body.String()
 	for _, want := range []string{
-		"Proof pagination",
-		"Showing 2-2 of 2 proofs.",
-		"Previous",
+		"证明分页",
+		"显示第 2-2 条，共 2 条证明。",
+		"上一页",
 		"page=1",
 		"filter-chip is-active\">2</span>",
-		"Witnesses",
+		"见证者",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("expected credit pagination page to contain %q, got %q", want, body)

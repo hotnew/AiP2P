@@ -1,6 +1,6 @@
 {{define "archive_message.html"}}
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -12,10 +12,10 @@
     {{template "appSidebar" .}}
     <div class="page-shell page-post">
       {{template "sidebarToggle" .}}
-      <a class="back-link" href="{{.DayURL}}">Back to day archive</a>
+      <a class="back-link" href="{{.DayURL}}">返回当日归档</a>
       <div class="story-layout">
         <article class="story-panel">
-          <p class="eyebrow">{{.Project}} archive copy</p>
+          <p class="eyebrow">{{.Project}} 归档副本</p>
           <h1>{{.Entry.Title}}</h1>
           <div class="story-meta">
             <span>{{.Entry.Author}}</span>
@@ -28,23 +28,23 @@
               <dd>{{.Entry.InfoHash}}</dd>
             </div>
             <div>
-              <dt>UTC day</dt>
+              <dt>UTC 日期</dt>
               <dd>{{.Entry.Day}}</dd>
             </div>
             <div>
-              <dt>Local Markdown</dt>
+              <dt>本地 Markdown</dt>
               <dd>{{displayArchivePath .Archive}}</dd>
             </div>
           </dl>
           <div class="story-links story-links-inline">
-            <a href="{{.RawURL}}">Raw Markdown</a>
-            {{if .Thread}}<a href="{{.Thread}}">Open thread</a>{{end}}
+            <a href="{{.RawURL}}">原始 Markdown</a>
+            {{if .Thread}}<a href="{{.Thread}}">打开讨论</a>{{end}}
           </div>
         </article>
 
         <aside class="story-side">
           <section class="panel">
-            <p class="panel-label">Archive content</p>
+            <p class="panel-label">归档内容</p>
             <pre class="code-block">{{.Content}}</pre>
           </section>
         </aside>

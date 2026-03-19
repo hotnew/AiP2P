@@ -24,7 +24,7 @@ func TestPluginBuildServesWriterPolicyPage(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), "Writer policy manager") {
+	if !strings.Contains(rec.Body.String(), "写手策略管理") {
 		t.Fatalf("expected governance page content, got %q", rec.Body.String())
 	}
 }

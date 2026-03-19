@@ -1,6 +1,6 @@
 {{define "collection.html"}}
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -13,44 +13,44 @@
     <div class="page-shell">
       {{template "sidebarToggle" .}}
       <header class="hero hero-dashboard">
-        <a class="back-link" href="{{.DirectoryURL}}">Back to {{.Kind | printf "%ss"}}</a>
+        <a class="back-link" href="{{.DirectoryURL}}">返回列表</a>
         <p class="eyebrow">{{.Project}} {{.Kind}}</p>
         <div class="hero-heading">
           <div>
             <h1>{{compactIdentity .Name}}</h1>
             {{if isPublicKeyish .Name}}
               <details class="identity-reveal identity-reveal-hero">
-                <summary>View full key</summary>
+                <summary>查看完整键值</summary>
                 <div class="identity-reveal-body">
                   <code class="identity-code">{{.Name}}</code>
-                  <button class="button-link button-link-muted identity-copy-button" type="button" data-copy-text="{{.Name}}">Copy</button>
+                  <button class="button-link button-link-muted identity-copy-button" type="button" data-copy-text="{{.Name}}">复制</button>
                 </div>
               </details>
             {{end}}
-            <p class="hero-copy">This view narrows the local bundle index to a single {{lower .Kind}} while keeping related replies and reactions visible.</p>
+            <p class="hero-copy">该视图将本地 bundle 索引收窄到单个 {{lower .Kind}}，同时保留相关回复与反应。</p>
           </div>
           <div class="hero-actions">
-            <a class="button-link button-link-muted" href="{{.APIPath}}">JSON API</a>
-            {{if .ExternalURL}}<a class="button-link" href="{{.ExternalURL}}" target="_blank" rel="noreferrer">Open source site</a>{{end}}
+            <a class="button-link button-link-muted" href="{{.APIPath}}">JSON 接口</a>
+            {{if .ExternalURL}}<a class="button-link" href="{{.ExternalURL}}" target="_blank" rel="noreferrer">打开来源站点</a>{{end}}
           </div>
         </div>
         <div class="hero-stats hero-stats-wide">
           <div class="hero-stat-card">
-            <span class="stat-label">Indexed in scope</span>
+            <span class="stat-label">范围内已索引</span>
             <strong>{{.TotalPostCount}}</strong>
           </div>
           <div class="hero-stat-card">
-            <span class="stat-label">Snapshot</span>
+            <span class="stat-label">快照</span>
             <strong>{{formatTime .Now}}</strong>
           </div>
         </div>
         <form class="search-bar" method="get" action="{{.Path}}">
-          <input type="search" name="q" value="{{.Options.Query}}" placeholder="Search within {{compactIdentity .Name}}">
+          <input type="search" name="q" value="{{.Options.Query}}" placeholder="在 {{compactIdentity .Name}} 内搜索">
           {{if .Options.Channel}}<input type="hidden" name="channel" value="{{.Options.Channel}}">{{end}}
           {{if .Options.Sort}}<input type="hidden" name="sort" value="{{.Options.Sort}}">{{end}}
           {{if .Options.Window}}<input type="hidden" name="window" value="{{.Options.Window}}">{{end}}
           {{if gt .Options.PageSize 0}}<input type="hidden" name="page_size" value="{{.Options.PageSize}}">{{end}}
-          <button type="submit">Search</button>
+          <button type="submit">搜索</button>
         </form>
       </header>
 
@@ -69,7 +69,7 @@
           </section>
 
           <section class="panel">
-            <p class="panel-label">Time range</p>
+            <p class="panel-label">时间范围</p>
             <div class="facet-list">
               {{range .WindowOptions}}
                 <a class="facet {{if .Active}}is-active{{end}}" href="{{.URL}}">{{.Name}}</a>
@@ -78,7 +78,7 @@
           </section>
 
           <section class="panel">
-            <p class="panel-label">Sort</p>
+            <p class="panel-label">排序</p>
             <div class="facet-list">
               {{range .SortOptions}}
                 <a class="facet {{if .Active}}is-active{{end}}" href="{{.URL}}">{{.Name}}</a>
@@ -90,7 +90,7 @@
 
         <main class="feed">
           <section class="panel panel-inline">
-            <p class="panel-label">Current slice</p>
+            <p class="panel-label">当前视图</p>
             <div class="summary-grid">
               {{range .SummaryStats}}
                 <div>
@@ -104,7 +104,7 @@
                 {{range .ActiveFilters}}
                   <a class="filter-chip" href="{{.URL}}">{{.Label}}</a>
                 {{end}}
-                <a class="filter-chip clear-chip" href="{{.Path}}">Clear all</a>
+                <a class="filter-chip clear-chip" href="{{.Path}}">清除全部</a>
               </div>
             {{end}}
           </section>
@@ -118,8 +118,8 @@
             {{template "paginationControls" .}}
           {{else}}
             <section class="empty-state">
-              <h2>No matching stories in this scope</h2>
-              <p>Adjust the query, time range, or channel facets and try again.</p>
+              <h2>当前范围内没有匹配内容</h2>
+              <p>调整查询、时间范围或筛选条件后重试。</p>
             </section>
           {{end}}
         </main>

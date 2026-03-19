@@ -1,10 +1,10 @@
 {{define "appSidebar"}}
   <aside id="app-sidebar" class="app-sidebar">
     <a class="brand-block" href="/">
-      <span class="brand-kicker">Hao.News example node</span>
+      <span class="brand-kicker">Hao.News 示例节点</span>
       <strong>{{.Project}}</strong>
       {{if .Version}}<span class="brand-version">{{.Version}}</span>{{end}}
-      <span class="brand-copy">Human-readable public index for shared Hao.News bundles, replies, and mirrored Markdown.</span>
+      <span class="brand-copy">面向人类可读的 Hao.News 公共索引，展示共享内容、回复与 Markdown 镜像。</span>
     </a>
     <nav class="page-nav page-nav-rail">
       {{range .PageNav}}
@@ -13,22 +13,22 @@
     </nav>
     <section class="rail-panel">
       <div class="panel-head">
-        <p class="panel-label">Network dashboard</p>
+        <p class="panel-label">网络看板</p>
         <span class="status-pill status-{{.NodeStatus.SummaryTone}}">{{.NodeStatus.Summary}}</span>
       </div>
       <div class="rail-stat">
         <div class="rail-stat-copy">
-          <span>Overall</span>
+          <span>总览</span>
           {{if .NodeStatus.SummaryDetail}}<small>{{.NodeStatus.SummaryDetail}}</small>{{end}}
         </div>
         <strong class="status-{{.NodeStatus.SummaryTone}}">{{.NodeStatus.Summary}}</strong>
       </div>
       <div class="rail-stat">
         <div class="rail-stat-copy">
-          <span>Network</span>
+          <span>网络</span>
           {{if .NodeStatus.NetworkDetail}}<small>{{.NodeStatus.NetworkDetail}}</small>{{end}}
         </div>
-        <strong class="status-{{if .NodeStatus.NetworkTone}}{{.NodeStatus.NetworkTone}}{{else}}warn{{end}}">{{if .NodeStatus.NetworkStatus}}{{.NodeStatus.NetworkStatus}}{{else}}unknown{{end}}</strong>
+        <strong class="status-{{if .NodeStatus.NetworkTone}}{{.NodeStatus.NetworkTone}}{{else}}warn{{end}}">{{if .NodeStatus.NetworkStatus}}{{.NodeStatus.NetworkStatus}}{{else}}未知{{end}}</strong>
       </div>
     </section>
   </aside>
@@ -42,7 +42,7 @@
     aria-expanded="true"
     data-sidebar-toggle
   >
-    Hide menu
+    收起菜单
   </button>
 {{end}}
 
@@ -58,7 +58,7 @@
   const applyState = (hidden) => {
     body.classList.toggle("sidebar-collapsed", hidden);
     toggle.setAttribute("aria-expanded", hidden ? "false" : "true");
-    toggle.textContent = hidden ? "Show menu" : "Hide menu";
+    toggle.textContent = hidden ? "展开菜单" : "收起菜单";
   };
 
   applyState(window.localStorage.getItem(storageKey) === "1");
@@ -76,12 +76,12 @@
       const original = button.textContent;
       try {
         await navigator.clipboard.writeText(text);
-        button.textContent = "Copied";
+        button.textContent = "已复制";
         window.setTimeout(() => {
           button.textContent = original;
         }, 1200);
       } catch (error) {
-        button.textContent = "Copy failed";
+        button.textContent = "复制失败";
         window.setTimeout(() => {
           button.textContent = original;
         }, 1200);
@@ -102,13 +102,13 @@
 
 {{define "subscriptionSummary"}}
   <section class="panel panel-inline subscription-panel">
-    <p class="panel-label">Local subscription mirror</p>
+    <p class="panel-label">本地订阅镜像</p>
     {{if and (eq (len .Topics) 0) (eq (len .Tags) 0)}}
-      <p class="micro-copy">No local subscription rules loaded. This node mirrors all indexed Hao.News Public bundles.</p>
+      <p class="micro-copy">当前未加载本地订阅规则。此节点会镜像全部已索引的 Hao.News Public 内容。</p>
     {{else}}
       <div class="active-filters">
-        {{range .Topics}}<span class="filter-chip">Topic: {{.}}</span>{{end}}
-        {{range .Tags}}<span class="filter-chip">Tag: {{.}}</span>{{end}}
+        {{range .Topics}}<span class="filter-chip">话题：{{.}}</span>{{end}}
+        {{range .Tags}}<span class="filter-chip">标签：{{.}}</span>{{end}}
       </div>
     {{end}}
   </section>
@@ -118,7 +118,7 @@
   <article class="story-card">
     <div class="story-card-main">
       <div class="story-topline">
-        <span class="badge">{{if .Topics}}{{index .Topics 0}}{{else}}untagged{{end}}</span>
+        <span class="badge">{{if .Topics}}{{index .Topics 0}}{{else}}未分类{{end}}</span>
         {{if .PostType}}<span class="badge badge-muted">{{.PostType}}</span>{{end}}
       </div>
       <div class="card-meta">
@@ -133,37 +133,37 @@
         {{if .Topics}}
           {{range .Topics}}<a class="topic-pill" href="{{topicPath .}}">{{.}}</a>{{end}}
         {{else}}
-          <span class="topics">No topics supplied</span>
+          <span class="topics">未提供话题</span>
         {{end}}
       </div>
     </div>
     <aside class="story-card-side">
       <div class="signal-grid">
         <div>
-          <span class="label">Replies</span>
+          <span class="label">回复</span>
           <strong>{{.ReplyCount}}</strong>
         </div>
         <div>
-          <span class="label">Reactions</span>
+          <span class="label">反应</span>
           <strong>{{.ReactionCount}}</strong>
         </div>
         <div>
-          <span class="label">Vote</span>
+          <span class="label">投票</span>
           <strong>{{.VoteScore}}</strong>
         </div>
         <div>
-          <span class="label">Truth</span>
+          <span class="label">真实性</span>
           <strong>{{formatScore .TruthScoreAverage}}</strong>
         </div>
         <div>
-          <span class="label">Source</span>
+          <span class="label">来源</span>
           <strong>{{formatScore .SourceScoreAverage}}</strong>
         </div>
       </div>
       <div class="story-links story-links-column">
-        <a href="/posts/{{.InfoHash}}">Open thread</a>
+        <a href="/posts/{{.InfoHash}}">打开讨论</a>
         {{if .SourceURL}}
-          <a href="{{.SourceURL}}" target="_blank" rel="noreferrer">Source site</a>
+          <a href="{{.SourceURL}}" target="_blank" rel="noreferrer">来源站点</a>
         {{end}}
       </div>
     </aside>
@@ -175,11 +175,11 @@
     <section class="panel panel-inline pagination-panel">
       <div class="panel-head">
         <div>
-          <p class="panel-label">Feed pagination</p>
-          <p class="micro-copy">Showing {{.Pagination.FromItem}}-{{.Pagination.ToItem}} of {{.Pagination.TotalItems}} matching stories.</p>
+          <p class="panel-label">列表分页</p>
+          <p class="micro-copy">显示第 {{.Pagination.FromItem}}-{{.Pagination.ToItem}} 条，共 {{.Pagination.TotalItems}} 条匹配内容。</p>
         </div>
         <div class="pagination-size">
-          <span class="micro-copy">Per page</span>
+          <span class="micro-copy">每页</span>
           <div class="facet-list facet-list-inline">
             {{range .PageSizeOptions}}
               <a class="facet {{if .Active}}is-active{{end}}" href="{{.URL}}">{{.Name}}</a>
@@ -190,9 +190,9 @@
       {{if gt .Pagination.TotalPages 1}}
         <div class="pagination-links">
           {{if .Pagination.PrevURL}}
-            <a class="filter-chip" href="{{.Pagination.PrevURL}}">Previous</a>
+            <a class="filter-chip" href="{{.Pagination.PrevURL}}">上一页</a>
           {{else}}
-            <span class="filter-chip is-disabled">Previous</span>
+            <span class="filter-chip is-disabled">上一页</span>
           {{end}}
           {{range .Pagination.Links}}
             {{if .Active}}
@@ -202,9 +202,9 @@
             {{end}}
           {{end}}
           {{if .Pagination.NextURL}}
-            <a class="filter-chip" href="{{.Pagination.NextURL}}">Next</a>
+            <a class="filter-chip" href="{{.Pagination.NextURL}}">下一页</a>
           {{else}}
-            <span class="filter-chip is-disabled">Next</span>
+            <span class="filter-chip is-disabled">下一页</span>
           {{end}}
         </div>
       {{end}}

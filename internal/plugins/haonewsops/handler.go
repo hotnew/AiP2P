@@ -156,7 +156,7 @@ func handleCredit(app *newsplugin.App, w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		selectedBalance = &balance
-		proofsLabel = "Proofs for " + author
+		proofsLabel = "证明记录：" + author
 	} else {
 		if date == "" {
 			date = time.Now().UTC().Format("2006-01-02")
@@ -166,7 +166,7 @@ func handleCredit(app *newsplugin.App, w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		proofsLabel = "Proofs for " + date
+		proofsLabel = "证明记录：" + date
 	}
 	selectedProofTotal := len(proofs)
 	proofs, pagination := paginateCreditProofs(proofs, r)
@@ -308,7 +308,7 @@ func opsPageNav(app *newsplugin.App, activePath string) []newsplugin.NavItem {
 	}
 	if !hasCredit {
 		items = append(items, newsplugin.NavItem{
-			Name:   "Credit",
+			Name:   "积分",
 			URL:    "/credit",
 			Active: activePath == "/credit",
 		})
