@@ -1130,6 +1130,22 @@ func ensureSyncLayout(store *Store, queuePath string) (string, error) {
 	return queuePath, nil
 }
 
+func QueueSyncRefForStore(storeRoot, raw string) (bool, error) {
+	store, err := OpenStore(storeRoot)
+	if err != nil {
+		return false, err
+	}
+	queuePath, err := ensureSyncLayout(store, "")
+	if err != nil {
+		return false, err
+	}
+	ref, err := ParseSyncRef(raw)
+	if err != nil {
+		return false, err
+	}
+	return enqueueSyncRef(queuePath, ref)
+}
+
 func collectSyncRefs(direct []string, queuePath string) ([]SyncRef, error) {
 	seen := make(map[string]struct{})
 	out := make([]SyncRef, 0)

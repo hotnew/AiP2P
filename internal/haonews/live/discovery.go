@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -109,15 +110,44 @@ func (w *AnnouncementWatcher) run(ctx context.Context) {
 		if err := json.Unmarshal(msg.Data, &event); err != nil {
 			continue
 		}
-		if err := VerifyMessage(event); err != nil || event.Type != TypeRoomAnnounce {
+		if err := VerifyMessage(event); err != nil {
 			continue
 		}
+		if err := w.handleEvent(event); err != nil {
+			continue
+		}
+	}
+}
+
+func (w *AnnouncementWatcher) handleEvent(event LiveMessage) error {
+	switch event.Type {
+	case TypeRoomAnnounce:
 		info := roomInfoFromAnnouncement(event)
 		if strings.TrimSpace(info.RoomID) == "" {
-			continue
+			return nil
 		}
-		_ = w.store.SaveRoom(info)
+		return w.store.SaveRoom(info)
+	case TypeArchiveNotice:
+		info := roomInfoFromAnnouncement(event)
+		if strings.TrimSpace(info.RoomID) == "" {
+			return nil
+		}
+		if err := w.store.SaveRoom(info); err != nil {
+			return err
+		}
+		if err := w.store.AppendEvent(info.RoomID, event); err != nil {
+			return err
+		}
+		if result, ok := archiveResultFromNotice(event); ok {
+			if err := w.store.SaveArchiveResult(info.RoomID, result); err != nil {
+				return err
+			}
+			if ref := archiveSyncRefFromNotice(event); strings.TrimSpace(ref) != "" {
+				_, _ = haonews.QueueSyncRefForStore(filepath.Dir(w.store.Root), ref)
+			}
+		}
 	}
+	return nil
 }
 
 func (w *AnnouncementWatcher) shutdown() {

@@ -2,6 +2,8 @@ package live
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -247,6 +249,77 @@ func TestRoomInfoFromAnnouncement(t *testing.T) {
 	})
 	if info.RoomID != "room-announce" || info.Title != "Live Room" || info.Creator != "agent://pc75/openclaw01" {
 		t.Fatalf("room info = %#v", info)
+	}
+}
+
+func TestAnnouncementWatcherHandleArchiveNotice(t *testing.T) {
+	root := t.TempDir()
+	store, err := OpenLocalStore(root)
+	if err != nil {
+		t.Fatalf("OpenLocalStore error = %v", err)
+	}
+	identity, err := haonews.NewAgentIdentity("agent://pc75", "agent://pc75/openclaw01", time.Now().UTC())
+	if err != nil {
+		t.Fatalf("NewAgentIdentity error = %v", err)
+	}
+	info := RoomInfo{
+		RoomID:      "room-archive-notice",
+		Title:       "Archive Notice Test",
+		Creator:     identity.Author,
+		CreatedAt:   "2026-03-19T10:00:00Z",
+		Channel:     "hao.news/live",
+		Description: "archive notice propagation",
+	}
+	result := ArchiveResult{
+		RoomID:     info.RoomID,
+		Channel:    "hao.news/live",
+		Events:     5,
+		ArchivedAt: "2026-03-19T10:05:00Z",
+		ViewerURL:  "/posts/338f294e18ac2fe39c0a5201845bc6e4d7cc33c0",
+		Published: haonews.PublishResult{
+			InfoHash: "338f294e18ac2fe39c0a5201845bc6e4d7cc33c0",
+			Magnet:   "magnet:?xt=urn:btih:338f294e18ac2fe39c0a5201845bc6e4d7cc33c0&dn=live-archive",
+		},
+	}
+	event, err := NewSignedMessage(identity, identity.Author, info.RoomID, TypeArchiveNotice, 1, 0, LivePayload{
+		Content:     result.ViewerURL,
+		ContentType: "application/json",
+		Metadata:    archiveNoticeMetadata(info, result),
+	})
+	if err != nil {
+		t.Fatalf("NewSignedMessage error = %v", err)
+	}
+	watcher := &AnnouncementWatcher{store: store}
+	if err := watcher.handleEvent(event); err != nil {
+		t.Fatalf("handleEvent error = %v", err)
+	}
+	room, err := store.LoadRoom(info.RoomID)
+	if err != nil {
+		t.Fatalf("LoadRoom error = %v", err)
+	}
+	if room.Title != info.Title || room.Channel != info.Channel {
+		t.Fatalf("saved room = %#v, want title/channel from notice", room)
+	}
+	archive, err := store.LoadArchiveResult(info.RoomID)
+	if err != nil {
+		t.Fatalf("LoadArchiveResult error = %v", err)
+	}
+	if archive == nil || archive.InfoHash != result.Published.InfoHash || archive.ViewerURL != result.ViewerURL {
+		t.Fatalf("archive = %#v, want infohash/viewer url", archive)
+	}
+	events, err := store.ReadEvents(info.RoomID)
+	if err != nil {
+		t.Fatalf("ReadEvents error = %v", err)
+	}
+	if len(events) != 1 || events[0].Type != TypeArchiveNotice {
+		t.Fatalf("events = %#v, want single archive_notice", events)
+	}
+	queueBody, err := os.ReadFile(filepath.Join(root, "sync", "magnets.txt"))
+	if err != nil {
+		t.Fatalf("read queue error = %v", err)
+	}
+	if !strings.Contains(string(queueBody), result.Published.InfoHash) {
+		t.Fatalf("queue missing archive sync ref: %s", string(queueBody))
 	}
 }
 

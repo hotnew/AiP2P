@@ -57,6 +57,7 @@ type session struct {
 	role            string
 	autoArchive     bool
 	storeRoot       string
+	netPath         string
 	identityFile    string
 	author          string
 }
@@ -217,6 +218,7 @@ func startSession(ctx context.Context, opts SessionOptions) (*session, error) {
 		role:         normalizeRole(opts.Role),
 		autoArchive:  opts.AutoArchive,
 		storeRoot:    opts.StoreRoot,
+		netPath:      strings.TrimSpace(opts.NetPath),
 		identityFile: strings.TrimSpace(opts.IdentityFile),
 		author:       author,
 	}
@@ -453,7 +455,34 @@ func (s *session) archiveOnExit(stdout io.Writer) error {
 	if stdout != nil {
 		fmt.Fprintf(stdout, "[auto-archive] %s -> %s\n", s.info.RoomID, result.ViewerURL)
 	}
+	if err := s.publishArchiveNotice(context.Background(), result); err != nil {
+		if stdout != nil {
+			fmt.Fprintf(stdout, "[auto-archive-notice] inline publish failed: %v\n", err)
+		}
+		if fallbackErr := publishArchiveNoticeDetached(s.netPath, s.identity, s.info, result); fallbackErr != nil {
+			if stdout != nil {
+				fmt.Fprintf(stdout, "[auto-archive-notice] detached publish failed: %v\n", fallbackErr)
+			}
+		} else if stdout != nil {
+			fmt.Fprintf(stdout, "[auto-archive-notice] detached publish ok: %s\n", result.ViewerURL)
+		}
+	}
 	return nil
+}
+
+func (s *session) publishArchiveNotice(ctx context.Context, result ArchiveResult) error {
+	if s == nil {
+		return nil
+	}
+	msg, err := NewSignedMessage(s.identity, s.identity.Author, s.info.RoomID, TypeArchiveNotice, s.nextSeq(), 0, LivePayload{
+		Content:     firstNonEmpty(strings.TrimSpace(result.ViewerURL), "/posts/"+strings.TrimSpace(result.Published.InfoHash)),
+		ContentType: "application/json",
+		Metadata:    archiveNoticeMetadata(s.info, result),
+	})
+	if err != nil {
+		return err
+	}
+	return s.publishEvent(ctx, msg)
 }
 
 func normalizeRole(role string) string {
