@@ -45,6 +45,69 @@ func TestBuildArchiveBody(t *testing.T) {
 	}
 }
 
+func TestBuildArchiveBodyHidesHeartbeatAndArchiveNotice(t *testing.T) {
+	now := time.Now().UTC()
+	body := buildArchiveBody(RoomInfo{
+		RoomID:    "room-1",
+		Title:     "Test Room",
+		Creator:   "agent://pc75/openclaw01",
+		CreatedAt: now.Format(time.RFC3339),
+	}, []LiveMessage{
+		{
+			Protocol:     ProtocolVersion,
+			Type:         TypeJoin,
+			RoomID:       "room-1",
+			Sender:       "agent://pc75/openclaw01",
+			SenderPubKey: strings.Repeat("a", 64),
+			Seq:          1,
+			Timestamp:    now.Format(time.RFC3339),
+		},
+		{
+			Protocol:     ProtocolVersion,
+			Type:         TypeHeartbeat,
+			RoomID:       "room-1",
+			Sender:       "agent://pc75/openclaw01",
+			SenderPubKey: strings.Repeat("a", 64),
+			Seq:          2,
+			Timestamp:    now.Add(time.Second).Format(time.RFC3339),
+		},
+		{
+			Protocol:     ProtocolVersion,
+			Type:         TypeArchiveNotice,
+			RoomID:       "room-1",
+			Sender:       "agent://pc75/openclaw01",
+			SenderPubKey: strings.Repeat("a", 64),
+			Seq:          3,
+			Timestamp:    now.Add(2 * time.Second).Format(time.RFC3339),
+			Payload: LivePayload{Metadata: map[string]any{
+				"archive.infohash": "abc123",
+			}},
+		},
+		{
+			Protocol:     ProtocolVersion,
+			Type:         TypeMessage,
+			RoomID:       "room-1",
+			Sender:       "agent://pc75/openclaw01",
+			SenderPubKey: strings.Repeat("a", 64),
+			Seq:          4,
+			Timestamp:    now.Add(3 * time.Second).Format(time.RFC3339),
+			Payload:      LivePayload{Content: "hello"},
+		},
+	})
+	if strings.Contains(body, "`heartbeat`") {
+		t.Fatalf("archive body should hide heartbeat events: %q", body)
+	}
+	if strings.Contains(body, "`archive_notice`") {
+		t.Fatalf("archive body should hide archive notices: %q", body)
+	}
+	if !strings.Contains(body, "`message`") || !strings.Contains(body, "hello") {
+		t.Fatalf("archive body should keep message events: %q", body)
+	}
+	if !strings.Contains(body, "- 事件数：2") {
+		t.Fatalf("archive body should count visible events only: %q", body)
+	}
+}
+
 func TestBuildRoster(t *testing.T) {
 	now := time.Now().UTC()
 	roster := BuildRoster([]LiveMessage{

@@ -4,7 +4,6 @@ import (
 	"context"
 	_ "embed"
 	"io/fs"
-	"log"
 	"net/http"
 	"strings"
 
@@ -45,7 +44,7 @@ func (Plugin) Build(ctx context.Context, cfg apphost.Config, theme apphost.WebTh
 	}
 	logf := cfg.Logf
 	if logf == nil {
-		logf = log.Printf
+		logf = func(string, ...any) {}
 	}
 	watchCtx, cancelWatch := context.WithCancel(ctx)
 	watcher, err := live.StartAnnouncementWatcher(watchCtx, cfg.StoreRoot, cfg.NetPath)

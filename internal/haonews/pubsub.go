@@ -29,19 +29,20 @@ const (
 )
 
 type SyncAnnouncement struct {
-	Protocol  string   `json:"protocol"`
-	InfoHash  string   `json:"infohash"`
-	Magnet    string   `json:"magnet"`
-	SizeBytes int64    `json:"size_bytes,omitempty"`
-	Kind      string   `json:"kind,omitempty"`
-	Channel   string   `json:"channel,omitempty"`
-	Title     string   `json:"title,omitempty"`
-	Author    string   `json:"author,omitempty"`
-	CreatedAt string   `json:"created_at,omitempty"`
-	Project   string   `json:"project,omitempty"`
-	NetworkID string   `json:"network_id,omitempty"`
-	Topics    []string `json:"topics,omitempty"`
-	Tags      []string `json:"tags,omitempty"`
+	Protocol     string   `json:"protocol"`
+	InfoHash     string   `json:"infohash"`
+	Magnet       string   `json:"magnet"`
+	SizeBytes    int64    `json:"size_bytes,omitempty"`
+	Kind         string   `json:"kind,omitempty"`
+	Channel      string   `json:"channel,omitempty"`
+	Title        string   `json:"title,omitempty"`
+	Author       string   `json:"author,omitempty"`
+	CreatedAt    string   `json:"created_at,omitempty"`
+	Project      string   `json:"project,omitempty"`
+	NetworkID    string   `json:"network_id,omitempty"`
+	Topics       []string `json:"topics,omitempty"`
+	Tags         []string `json:"tags,omitempty"`
+	LibP2PPeerID string   `json:"libp2p_peer_id,omitempty"`
 }
 
 type pubsubRuntime struct {
@@ -146,6 +147,9 @@ func (r *pubsubRuntime) PublishAnnouncement(ctx context.Context, announcement Sy
 	announcement = normalizeAnnouncement(announcement)
 	if announcement.InfoHash == "" || announcement.Magnet == "" {
 		return fmt.Errorf("announcement requires both infohash and magnet")
+	}
+	if r.host != nil && r.host.host != nil && announcement.LibP2PPeerID == "" {
+		announcement.LibP2PPeerID = r.host.host.ID().String()
 	}
 	body, err := json.Marshal(announcement)
 	if err != nil {
@@ -499,6 +503,7 @@ func normalizeAnnouncement(announcement SyncAnnouncement) SyncAnnouncement {
 	announcement.Author = strings.TrimSpace(announcement.Author)
 	announcement.Project = strings.TrimSpace(announcement.Project)
 	announcement.NetworkID = normalizeNetworkID(announcement.NetworkID)
+	announcement.LibP2PPeerID = strings.TrimSpace(announcement.LibP2PPeerID)
 	announcement.Topics = uniqueFold(announcement.Topics)
 	announcement.Tags = uniqueFold(announcement.Tags)
 	return announcement

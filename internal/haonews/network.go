@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -31,12 +32,14 @@ func defaultNetworkBootstrapConfig(path string) (string, error) {
 #   lan_bt_peer=<host-or-ip>
 #   libp2p_bootstrap=/dnsaddr/.../p2p/<peer-id>
 #   libp2p_rendezvous=latest.org/<topic>
+#   libp2p_transfer_max_size=<bytes>
 #   dht_router=host:port
 #
 # Generated on first start. Reuse these ports on later restarts unless you intentionally change them.
 network_id=%s
 libp2p_listen=/ip4/0.0.0.0/tcp/%d
 libp2p_listen=/ip4/0.0.0.0/udp/%d/quic-v1
+libp2p_transfer_max_size=%d
 bittorrent_listen=0.0.0.0:%d
 
 # Optional LAN anchor. Hao.News will query http://<lan_peer>:51818/api/network/bootstrap
@@ -61,20 +64,21 @@ libp2p_rendezvous=latest.org/world
 dht_router=router.bittorrent.com:6881
 dht_router=router.utorrent.com:6881
 dht_router=dht.transmissionbt.com:6881
-`, path, latestOrgNetworkID, libp2pPort, libp2pPort, bitTorrentPort), nil
+`, path, latestOrgNetworkID, libp2pPort, libp2pPort, defaultLibP2PTransferMaxSize, bitTorrentPort), nil
 }
 
 type NetworkBootstrapConfig struct {
-	Path             string
-	Exists           bool
-	NetworkID        string
-	BitTorrentListen string
-	LibP2PListen     []string
-	LANPeers         []string
-	LANTorrentPeers  []string
-	DHTRouters       []string
-	LibP2PBootstrap  []string
-	LibP2PRendezvous []string
+	Path                  string
+	Exists                bool
+	NetworkID             string
+	BitTorrentListen      string
+	LibP2PListen          []string
+	LibP2PTransferMaxSize int64
+	LANPeers              []string
+	LANTorrentPeers       []string
+	DHTRouters            []string
+	LibP2PBootstrap       []string
+	LibP2PRendezvous      []string
 }
 
 func LoadNetworkBootstrapConfig(path string) (NetworkBootstrapConfig, error) {
@@ -128,6 +132,12 @@ func LoadNetworkBootstrapConfig(path string) (NetworkBootstrapConfig, error) {
 			}
 			seenListen[value] = struct{}{}
 			cfg.LibP2PListen = append(cfg.LibP2PListen, value)
+		case "libp2p_transfer_max_size":
+			size, err := strconv.ParseInt(value, 10, 64)
+			if err != nil || size <= 0 {
+				continue
+			}
+			cfg.LibP2PTransferMaxSize = size
 		case "lan_peer":
 			if _, ok := seenLAN[value]; ok {
 				continue
@@ -161,6 +171,13 @@ func LoadNetworkBootstrapConfig(path string) (NetworkBootstrapConfig, error) {
 		}
 	}
 	return cfg, nil
+}
+
+func effectiveLibP2PTransferMaxSize(value int64) int64 {
+	if value <= 0 {
+		return defaultLibP2PTransferMaxSize
+	}
+	return value
 }
 
 func EnsureDefaultNetworkBootstrapConfig(path string) error {

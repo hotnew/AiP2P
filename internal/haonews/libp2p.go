@@ -25,6 +25,8 @@ type libp2pRuntime struct {
 	ping               *ping.PingService
 	mdns               mdns.Service
 	mdnsTracker        *mdnsTracker
+	transfer           *bundleTransferProvider
+	transferMaxSize    int64
 	netCfg             NetworkBootstrapConfig
 	networkID          string
 	configuredListen   []string
@@ -57,7 +59,7 @@ type KnownGoodLibP2PPeerStatus struct {
 	Addrs         []string   `json:"addrs,omitempty"`
 }
 
-func startLibP2PRuntime(ctx context.Context, cfg NetworkBootstrapConfig) (*libp2pRuntime, error) {
+func startLibP2PRuntime(ctx context.Context, cfg NetworkBootstrapConfig, store *Store) (*libp2pRuntime, error) {
 	knownGoodPeers, knownGoodErr := LoadKnownGoodLibP2PBootstrapPeers(cfg)
 	if len(cfg.LibP2PBootstrap) == 0 && len(cfg.LibP2PRendezvous) == 0 && len(cfg.LANPeers) == 0 && len(knownGoodPeers) == 0 {
 		return nil, nil
@@ -108,12 +110,15 @@ func startLibP2PRuntime(ctx context.Context, cfg NetworkBootstrapConfig) (*libp2
 		return nil, fmt.Errorf("start libp2p mdns: %w", err)
 	}
 	now := time.Now().UTC()
+	transferMaxSize := effectiveLibP2PTransferMaxSize(cfg.LibP2PTransferMaxSize)
 	return &libp2pRuntime{
 		host:             h,
 		dht:              dht,
 		ping:             ping.NewPingService(h),
 		mdns:             mdnsService,
 		mdnsTracker:      mdnsTracker,
+		transfer:         newBundleTransferProvider(h, store, transferMaxSize),
+		transferMaxSize:  transferMaxSize,
 		netCfg:           cfg,
 		networkID:        cfg.NetworkID,
 		configuredListen: configuredListen,
@@ -141,6 +146,9 @@ func (r *libp2pRuntime) Close() error {
 	if r.mdns != nil {
 		_ = r.mdns.Close()
 	}
+	if r.transfer != nil {
+		r.transfer.Close()
+	}
 	if r.dht != nil {
 		_ = r.dht.Close()
 	}
@@ -156,11 +164,13 @@ func (r *libp2pRuntime) Status(ctx context.Context) SyncLibP2PStatus {
 	}
 
 	status := SyncLibP2PStatus{
-		Enabled:              true,
-		PeerID:               r.host.ID().String(),
-		ConfiguredListen:     append([]string(nil), r.configuredListen...),
-		ConfiguredBootstrap:  len(r.bootstraps),
-		ConfiguredRendezvous: len(r.rendezvous),
+		Enabled:               true,
+		PeerID:                r.host.ID().String(),
+		ConfiguredListen:      append([]string(nil), r.configuredListen...),
+		DirectTransferEnabled: r.transfer != nil,
+		TransferMaxSize:       r.transferMaxSize,
+		ConfiguredBootstrap:   len(r.bootstraps),
+		ConfiguredRendezvous:  len(r.rendezvous),
 		MDNS: SyncMDNSStatus{
 			Enabled:     r.mdns != nil,
 			ServiceName: r.mdnsServiceName,

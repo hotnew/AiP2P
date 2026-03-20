@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"path/filepath"
@@ -251,7 +250,7 @@ func normalizeConfig(cfg Config) Config {
 		cfg.SyncStaleAfter = 2 * time.Minute
 	}
 	if cfg.Logf == nil {
-		cfg.Logf = log.Printf
+		cfg.Logf = func(string, ...any) {}
 	}
 	return cfg
 }

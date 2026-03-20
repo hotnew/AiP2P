@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -75,7 +75,7 @@ func StartManagedSyncSupervisor(parent context.Context, cfg ManagedSyncConfig) (
 		cfg.StaleAfter = 2 * time.Minute
 	}
 	if cfg.Logf == nil {
-		cfg.Logf = log.Printf
+		cfg.Logf = func(string, ...any) {}
 	}
 	binaryPath, err := resolveManagedSyncBinary(cfg)
 	if err != nil {
@@ -90,7 +90,6 @@ func StartManagedSyncSupervisor(parent context.Context, cfg ManagedSyncConfig) (
 		state: SyncSupervisorState{
 			Mode:       string(SyncModeManaged),
 			BinaryPath: binaryPath,
-			LogPath:    cfg.Runtime.SyncLogPath,
 			StatusPath: cfg.Runtime.StatusPath,
 			StoreRoot:  cfg.StoreRoot,
 			StaleAfter: cfg.StaleAfter.String(),
@@ -173,10 +172,6 @@ func (s *ManagedSyncSupervisor) loop(ctx context.Context) {
 }
 
 func (s *ManagedSyncSupervisor) startChild() (*exec.Cmd, <-chan error, error) {
-	logFile, err := os.OpenFile(s.cfg.Runtime.SyncLogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
-	if err != nil {
-		return nil, nil, err
-	}
 	args := []string{
 		"sync",
 		"--store", s.cfg.StoreRoot,
@@ -186,10 +181,9 @@ func (s *ManagedSyncSupervisor) startChild() (*exec.Cmd, <-chan error, error) {
 		"--trackers", s.cfg.Trackers,
 	}
 	cmd := exec.Command(s.cfg.BinaryPath, args...)
-	cmd.Stdout = logFile
-	cmd.Stderr = logFile
+	cmd.Stdout = io.Discard
+	cmd.Stderr = io.Discard
 	if err := cmd.Start(); err != nil {
-		_ = logFile.Close()
 		return nil, nil, err
 	}
 	s.mu.Lock()
@@ -206,7 +200,6 @@ func (s *ManagedSyncSupervisor) startChild() (*exec.Cmd, <-chan error, error) {
 	exitCh := make(chan error, 1)
 	go func() {
 		err := cmd.Wait()
-		_ = logFile.Close()
 		exitCh <- err
 		close(exitCh)
 	}()

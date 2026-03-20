@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"html/template"
 	"io/fs"
-	"log"
 	"net/http"
 	"path/filepath"
 	"sort"
@@ -193,7 +192,7 @@ func (r *Registry) Build(ctx context.Context, cfg Config) (*Site, error) {
 	cfg.Theme = themeManifest.ID
 	logf := cfg.Logf
 	if logf == nil {
-		logf = log.Printf
+		logf = func(string, ...any) {}
 	}
 	for _, manifest := range manifests {
 		if err := validateThemeCompatibility(manifest, themeManifest); err != nil {

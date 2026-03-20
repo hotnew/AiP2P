@@ -23,20 +23,22 @@ type SyncRuntimeStatus struct {
 }
 
 type SyncLibP2PStatus struct {
-	Enabled              bool           `json:"enabled"`
-	PeerID               string         `json:"peer_id,omitempty"`
-	ConfiguredListen     []string       `json:"configured_listen,omitempty"`
-	ListenAddrs          []string       `json:"listen_addrs,omitempty"`
-	ConfiguredBootstrap  int            `json:"configured_bootstrap"`
-	ConfiguredRendezvous int            `json:"configured_rendezvous"`
-	ConnectedBootstrap   int            `json:"connected_bootstrap"`
-	ReachableBootstrap   int            `json:"reachable_bootstrap"`
-	ConnectedPeers       int            `json:"connected_peers"`
-	RoutingTablePeers    int            `json:"routing_table_peers"`
-	MDNS                 SyncMDNSStatus `json:"mdns"`
-	LastBootstrapAt      *time.Time     `json:"last_bootstrap_at,omitempty"`
-	LastError            string         `json:"last_error,omitempty"`
-	Peers                []SyncPeerRef  `json:"peers,omitempty"`
+	Enabled               bool           `json:"enabled"`
+	PeerID                string         `json:"peer_id,omitempty"`
+	ConfiguredListen      []string       `json:"configured_listen,omitempty"`
+	ListenAddrs           []string       `json:"listen_addrs,omitempty"`
+	DirectTransferEnabled bool           `json:"direct_transfer_enabled"`
+	TransferMaxSize       int64          `json:"transfer_max_size,omitempty"`
+	ConfiguredBootstrap   int            `json:"configured_bootstrap"`
+	ConfiguredRendezvous  int            `json:"configured_rendezvous"`
+	ConnectedBootstrap    int            `json:"connected_bootstrap"`
+	ReachableBootstrap    int            `json:"reachable_bootstrap"`
+	ConnectedPeers        int            `json:"connected_peers"`
+	RoutingTablePeers     int            `json:"routing_table_peers"`
+	MDNS                  SyncMDNSStatus `json:"mdns"`
+	LastBootstrapAt       *time.Time     `json:"last_bootstrap_at,omitempty"`
+	LastError             string         `json:"last_error,omitempty"`
+	Peers                 []SyncPeerRef  `json:"peers,omitempty"`
 }
 
 type SyncMDNSStatus struct {
@@ -90,15 +92,18 @@ type SyncPubSubStatus struct {
 }
 
 type SyncActivityStatus struct {
-	QueueRefs    int        `json:"queue_refs"`
-	Imported     int        `json:"imported"`
-	Skipped      int        `json:"skipped"`
-	Failed       int        `json:"failed"`
-	LastRef      string     `json:"last_ref,omitempty"`
-	LastInfoHash string     `json:"last_infohash,omitempty"`
-	LastStatus   string     `json:"last_status,omitempty"`
-	LastMessage  string     `json:"last_message,omitempty"`
-	LastEventAt  *time.Time `json:"last_event_at,omitempty"`
+	QueueRefs          int        `json:"queue_refs"`
+	Imported           int        `json:"imported"`
+	DirectImported     int        `json:"direct_imported"`
+	BitTorrentImported int        `json:"bittorrent_imported"`
+	Skipped            int        `json:"skipped"`
+	Failed             int        `json:"failed"`
+	LastRef            string     `json:"last_ref,omitempty"`
+	LastInfoHash       string     `json:"last_infohash,omitempty"`
+	LastStatus         string     `json:"last_status,omitempty"`
+	LastTransport      string     `json:"last_transport,omitempty"`
+	LastMessage        string     `json:"last_message,omitempty"`
+	LastEventAt        *time.Time `json:"last_event_at,omitempty"`
 }
 
 func syncStatusPath(store *Store) string {

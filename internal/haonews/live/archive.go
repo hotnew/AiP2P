@@ -104,12 +104,13 @@ func Archive(opts ArchiveOptions) (ArchiveResult, error) {
 }
 
 func buildArchiveBody(info RoomInfo, events []LiveMessage) string {
+	displayEvents := archiveDisplayEvents(events)
 	var b strings.Builder
-	startAt, endAt := archiveEventRange(events)
+	startAt, endAt := archiveEventRange(displayEvents)
 	participants := archiveParticipants(events)
 	taskSummaries := archiveTaskSummaries(events)
-	messageCount := archiveCountByType(events, TypeMessage)
-	taskUpdateCount := archiveCountByType(events, TypeTaskUpdate)
+	messageCount := archiveCountByType(displayEvents, TypeMessage)
+	taskUpdateCount := archiveCountByType(displayEvents, TypeTaskUpdate)
 
 	b.WriteString("# Live 房间归档\n\n")
 	b.WriteString("## 房间摘要\n\n")
@@ -117,7 +118,7 @@ func buildArchiveBody(info RoomInfo, events []LiveMessage) string {
 	fmt.Fprintf(&b, "- 标题：%s\n", firstNonEmpty(info.Title, "未命名房间"))
 	fmt.Fprintf(&b, "- 创建者：`%s`\n", info.Creator)
 	fmt.Fprintf(&b, "- 创建时间：%s\n", info.CreatedAt)
-	fmt.Fprintf(&b, "- 事件数：%d\n", len(events))
+	fmt.Fprintf(&b, "- 事件数：%d\n", len(displayEvents))
 	if startAt != "" {
 		fmt.Fprintf(&b, "- 首条事件：%s\n", startAt)
 	}
@@ -162,7 +163,7 @@ func buildArchiveBody(info RoomInfo, events []LiveMessage) string {
 	}
 
 	b.WriteString("## 完整事件流\n\n")
-	for _, event := range events {
+	for _, event := range displayEvents {
 		content := strings.TrimSpace(event.Payload.Content)
 		if content == "" {
 			content = "-"
@@ -190,6 +191,19 @@ func buildArchiveBody(info RoomInfo, events []LiveMessage) string {
 		}
 	}
 	return strings.TrimSpace(b.String()) + "\n"
+}
+
+func archiveDisplayEvents(events []LiveMessage) []LiveMessage {
+	filtered := make([]LiveMessage, 0, len(events))
+	for _, event := range events {
+		switch strings.TrimSpace(event.Type) {
+		case TypeHeartbeat, TypeArchiveNotice:
+			continue
+		default:
+			filtered = append(filtered, event)
+		}
+	}
+	return filtered
 }
 
 type archiveTaskSummary struct {

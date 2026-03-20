@@ -9,8 +9,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/anacrolix/torrent/metainfo"
+	"github.com/libp2p/go-libp2p/core/peer"
 )
 
 func TestParseSyncRefMagnet(t *testing.T) {
@@ -63,6 +65,7 @@ func TestLoadNetworkBootstrapConfig(t *testing.T) {
 	content := `network_id=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 dht_router=router.bittorrent.com:6881
 dht_router=router.utorrent.com:6881
+libp2p_transfer_max_size=123456
 lan_peer=192.168.102.74
 lan_peer=192.168.102.76
 lan_peer=192.168.102.75
@@ -83,6 +86,9 @@ libp2p_bootstrap=/dnsaddr/bootstrap.libp2p.io/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVw
 	}
 	if len(cfg.LibP2PBootstrap) != 1 {
 		t.Fatalf("libp2p peers = %d, want 1", len(cfg.LibP2PBootstrap))
+	}
+	if cfg.LibP2PTransferMaxSize != 123456 {
+		t.Fatalf("libp2p transfer max size = %d, want 123456", cfg.LibP2PTransferMaxSize)
 	}
 	if cfg.NetworkID == "" {
 		t.Fatal("expected network id to load")
@@ -310,5 +316,119 @@ func TestHasCompleteLocalBundleRequiresBundleFiles(t *testing.T) {
 	}
 	if hasCompleteLocalBundle(store, result.InfoHash) {
 		t.Fatalf("expected incomplete bundle after deleting content dir")
+	}
+}
+
+func TestHandleAnnouncementRemembersDirectPeer(t *testing.T) {
+	t.Parallel()
+
+	queue := filepath.Join(t.TempDir(), "magnets.txt")
+	store, err := OpenStore(filepath.Join(t.TempDir(), "store"))
+	if err != nil {
+		t.Fatalf("OpenStore error = %v", err)
+	}
+	host, err := newTestLibP2PHost(context.Background())
+	if err != nil {
+		t.Fatalf("newTestLibP2PHost error = %v", err)
+	}
+	defer host.Close()
+
+	runtime := &syncRuntime{
+		store:         store,
+		queuePath:     queue,
+		netCfg:        NetworkBootstrapConfig{NetworkID: latestOrgNetworkID},
+		directPeers:   make(map[string][]peer.ID),
+		subscriptions: SyncSubscriptions{},
+	}
+	enqueued, err := runtime.handleAnnouncement(SyncAnnouncement{
+		InfoHash:     "93a71a010a59022c8670e06e2c92fa279f98d974",
+		Magnet:       "magnet:?xt=urn:btih:93a71a010a59022c8670e06e2c92fa279f98d974&dn=test",
+		NetworkID:    latestOrgNetworkID,
+		LibP2PPeerID: host.ID().String(),
+		CreatedAt:    time.Now().UTC().Format(time.RFC3339),
+	})
+	if err != nil {
+		t.Fatalf("handleAnnouncement error = %v", err)
+	}
+	if !enqueued {
+		t.Fatal("expected announcement to enqueue")
+	}
+	peers := runtime.directPeerIDs("93a71a010a59022c8670e06e2c92fa279f98d974")
+	if len(peers) != 1 || peers[0] != host.ID() {
+		t.Fatalf("direct peers = %#v, want %s", peers, host.ID())
+	}
+}
+
+func TestSyncRefImportsViaLibP2PDirectTransfer(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	providerHost, err := newTestLibP2PHost(ctx)
+	if err != nil {
+		t.Fatalf("newTestLibP2PHost(provider) error = %v", err)
+	}
+	defer providerHost.Close()
+	requesterHost, err := newTestLibP2PHost(ctx)
+	if err != nil {
+		t.Fatalf("newTestLibP2PHost(requester) error = %v", err)
+	}
+	defer requesterHost.Close()
+
+	addrInfo := peer.AddrInfo{ID: providerHost.ID(), Addrs: providerHost.Addrs()}
+	if err := requesterHost.Connect(ctx, addrInfo); err != nil {
+		t.Fatalf("requesterHost.Connect() error = %v", err)
+	}
+
+	providerStore, err := OpenStore(filepath.Join(t.TempDir(), "provider"))
+	if err != nil {
+		t.Fatalf("OpenStore(provider) error = %v", err)
+	}
+	requesterStore, err := OpenStore(filepath.Join(t.TempDir(), "requester"))
+	if err != nil {
+		t.Fatalf("OpenStore(requester) error = %v", err)
+	}
+	published, err := PublishMessage(providerStore, MessageInput{
+		Kind:    "post",
+		Author:  "agent://test/main",
+		Title:   "direct-transfer",
+		Body:    "libp2p first",
+		Channel: "latest.org/world",
+		Extensions: map[string]any{
+			"project":    "latest.org",
+			"network_id": latestOrgNetworkID,
+		},
+	})
+	if err != nil {
+		t.Fatalf("PublishMessage error = %v", err)
+	}
+	provider := newBundleTransferProvider(providerHost, providerStore, defaultLibP2PTransferMaxSize)
+	defer provider.Close()
+
+	result := syncRef(
+		ctx,
+		nil,
+		requesterStore,
+		SyncRef{Raw: published.Magnet, Magnet: published.Magnet, InfoHash: published.InfoHash},
+		5*time.Second,
+		nil,
+		nil,
+		SyncSubscriptions{},
+		true,
+		&libp2pRuntime{host: requesterHost, transferMaxSize: defaultLibP2PTransferMaxSize},
+		[]peer.ID{providerHost.ID()},
+	)
+	if result.Status != "imported" {
+		t.Fatalf("status = %q, want imported (%s)", result.Status, result.Message)
+	}
+	if result.Transport != "libp2p" {
+		t.Fatalf("transport = %q, want libp2p", result.Transport)
+	}
+	if !hasCompleteLocalBundle(requesterStore, published.InfoHash) {
+		t.Fatal("expected transferred bundle to exist locally")
+	}
+	if _, err := requesterStore.ExistingTorrentPath(published.InfoHash); err != nil {
+		t.Fatalf("ExistingTorrentPath() error = %v", err)
 	}
 }

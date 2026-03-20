@@ -7,7 +7,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -1037,6 +1036,7 @@ func runSync(args []string) error {
 	timeout := fs.Duration("timeout", 20*time.Second, "per-ref sync timeout")
 	once := fs.Bool("once", false, "run one sync pass and exit")
 	seed := fs.Bool("seed", true, "seed after download while daemon is running")
+	directTransfer := fs.Bool("direct-transfer", true, "prefer libp2p direct bundle transfer before bittorrent fallback")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -1058,7 +1058,8 @@ func runSync(args []string) error {
 		Timeout:            *timeout,
 		Once:               *once,
 		Seed:               *seed,
-	}, log.Printf)
+		DirectTransfer:     *directTransfer,
+	}, nil)
 }
 
 func runServe(args []string) error {
@@ -1114,12 +1115,10 @@ func runServe(args []string) error {
 		SyncMode:         *syncMode,
 		SyncBinaryPath:   *syncBinary,
 		SyncStaleAfter:   *syncStaleAfter,
-		Logf:             log.Printf,
 	})
 	if err != nil {
 		return err
 	}
-	log.Printf("Hao.News host serving plugin=%s theme=%s on http://%s", instance.Site().Manifest.ID, instance.Site().Theme.ID, instance.ListenAddr())
 	return instance.ListenAndServe(ctx)
 }
 
