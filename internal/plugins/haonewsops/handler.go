@@ -83,24 +83,151 @@ func handleNetwork(app *newsplugin.App, w http.ResponseWriter, r *http.Request) 
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	requestHost := newsplugin.RequestBootstrapHost(r)
+	advertiseHost := newsplugin.PreferredAdvertiseHostForConfig(syncStatus, requestHost, netCfg)
+	dialAddrs := newsplugin.DialableLibP2PAddrs(syncStatus, advertiseHost)
+	btNodes := newsplugin.DialableBitTorrentNodes(syncStatus, advertiseHost)
 	anchors, hasLANBTMatch, lanBTOverall := app.LANBTStatus(r.Context(), netCfg)
+	lanPeerHealth, lanBTHealth, err := app.LANPeerHealth()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	knownGoodPeers, err := app.KnownGoodLibP2PPeers()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	advertiseHostHealth, err := app.AdvertiseHostHealth()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	advertiseCandidates, err := app.AdvertiseHostCandidates(syncStatus, requestHost, netCfg)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	primaryExplainDetail := buildPrimaryAdvertiseExplainDetail(requestHost, advertiseHost, lanPeerHealth, lanBTHealth, advertiseHostHealth)
+	primaryExplain := buildPrimaryAdvertiseExplanation(primaryExplainDetail)
 	data := newsplugin.NetworkPageData{
-		Project:       app.ProjectName(),
-		Version:       app.VersionString(),
-		ListenAddr:    app.HTTPListenAddr(),
-		PageNav:       opsPageNav(app, "/network"),
-		Now:           time.Now(),
-		NodeStatus:    app.NodeStatus(index),
-		SyncStatus:    syncStatus,
-		Supervisor:    supervisorStatus,
-		LANPeers:      append([]string(nil), netCfg.LANPeers...),
-		LANBTAnchors:  anchors,
-		LANBTHasMatch: hasLANBTMatch,
-		LANBTOverall:  lanBTOverall,
+		Project:             app.ProjectName(),
+		Version:             app.VersionString(),
+		ListenAddr:          app.HTTPListenAddr(),
+		RequestHost:         advertiseHost,
+		PrimaryLibP2P:       firstString(dialAddrs),
+		PrimaryBTNode:       firstString(btNodes),
+		PrimaryHostExplain:  primaryExplain,
+		AdvertiseCandidates: advertiseCandidates,
+		PageNav:             opsPageNav(app, "/network"),
+		Now:                 time.Now(),
+		NodeStatus:          app.NodeStatus(index),
+		SyncStatus:          syncStatus,
+		Supervisor:          supervisorStatus,
+		LANPeers:            append([]string(nil), netCfg.LANPeers...),
+		LANPeerHealth:       lanPeerHealth,
+		LANBTHealth:         lanBTHealth,
+		AdvertiseHostHealth: advertiseHostHealth,
+		KnownGoodLibP2P:     knownGoodPeers,
+		LANBTAnchors:        anchors,
+		LANBTHasMatch:       hasLANBTMatch,
+		LANBTOverall:        lanBTOverall,
 	}
 	if err := app.Templates().ExecuteTemplate(w, "network.html", data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+func buildPrimaryAdvertiseExplanation(detail *newsplugin.NetworkBootstrapExplainDetail) []string {
+	if detail == nil || strings.TrimSpace(detail.PrimaryHost) == "" {
+		return nil
+	}
+	lines := []string{"当前主通告地址：`" + detail.PrimaryHost + "`"}
+	if detail.RequestHost != "" && detail.RequestHost != detail.PrimaryHost {
+		lines = append(lines, "当前请求主机："+detail.RequestHost+"，已回退到更合适的主通告地址。")
+	}
+	if detail.SuccessCount > 0 || detail.FailureCount > 0 {
+		lines = append(lines, "历史结果：成功 "+strconv.Itoa(detail.SuccessCount)+" 次，失败 "+strconv.Itoa(detail.FailureCount)+" 次。")
+	} else {
+		lines = append(lines, "历史结果：当前还没有这个地址的成功/失败记录。")
+	}
+	if detail.LastSuccessAt != nil {
+		lines = append(lines, "最近成功："+detail.LastSuccessAt.Local().Format("2006-01-02 15:04 MST"))
+	}
+	if detail.LastFailureAt != nil {
+		lines = append(lines, "最近失败："+detail.LastFailureAt.Local().Format("2006-01-02 15:04 MST"))
+	}
+	lines = append(lines, detail.Reasons...)
+	return lines
+}
+
+func buildPrimaryAdvertiseExplainDetail(requestHost, primaryHost string, lanPeerHealth, lanBTHealth []newsplugin.LANPeerHealthStatus, advertiseHealth []newsplugin.AdvertiseHostHealthStatus) *newsplugin.NetworkBootstrapExplainDetail {
+	primaryHost = strings.TrimSpace(primaryHost)
+	if primaryHost == "" {
+		return nil
+	}
+	detail := &newsplugin.NetworkBootstrapExplainDetail{
+		RequestHost: strings.TrimSpace(requestHost),
+		PrimaryHost: primaryHost,
+	}
+	if item, ok := findAdvertiseHostHealth(advertiseHealth, primaryHost); ok {
+		detail.SuccessCount = item.SuccessCount
+		detail.FailureCount = item.FailureCount
+		detail.LastSuccessAt = item.LastSuccessAt
+		detail.LastFailureAt = item.LastFailureAt
+	}
+	if item, ok := findLANPeerHealth(lanPeerHealth, primaryHost); ok {
+		detail.LANLibP2P = &newsplugin.NetworkBootstrapAnchorExplainDetail{
+			Peer:                item.Peer,
+			ObservedPrimaryHost: item.ObservedPrimaryHost,
+			ObservedPrimaryFrom: item.ObservedPrimaryFrom,
+			State:               item.State,
+			Reason:              item.Reason,
+			LastError:           item.LastError,
+			LastOKAt:            item.LastSuccessAt,
+			LastKOAt:            item.LastFailureAt,
+		}
+		detail.Reasons = append(detail.Reasons, "LAN libp2p 锚点状态："+item.State+"。"+strings.TrimSpace(item.Reason))
+	}
+	if item, ok := findLANPeerHealth(lanBTHealth, primaryHost); ok {
+		detail.LANBT = &newsplugin.NetworkBootstrapAnchorExplainDetail{
+			Peer:                item.Peer,
+			ObservedPrimaryHost: item.ObservedPrimaryHost,
+			ObservedPrimaryFrom: item.ObservedPrimaryFrom,
+			State:               item.State,
+			Reason:              item.Reason,
+			LastError:           item.LastError,
+			LastOKAt:            item.LastSuccessAt,
+			LastKOAt:            item.LastFailureAt,
+		}
+		detail.Reasons = append(detail.Reasons, "LAN BT/DHT 锚点状态："+item.State+"。"+strings.TrimSpace(item.Reason))
+	}
+	return detail
+}
+
+func findAdvertiseHostHealth(values []newsplugin.AdvertiseHostHealthStatus, host string) (newsplugin.AdvertiseHostHealthStatus, bool) {
+	for _, value := range values {
+		if strings.TrimSpace(value.Host) == host {
+			return value, true
+		}
+	}
+	return newsplugin.AdvertiseHostHealthStatus{}, false
+}
+
+func findLANPeerHealth(values []newsplugin.LANPeerHealthStatus, host string) (newsplugin.LANPeerHealthStatus, bool) {
+	for _, value := range values {
+		if strings.TrimSpace(value.Peer) == host || strings.TrimSpace(value.ObservedPrimaryHost) == host {
+			return value, true
+		}
+	}
+	return newsplugin.LANPeerHealthStatus{}, false
+}
+
+func firstString(values []string) string {
+	if len(values) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(values[0])
 }
 
 func handleCredit(app *newsplugin.App, w http.ResponseWriter, r *http.Request) {
@@ -330,12 +457,24 @@ func handleAPINetworkBootstrap(app *newsplugin.App, w http.ResponseWriter, r *ht
 		http.Error(w, "libp2p sync daemon is not online on this node", http.StatusServiceUnavailable)
 		return
 	}
+	netCfg, err := app.NetworkBootstrap()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	host := newsplugin.RequestBootstrapHost(r)
-	dialAddrs := newsplugin.DialableLibP2PAddrs(syncStatus, host)
+	advertiseHost := newsplugin.PreferredAdvertiseHostForConfig(syncStatus, host, netCfg)
+	dialAddrs := newsplugin.DialableLibP2PAddrs(syncStatus, advertiseHost)
 	if len(dialAddrs) == 0 {
+		_ = newsplugin.RecordAdvertiseHostResult(netCfg, advertiseHost, false)
 		http.Error(w, "no dialable libp2p addresses available on this node", http.StatusServiceUnavailable)
 		return
 	}
+	_ = newsplugin.RecordAdvertiseHostResult(netCfg, advertiseHost, true)
+	advertiseHostHealth, _ := app.AdvertiseHostHealth()
+	lanPeerHealth, lanBTHealth, _ := app.LANPeerHealth()
+	explainDetail := buildPrimaryAdvertiseExplainDetail(host, advertiseHost, lanPeerHealth, lanBTHealth, advertiseHostHealth)
+	explain := buildPrimaryAdvertiseExplanation(explainDetail)
 	newsplugin.WriteJSON(w, http.StatusOK, newsplugin.NetworkBootstrapResponse{
 		Project:         app.ProjectName(),
 		Version:         app.VersionString(),
@@ -343,7 +482,9 @@ func handleAPINetworkBootstrap(app *newsplugin.App, w http.ResponseWriter, r *ht
 		PeerID:          syncStatus.LibP2P.PeerID,
 		ListenAddrs:     append([]string(nil), syncStatus.LibP2P.ListenAddrs...),
 		DialAddrs:       dialAddrs,
-		BitTorrentNodes: newsplugin.DialableBitTorrentNodes(syncStatus, host),
+		BitTorrentNodes: newsplugin.DialableBitTorrentNodes(syncStatus, advertiseHost),
+		Explain:         explain,
+		ExplainDetail:   explainDetail,
 	})
 }
 

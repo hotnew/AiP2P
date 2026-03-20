@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"hao.news/internal/haonews"
+	corehaonews "hao.news/internal/haonews"
 )
 
 func (a *App) nodeStatus(index Index) NodeStatus {
@@ -19,7 +19,7 @@ func (a *App) nodeStatus(index Index) NodeStatus {
 		storeTone = "warn"
 	}
 	torrentCount := 0
-	store := &haonews.Store{TorrentDir: filepath.Join(a.storeRoot, "torrents")}
+	store := &corehaonews.Store{TorrentDir: filepath.Join(a.storeRoot, "torrents")}
 	if count, err := store.TorrentCount(); err == nil {
 		torrentCount = count
 	}
@@ -373,6 +373,60 @@ func (a *App) syncSupervisorStatus() (SyncSupervisorState, error) {
 	return a.loadSuper(paths.SupervisorStatePath)
 }
 
+func (a *App) lanPeerHealth() ([]LANPeerHealthStatus, []LANPeerHealthStatus, error) {
+	cfg, err := corehaonews.LoadNetworkBootstrapConfig(a.netPath)
+	if err != nil {
+		return nil, nil, err
+	}
+	lanPeers, lanBTPeers, err := corehaonews.ReadLANPeerHealthStatus(cfg)
+	if err != nil {
+		return nil, nil, err
+	}
+	return mapLANPeerHealthStatus(lanPeers), mapLANPeerHealthStatus(lanBTPeers), nil
+}
+
+func (a *App) knownGoodLibP2PPeers() ([]KnownGoodLibP2PPeerStatus, error) {
+	cfg, err := corehaonews.LoadNetworkBootstrapConfig(a.netPath)
+	if err != nil {
+		return nil, err
+	}
+	items, err := corehaonews.ReadKnownGoodLibP2PPeerStatus(cfg)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]KnownGoodLibP2PPeerStatus, 0, len(items))
+	for _, item := range items {
+		out = append(out, KnownGoodLibP2PPeerStatus{
+			PeerID:        item.PeerID,
+			LastSuccessAt: item.LastSuccessAt,
+			Addrs:         append([]string(nil), item.Addrs...),
+		})
+	}
+	return out, nil
+}
+
+func (a *App) advertiseHostHealth() ([]AdvertiseHostHealthStatus, error) {
+	cfg, err := LoadNetworkBootstrapConfig(a.netPath)
+	if err != nil {
+		return nil, err
+	}
+	items, err := ReadAdvertiseHostHealth(cfg)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]AdvertiseHostHealthStatus, 0, len(items))
+	for _, item := range items {
+		out = append(out, AdvertiseHostHealthStatus{
+			Host:          item.Host,
+			SuccessCount:  item.SuccessCount,
+			FailureCount:  item.FailureCount,
+			LastSuccessAt: item.LastSuccessAt,
+			LastFailureAt: item.LastFailureAt,
+		})
+	}
+	return out, nil
+}
+
 func (a *App) lanBTStatus(ctx context.Context, cfg NetworkBootstrapConfig) ([]LANBTAnchorStatus, bool, string) {
 	if len(cfg.LANTorrentPeers) == 0 || a.fetchLANBT == nil {
 		return nil, false, "not configured"
@@ -405,4 +459,68 @@ func (a *App) lanBTStatus(ctx context.Context, cfg NetworkBootstrapConfig) ([]LA
 		overall = "anchor configured"
 	}
 	return anchors, hasMatch, overall
+}
+
+func mapLANPeerHealthStatus(values []corehaonews.LANPeerHealthStatus) []LANPeerHealthStatus {
+	out := make([]LANPeerHealthStatus, 0, len(values))
+	for _, value := range values {
+		out = append(out, LANPeerHealthStatus{
+			Peer:                value.Peer,
+			State:               value.State,
+			Reason:              lanPeerHealthReason(value),
+			ObservedPrimaryHost: value.ObservedPrimaryHost,
+			ObservedPrimaryFrom: value.ObservedPrimaryFrom,
+			LastSuccessAt:       value.LastSuccessAt,
+			LastFailureAt:       value.LastFailureAt,
+			ConsecutiveFailure:  value.ConsecutiveFailure,
+			LastError:           value.LastError,
+		})
+	}
+	return out
+}
+
+func lanPeerHealthReason(value corehaonews.LANPeerHealthStatus) string {
+	observed := strings.TrimSpace(value.ObservedPrimaryHost)
+	source := strings.TrimSpace(value.ObservedPrimaryFrom)
+	observedSuffix := ""
+	if observed != "" && observed != strings.TrimSpace(value.Peer) {
+		observedSuffix = "；最近学习远端主地址为 " + observed
+		if source != "" {
+			observedSuffix += "（来源：" + source + "）"
+		}
+	}
+	switch strings.TrimSpace(value.State) {
+	case "preferred":
+		if observedSuffix != "" {
+			return "最近成功，当前优先作为局域网锚点" + observedSuffix
+		}
+		return "最近成功，当前优先作为局域网锚点"
+	case "cooldown":
+		if strings.TrimSpace(value.LastError) != "" {
+			if observedSuffix != "" {
+				return "最近失败，冷却后排：" + strings.TrimSpace(value.LastError) + observedSuffix
+			}
+			return "最近失败，冷却后排：" + strings.TrimSpace(value.LastError)
+		}
+		if observedSuffix != "" {
+			return "最近失败，当前处于冷却后排" + observedSuffix
+		}
+		return "最近失败，当前处于冷却后排"
+	case "degraded":
+		if strings.TrimSpace(value.LastError) != "" {
+			if observedSuffix != "" {
+				return "历史失败较多：" + strings.TrimSpace(value.LastError) + observedSuffix
+			}
+			return "历史失败较多：" + strings.TrimSpace(value.LastError)
+		}
+		if observedSuffix != "" {
+			return "历史上出现过失败，当前不是优先地址" + observedSuffix
+		}
+		return "历史上出现过失败，当前不是优先地址"
+	default:
+		if observedSuffix != "" {
+			return "尚无健康记录，等待首次探测" + observedSuffix
+		}
+		return "尚无健康记录，等待首次探测"
+	}
 }

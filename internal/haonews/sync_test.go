@@ -60,7 +60,7 @@ func TestLoadNetworkBootstrapConfig(t *testing.T) {
 
 	root := t.TempDir()
 	path := filepath.Join(root, "haonews_net.inf")
-content := `network_id=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+	content := `network_id=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 dht_router=router.bittorrent.com:6881
 dht_router=router.utorrent.com:6881
 lan_peer=192.168.102.74
@@ -202,6 +202,53 @@ func TestResolveEffectiveDHTRoutersPrefersLANBTAnchors(t *testing.T) {
 	}
 	if routers[0] != "192.168.102.74:53396" {
 		t.Fatalf("first router = %q, want LAN BT node first", routers[0])
+	}
+}
+
+func TestProbeLANAnchorsWritesHealthCache(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	netPath := filepath.Join(root, "hao_news_net.inf")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/network/bootstrap" {
+			http.NotFound(w, r)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(lanBootstrapResponse{
+			NetworkID:       latestOrgNetworkID,
+			PeerID:          "QmTestPeer",
+			DialAddrs:       []string{"/ip4/192.168.102.75/tcp/50584"},
+			BitTorrentNodes: []string{"192.168.102.75:50585"},
+		})
+	}))
+	defer srv.Close()
+
+	if err := os.WriteFile(netPath, []byte("network_id="+latestOrgNetworkID+"\n"), 0o644); err != nil {
+		t.Fatalf("write net config: %v", err)
+	}
+
+	runtime := &syncRuntime{
+		netCfg: NetworkBootstrapConfig{
+			Path:            netPath,
+			NetworkID:       latestOrgNetworkID,
+			LANPeers:        []string{srv.URL},
+			LANTorrentPeers: []string{srv.URL},
+		},
+	}
+	if err := runtime.probeLANAnchors(context.Background(), nil); err != nil {
+		t.Fatalf("probeLANAnchors() error = %v", err)
+	}
+
+	cache, err := loadLANPeerHealthCache(runtime.netCfg)
+	if err != nil {
+		t.Fatalf("loadLANPeerHealthCache() error = %v", err)
+	}
+	if cache.entry("lan_peer", srv.URL).LastSuccessAt.IsZero() {
+		t.Fatal("expected lan_peer success to be cached")
+	}
+	if cache.entry("lan_bt_peer", srv.URL).LastSuccessAt.IsZero() {
+		t.Fatal("expected lan_bt_peer success to be cached")
 	}
 }
 

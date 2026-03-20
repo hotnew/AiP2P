@@ -679,7 +679,9 @@ func startTransport(ctx context.Context, cfg haonews.NetworkBootstrapConfig) (ho
 	if err != nil {
 		return nil, nil, nil, nil, nil, err
 	}
-	bootstrapPeers, err := parseBootstrapPeers(cfg.LibP2PBootstrap)
+	resolvedLANPeers, _ := haonews.ResolveLANBootstrapPeers(ctx, cfg)
+	knownGoodPeers, _ := haonews.LoadKnownGoodLibP2PBootstrapPeers(cfg)
+	bootstrapPeers, err := parseBootstrapPeers(haonews.EffectiveLibP2PBootstrapPeersWithKnownGood(resolvedLANPeers, knownGoodPeers, cfg.LibP2PBootstrap))
 	if err != nil {
 		_ = h.Close()
 		return nil, nil, nil, nil, nil, err

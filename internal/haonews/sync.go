@@ -50,6 +50,7 @@ type SyncItemResult struct {
 const (
 	defaultSyncRefTimeout = 20 * time.Second
 	maxSyncRefsPerPass    = 3
+	lanHealthProbeEvery   = 60 * time.Second
 )
 
 func RunSync(ctx context.Context, opts SyncOptions, logf func(string, ...any)) error {
@@ -196,6 +197,9 @@ func RunSync(ctx context.Context, opts SyncOptions, logf func(string, ...any)) e
 	}
 
 	if opts.Once {
+		if err := runtime.probeLANAnchors(ctx, logf); err != nil && logf != nil {
+			logf("probe LAN anchors: %v", err)
+		}
 		if err := runtime.seedLocalTorrents(logf); err != nil && logf != nil {
 			logf("seed local torrents: %v", err)
 		}
@@ -223,6 +227,9 @@ func RunSync(ctx context.Context, opts SyncOptions, logf func(string, ...any)) e
 	ticker := time.NewTicker(opts.PollInterval)
 	defer ticker.Stop()
 	for {
+		if err := runtime.maybeProbeLANAnchors(ctx, logf); err != nil && logf != nil {
+			logf("probe LAN anchors: %v", err)
+		}
 		if err := runtime.seedLocalTorrents(logf); err != nil && logf != nil {
 			logf("seed local torrents: %v", err)
 		}
@@ -269,6 +276,7 @@ type syncRuntime struct {
 	seeded             map[string]struct{}
 	activity           SyncActivityStatus
 	configuredBTListen string
+	lastLANProbeAt     time.Time
 }
 
 func (r *syncRuntime) setQueueRefs(n int) {
@@ -748,6 +756,51 @@ func (r *syncRuntime) enqueueHistoryFromLANPeers(ctx context.Context, logf func(
 		}
 	}
 	return added, nil
+}
+
+func (r *syncRuntime) maybeProbeLANAnchors(ctx context.Context, logf func(string, ...any)) error {
+	if r == nil {
+		return nil
+	}
+	if !r.lastLANProbeAt.IsZero() && time.Since(r.lastLANProbeAt) < lanHealthProbeEvery {
+		return nil
+	}
+	return r.probeLANAnchors(ctx, logf)
+}
+
+func (r *syncRuntime) probeLANAnchors(ctx context.Context, logf func(string, ...any)) error {
+	if r == nil {
+		return nil
+	}
+	r.lastLANProbeAt = time.Now().UTC()
+	var errs []string
+
+	if len(r.netCfg.LANPeers) > 0 {
+		probeCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
+		peers, err := resolveLANBootstrapPeers(probeCtx, r.netCfg)
+		cancel()
+		if err != nil {
+			errs = append(errs, err.Error())
+		} else if logf != nil {
+			logf("LAN libp2p anchors healthy: %d", len(peers))
+		}
+	}
+
+	if len(r.netCfg.LANTorrentPeers) > 0 {
+		probeCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
+		routers, err := resolveLANTorrentRouters(probeCtx, r.netCfg)
+		cancel()
+		if err != nil {
+			errs = append(errs, err.Error())
+		} else if logf != nil {
+			logf("LAN BT anchors healthy: %d", len(routers))
+		}
+	}
+
+	if len(errs) > 0 {
+		return errors.New(strings.Join(errs, "; "))
+	}
+	return nil
 }
 
 func torrentStatus(client *torrent.Client, configuredRouters int, configuredListen string) SyncBitTorrentStatus {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -31,6 +32,109 @@ func TestPluginBuildServesNetworkPage(t *testing.T) {
 	}
 }
 
+func TestPluginBuildServesLANPeerHealth(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	site := buildOpsSiteAtRoot(t, root)
+	netPath := filepath.Join(root, "config", "haonews_net.inf")
+	healthPath := filepath.Join(root, "config", "lan_peer_health.json")
+	knownGoodPath := filepath.Join(root, "config", "known_good_libp2p_peers.json")
+	advertiseHealthPath := filepath.Join(root, "config", "advertise_host_health.json")
+	netText := `network_id=2c2d6cf7b255ba20d6ad01135654933851b02bd00c65c2a6a54b97ab56590475
+lan_peer=192.168.102.74
+lan_bt_peer=192.168.102.76
+`
+	if err := os.WriteFile(netPath, []byte(netText), 0o644); err != nil {
+		t.Fatalf("WriteFile(netPath) error = %v", err)
+	}
+	healthText := `{
+  "entries": {
+    "lan_peer|192.168.102.74": {
+      "last_success_at": "2026-03-20T10:00:00Z",
+      "observed_primary_host": "192.168.102.75",
+      "observed_primary_from": "lan_peer"
+    },
+    "lan_bt_peer|192.168.102.76": {
+      "last_failure_at": "2026-03-20T10:01:00Z",
+      "consecutive_failure": 2,
+      "last_error": "dial timeout",
+      "observed_primary_host": "192.168.102.75",
+      "observed_primary_from": "lan_bt_peer"
+    }
+  }
+}
+`
+	if err := os.WriteFile(healthPath, []byte(healthText), 0o644); err != nil {
+		t.Fatalf("WriteFile(healthPath) error = %v", err)
+	}
+	knownGoodText := `{
+  "network_id": "2c2d6cf7b255ba20d6ad01135654933851b02bd00c65c2a6a54b97ab56590475",
+  "entries": {
+    "QmKnownGood": {
+      "last_success_at": "2026-03-20T10:02:00Z",
+      "addrs": [
+        "/ip4/192.168.102.75/tcp/50584/p2p/QmKnownGood"
+      ]
+    }
+  }
+}
+`
+	if err := os.WriteFile(knownGoodPath, []byte(knownGoodText), 0o644); err != nil {
+		t.Fatalf("WriteFile(knownGoodPath) error = %v", err)
+	}
+	advertiseHealthText := `{
+  "entries": {
+    "192.168.102.75": {
+      "success_count": 3,
+      "failure_count": 1,
+      "last_success_at": "2026-03-20T10:03:00Z",
+      "last_failure_at": "2026-03-20T10:01:30Z"
+    }
+  }
+}
+`
+	if err := os.WriteFile(advertiseHealthPath, []byte(advertiseHealthText), 0o644); err != nil {
+		t.Fatalf("WriteFile(advertiseHealthPath) error = %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/network", nil)
+	rec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		"局域网锚点健康",
+		"libp2p 锚点健康",
+		"BT/DHT 锚点健康",
+		"主通告 libp2p",
+		"主通告 BT",
+		"主通告候选地址",
+		"地址类型",
+		"网卡类型",
+		"已知好节点缓存",
+		"当前主地址解释",
+		"当前主通告地址",
+		"主通告地址历史",
+		"3 成功 / 1 失败",
+		"192.168.102.75",
+		"观察到的主地址",
+		"来源：lan_peer",
+		"known-good",
+		"QmKnownGood",
+		"preferred",
+		"cooldown",
+		"最近失败，冷却后排：dial timeout",
+		"dial timeout",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("expected network page to contain %q, got %q", want, body)
+		}
+	}
+}
+
 func TestPluginBuildReturnsBootstrapUnavailableWithoutSyncDaemon(t *testing.T) {
 	t.Parallel()
 
@@ -40,6 +144,129 @@ func TestPluginBuildReturnsBootstrapUnavailableWithoutSyncDaemon(t *testing.T) {
 	site.Handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestPluginBuildServesBootstrapExplainAPI(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	netPath := filepath.Join(root, "config", "haonews_net.inf")
+	if err := os.MkdirAll(filepath.Dir(netPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll(netPath) error = %v", err)
+	}
+	netText := `network_id=2c2d6cf7b255ba20d6ad01135654933851b02bd00c65c2a6a54b97ab56590475
+lan_peer=192.168.102.75
+lan_bt_peer=192.168.102.75
+`
+	if err := os.WriteFile(netPath, []byte(netText), 0o644); err != nil {
+		t.Fatalf("WriteFile(netPath) error = %v", err)
+	}
+	advertiseHealthPath := filepath.Join(root, "config", "advertise_host_health.json")
+	advertiseHealthText := `{
+  "entries": {
+    "192.168.102.75": {
+      "success_count": 2,
+      "failure_count": 1,
+      "last_success_at": "2026-03-20T10:03:00Z",
+      "last_failure_at": "2026-03-20T10:01:30Z"
+    }
+  }
+}
+`
+	if err := os.WriteFile(advertiseHealthPath, []byte(advertiseHealthText), 0o644); err != nil {
+		t.Fatalf("WriteFile(advertiseHealthPath) error = %v", err)
+	}
+	healthPath := filepath.Join(root, "config", "lan_peer_health.json")
+	healthText := `{
+  "entries": {
+    "lan_peer|192.168.102.75": {
+      "last_success_at": "2026-03-20T10:00:00Z",
+      "observed_primary_host": "192.168.102.76",
+      "observed_primary_from": "lan_peer"
+    },
+    "lan_bt_peer|192.168.102.75": {
+      "last_success_at": "2026-03-20T10:00:30Z",
+      "observed_primary_host": "192.168.102.76",
+      "observed_primary_from": "lan_bt_peer"
+    }
+  }
+}
+`
+	if err := os.WriteFile(healthPath, []byte(healthText), 0o644); err != nil {
+		t.Fatalf("WriteFile(healthPath) error = %v", err)
+	}
+	syncDir := filepath.Join(root, "store", "sync")
+	if err := os.MkdirAll(syncDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(syncDir) error = %v", err)
+	}
+	status := newsplugin.SyncRuntimeStatus{
+		UpdatedAt: time.Now().UTC(),
+		NetworkID: "2c2d6cf7b255ba20d6ad01135654933851b02bd00c65c2a6a54b97ab56590475",
+		LibP2P: newsplugin.SyncLibP2PStatus{
+			Enabled:        true,
+			PeerID:         "QmBootstrapPeer",
+			ListenAddrs:    []string{"/ip4/0.0.0.0/tcp/50584"},
+			LastError:      "",
+			Peers:          nil,
+			ConnectedPeers: 1,
+		},
+		BitTorrentDHT: newsplugin.SyncBitTorrentStatus{
+			ConfiguredListen: "0.0.0.0:50585",
+		},
+	}
+	data, err := json.Marshal(status)
+	if err != nil {
+		t.Fatalf("json.Marshal(status) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(syncDir, "status.json"), data, 0o644); err != nil {
+		t.Fatalf("WriteFile(status.json) error = %v", err)
+	}
+
+	site := buildOpsSiteAtRoot(t, root)
+	req := httptest.NewRequest(http.MethodGet, "/api/network/bootstrap", nil)
+	req.Host = "127.0.0.1:51818"
+	rec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var payload newsplugin.NetworkBootstrapResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if payload.PeerID != "QmBootstrapPeer" {
+		t.Fatalf("payload.PeerID = %q", payload.PeerID)
+	}
+	if len(payload.Explain) == 0 {
+		t.Fatalf("payload.Explain = %#v, want non-empty explanation", payload.Explain)
+	}
+	if !strings.Contains(strings.Join(payload.Explain, "\n"), "当前主通告地址") {
+		t.Fatalf("payload.Explain = %#v, want primary explain text", payload.Explain)
+	}
+	if payload.ExplainDetail == nil {
+		t.Fatal("payload.ExplainDetail = nil, want structured detail")
+	}
+	if payload.ExplainDetail.PrimaryHost != "192.168.102.75" {
+		t.Fatalf("payload.ExplainDetail.PrimaryHost = %q", payload.ExplainDetail.PrimaryHost)
+	}
+	if payload.ExplainDetail.SuccessCount < 2 || payload.ExplainDetail.FailureCount != 1 {
+		t.Fatalf("payload.ExplainDetail = %#v", payload.ExplainDetail)
+	}
+	if payload.ExplainDetail.LANLibP2P == nil || payload.ExplainDetail.LANBT == nil {
+		t.Fatalf("payload.ExplainDetail = %#v, want lan detail", payload.ExplainDetail)
+	}
+	if payload.ExplainDetail.LANLibP2P.ObservedPrimaryHost != "192.168.102.76" {
+		t.Fatalf("payload.ExplainDetail.LANLibP2P = %#v, want observed_primary_host", payload.ExplainDetail.LANLibP2P)
+	}
+	if payload.ExplainDetail.LANLibP2P.ObservedPrimaryFrom != "lan_peer" {
+		t.Fatalf("payload.ExplainDetail.LANLibP2P = %#v, want observed_primary_from", payload.ExplainDetail.LANLibP2P)
+	}
+	if payload.ExplainDetail.LANBT.ObservedPrimaryHost != "192.168.102.76" {
+		t.Fatalf("payload.ExplainDetail.LANBT = %#v, want observed_primary_host", payload.ExplainDetail.LANBT)
+	}
+	if payload.ExplainDetail.LANBT.ObservedPrimaryFrom != "lan_bt_peer" {
+		t.Fatalf("payload.ExplainDetail.LANBT = %#v, want observed_primary_from", payload.ExplainDetail.LANBT)
 	}
 }
 

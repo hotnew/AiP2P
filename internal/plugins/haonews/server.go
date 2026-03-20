@@ -201,18 +201,27 @@ type ArchiveMessagePageData struct {
 }
 
 type NetworkPageData struct {
-	Project       string
-	Version       string
-	ListenAddr    string
-	PageNav       []NavItem
-	Now           time.Time
-	NodeStatus    NodeStatus
-	SyncStatus    SyncRuntimeStatus
-	Supervisor    SyncSupervisorState
-	LANPeers      []string
-	LANBTAnchors  []LANBTAnchorStatus
-	LANBTOverall  string
-	LANBTHasMatch bool
+	Project             string
+	Version             string
+	ListenAddr          string
+	RequestHost         string
+	PrimaryLibP2P       string
+	PrimaryBTNode       string
+	PrimaryHostExplain  []string
+	AdvertiseCandidates []AdvertiseHostCandidateStatus
+	PageNav             []NavItem
+	Now                 time.Time
+	NodeStatus          NodeStatus
+	SyncStatus          SyncRuntimeStatus
+	Supervisor          SyncSupervisorState
+	LANPeers            []string
+	LANPeerHealth       []LANPeerHealthStatus
+	LANBTHealth         []LANPeerHealthStatus
+	AdvertiseHostHealth []AdvertiseHostHealthStatus
+	KnownGoodLibP2P     []KnownGoodLibP2PPeerStatus
+	LANBTAnchors        []LANBTAnchorStatus
+	LANBTOverall        string
+	LANBTHasMatch       bool
 }
 
 type LANBTAnchorStatus struct {
@@ -222,14 +231,82 @@ type LANBTAnchorStatus struct {
 	Error       string
 }
 
+type LANPeerHealthStatus struct {
+	Peer                string
+	State               string
+	Reason              string
+	ObservedPrimaryHost string
+	ObservedPrimaryFrom string
+	LastSuccessAt       *time.Time
+	LastFailureAt       *time.Time
+	ConsecutiveFailure  int
+	LastError           string
+}
+
+type KnownGoodLibP2PPeerStatus struct {
+	PeerID        string
+	LastSuccessAt *time.Time
+	Addrs         []string
+}
+
+type AdvertiseHostHealthStatus struct {
+	Host          string
+	SuccessCount  int
+	FailureCount  int
+	LastSuccessAt *time.Time
+	LastFailureAt *time.Time
+}
+
+type AdvertiseHostCandidateStatus struct {
+	Host           string
+	InterfaceName  string
+	TypeLabel      string
+	InterfaceLabel string
+	TypeScore      int
+	InterfaceScore int
+	HistoryScore   int
+	TotalScore     int
+	SuccessCount   int
+	FailureCount   int
+	LastSuccessAt  *time.Time
+	LastFailureAt  *time.Time
+	Selected       bool
+	Reasons        []string
+}
+
 type NetworkBootstrapResponse struct {
-	Project         string   `json:"project"`
-	Version         string   `json:"version"`
-	NetworkID       string   `json:"network_id"`
-	PeerID          string   `json:"peer_id"`
-	ListenAddrs     []string `json:"listen_addrs"`
-	DialAddrs       []string `json:"dial_addrs"`
-	BitTorrentNodes []string `json:"bittorrent_nodes,omitempty"`
+	Project         string                         `json:"project"`
+	Version         string                         `json:"version"`
+	NetworkID       string                         `json:"network_id"`
+	PeerID          string                         `json:"peer_id"`
+	ListenAddrs     []string                       `json:"listen_addrs"`
+	DialAddrs       []string                       `json:"dial_addrs"`
+	BitTorrentNodes []string                       `json:"bittorrent_nodes,omitempty"`
+	Explain         []string                       `json:"explain,omitempty"`
+	ExplainDetail   *NetworkBootstrapExplainDetail `json:"explain_detail,omitempty"`
+}
+
+type NetworkBootstrapExplainDetail struct {
+	RequestHost   string                               `json:"request_host,omitempty"`
+	PrimaryHost   string                               `json:"primary_host,omitempty"`
+	SuccessCount  int                                  `json:"success_count,omitempty"`
+	FailureCount  int                                  `json:"failure_count,omitempty"`
+	LastSuccessAt *time.Time                           `json:"last_success_at,omitempty"`
+	LastFailureAt *time.Time                           `json:"last_failure_at,omitempty"`
+	LANLibP2P     *NetworkBootstrapAnchorExplainDetail `json:"lan_libp2p,omitempty"`
+	LANBT         *NetworkBootstrapAnchorExplainDetail `json:"lan_bt,omitempty"`
+	Reasons       []string                             `json:"reasons,omitempty"`
+}
+
+type NetworkBootstrapAnchorExplainDetail struct {
+	Peer                string     `json:"peer,omitempty"`
+	ObservedPrimaryHost string     `json:"observed_primary_host,omitempty"`
+	ObservedPrimaryFrom string     `json:"observed_primary_from,omitempty"`
+	State               string     `json:"state,omitempty"`
+	Reason              string     `json:"reason,omitempty"`
+	LastError           string     `json:"last_error,omitempty"`
+	LastOKAt            *time.Time `json:"last_ok_at,omitempty"`
+	LastKOAt            *time.Time `json:"last_ko_at,omitempty"`
 }
 
 func NewWithThemeAndOptions(storeRoot, project, version, archiveRoot, rulesPath, writerPath, netPath string, theme apphost.WebTheme, options AppOptions) (*App, error) {

@@ -49,6 +49,14 @@
             <span class="stat-label">网络 ID</span>
             <strong class="network-value-wrap">{{if .SyncStatus.NetworkID}}{{.SyncStatus.NetworkID}}{{else}}尚未激活{{end}}</strong>
           </div>
+          <div class="hero-stat-card">
+            <span class="stat-label">主通告 libp2p</span>
+            <strong class="network-value-wrap">{{if .PrimaryLibP2P}}{{.PrimaryLibP2P}}{{else}}尚未选出{{end}}</strong>
+          </div>
+          <div class="hero-stat-card">
+            <span class="stat-label">主通告 BT</span>
+            <strong class="network-value-wrap">{{if .PrimaryBTNode}}{{.PrimaryBTNode}}{{else}}尚未选出{{end}}</strong>
+          </div>
         </div>
       </header>
 
@@ -105,6 +113,193 @@
               <p class="micro-copy">在公共 DHT 路由之前，优先作为局域网回填来源。</p>
             </article>
           </div>
+        </section>
+
+        <section class="panel panel-inline">
+          <div class="panel-head">
+            <div>
+              <p class="panel-label">局域网锚点健康</p>
+              <p class="network-summary-copy">显示 `lan_peer` / `lan_bt_peer` 的最近成功、失败冷却和当前优先级。</p>
+            </div>
+          </div>
+          <div class="network-layout">
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="panel-label">libp2p 锚点健康</p>
+                </div>
+              </div>
+              {{if .LANPeerHealth}}
+                <div class="network-peer-list">
+                  {{range .LANPeerHealth}}
+                    <article class="network-peer-card">
+                      <div class="network-peer-head">
+                        <strong class="network-code-inline">{{.Peer}}</strong>
+                        <span class="status-pill status-{{if eq .State "preferred"}}good{{else if eq .State "cooldown"}}warn{{else}}warn{{end}}">{{.State}}</span>
+                      </div>
+                      <div class="summary-grid">
+                        <div><span class="stat-label">最近成功</span><strong>{{formatOptionalTime .LastSuccessAt}}</strong></div>
+                        <div><span class="stat-label">最近失败</span><strong>{{formatOptionalTime .LastFailureAt}}</strong></div>
+                        <div><span class="stat-label">连续失败</span><strong>{{.ConsecutiveFailure}}</strong></div>
+                      </div>
+                      {{if .ObservedPrimaryHost}}<p class="micro-copy">观察到的主地址：<code>{{.ObservedPrimaryHost}}</code>{{if .ObservedPrimaryFrom}}<span>，来源：{{.ObservedPrimaryFrom}}</span>{{end}}</p>{{end}}
+                      <p class="micro-copy">{{.Reason}}</p>
+                      {{if .LastError}}<p class="micro-copy network-error-copy">{{.LastError}}</p>{{end}}
+                    </article>
+                  {{end}}
+                </div>
+              {{else}}
+                <p class="network-card-copy">当前还没有 `lan_peer` 健康缓存。</p>
+              {{end}}
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="panel-label">BT/DHT 锚点健康</p>
+                </div>
+              </div>
+              {{if .LANBTHealth}}
+                <div class="network-peer-list">
+                  {{range .LANBTHealth}}
+                    <article class="network-peer-card">
+                      <div class="network-peer-head">
+                        <strong class="network-code-inline">{{.Peer}}</strong>
+                        <span class="status-pill status-{{if eq .State "preferred"}}good{{else if eq .State "cooldown"}}warn{{else}}warn{{end}}">{{.State}}</span>
+                      </div>
+                      <div class="summary-grid">
+                        <div><span class="stat-label">最近成功</span><strong>{{formatOptionalTime .LastSuccessAt}}</strong></div>
+                        <div><span class="stat-label">最近失败</span><strong>{{formatOptionalTime .LastFailureAt}}</strong></div>
+                        <div><span class="stat-label">连续失败</span><strong>{{.ConsecutiveFailure}}</strong></div>
+                      </div>
+                      {{if .ObservedPrimaryHost}}<p class="micro-copy">观察到的主地址：<code>{{.ObservedPrimaryHost}}</code>{{if .ObservedPrimaryFrom}}<span>，来源：{{.ObservedPrimaryFrom}}</span>{{end}}</p>{{end}}
+                      <p class="micro-copy">{{.Reason}}</p>
+                      {{if .LastError}}<p class="micro-copy network-error-copy">{{.LastError}}</p>{{end}}
+                    </article>
+                  {{end}}
+                </div>
+              {{else}}
+                <p class="network-card-copy">当前还没有 `lan_bt_peer` 健康缓存。</p>
+              {{end}}
+            </section>
+          </div>
+        </section>
+
+        <section class="panel panel-inline">
+          <div class="panel-head">
+            <div>
+              <p class="panel-label">已知好节点缓存</p>
+              <p class="network-summary-copy">重启后会优先尝试这些最近成功连接过的 libp2p 节点，再回退到公网 bootstrap。</p>
+            </div>
+          </div>
+          {{if .KnownGoodLibP2P}}
+            <div class="network-peer-list">
+              {{range .KnownGoodLibP2P}}
+                <article class="network-peer-card">
+                  <div class="network-peer-head">
+                    <strong class="network-value-wrap">{{.PeerID}}</strong>
+                    <span class="status-pill status-good">known-good</span>
+                  </div>
+                  <div class="summary-grid">
+                    <div><span class="stat-label">最近成功</span><strong>{{formatOptionalTime .LastSuccessAt}}</strong></div>
+                    <div><span class="stat-label">缓存地址数</span><strong>{{len .Addrs}}</strong></div>
+                  </div>
+                  {{if .Addrs}}
+                    <div class="network-code-list">
+                      {{range .Addrs}}<code>{{.}}</code>{{end}}
+                    </div>
+                  {{end}}
+                </article>
+              {{end}}
+            </div>
+          {{else}}
+            <p class="network-card-copy">当前还没有已知好 libp2p 节点缓存。</p>
+          {{end}}
+        </section>
+
+        <section class="panel panel-inline">
+          <div class="panel-head">
+            <div>
+              <p class="panel-label">当前主地址解释</p>
+              <p class="network-summary-copy">把当前主通告地址、最近成功/失败记录以及 LAN 锚点状态串起来，便于快速判断为什么当前选的是它。</p>
+            </div>
+          </div>
+          {{if .PrimaryHostExplain}}
+            <div class="network-block">
+              {{range .PrimaryHostExplain}}<p class="micro-copy">{{.}}</p>{{end}}
+            </div>
+          {{else}}
+            <p class="network-card-copy">当前还没有可解释的主通告地址。</p>
+          {{end}}
+        </section>
+
+        <section class="panel panel-inline">
+          <div class="panel-head">
+            <div>
+              <p class="panel-label">主通告候选地址</p>
+              <p class="network-summary-copy">展示当前节点所有候选地址的打分拆解，便于判断多网卡情况下为什么某个地址被选中或被压后。</p>
+            </div>
+          </div>
+          {{if .AdvertiseCandidates}}
+            <div class="network-peer-list">
+              {{range .AdvertiseCandidates}}
+                <article class="network-peer-card">
+                  <div class="network-peer-head">
+                    <strong class="network-code-inline">{{.Host}}</strong>
+                    <span class="status-pill status-{{if .Selected}}good{{else}}warn{{end}}">{{if .Selected}}selected{{else}}candidate{{end}}</span>
+                  </div>
+                  <div class="summary-grid">
+                    <div><span class="stat-label">总分</span><strong>{{.TotalScore}}</strong></div>
+                    <div><span class="stat-label">地址类型</span><strong>{{.TypeLabel}} / {{.TypeScore}}</strong></div>
+                    <div><span class="stat-label">网卡类型</span><strong>{{.InterfaceLabel}} / {{.InterfaceScore}}</strong></div>
+                    <div><span class="stat-label">历史分</span><strong>{{.HistoryScore}}</strong></div>
+                  </div>
+                  {{if .InterfaceName}}<p class="micro-copy">接口：<code>{{.InterfaceName}}</code></p>{{end}}
+                  {{if or .LastSuccessAt .LastFailureAt}}
+                    <div class="summary-grid">
+                      <div><span class="stat-label">最近成功</span><strong>{{formatOptionalTime .LastSuccessAt}}</strong></div>
+                      <div><span class="stat-label">最近失败</span><strong>{{formatOptionalTime .LastFailureAt}}</strong></div>
+                      <div><span class="stat-label">历史计数</span><strong>{{.SuccessCount}} / {{.FailureCount}}</strong></div>
+                    </div>
+                  {{end}}
+                  {{if .Reasons}}
+                    <div class="network-block">
+                      {{range .Reasons}}<p class="micro-copy">{{.}}</p>{{end}}
+                    </div>
+                  {{end}}
+                </article>
+              {{end}}
+            </div>
+          {{else}}
+            <p class="network-card-copy">当前还没有可用的主通告候选地址。</p>
+          {{end}}
+        </section>
+
+        <section class="panel panel-inline">
+          <div class="panel-head">
+            <div>
+              <p class="panel-label">主通告地址历史</p>
+              <p class="network-summary-copy">记录哪些地址最近成功或失败地作为当前节点的主通告地址对外提供 bootstrap。</p>
+            </div>
+          </div>
+          {{if .AdvertiseHostHealth}}
+            <div class="network-peer-list">
+              {{range .AdvertiseHostHealth}}
+                <article class="network-peer-card">
+                  <div class="network-peer-head">
+                    <strong class="network-code-inline">{{.Host}}</strong>
+                    <span class="status-pill status-{{if ge .SuccessCount .FailureCount}}good{{else}}warn{{end}}">{{.SuccessCount}} 成功 / {{.FailureCount}} 失败</span>
+                  </div>
+                  <div class="summary-grid">
+                    <div><span class="stat-label">最近成功</span><strong>{{formatOptionalTime .LastSuccessAt}}</strong></div>
+                    <div><span class="stat-label">最近失败</span><strong>{{formatOptionalTime .LastFailureAt}}</strong></div>
+                  </div>
+                </article>
+              {{end}}
+            </div>
+          {{else}}
+            <p class="network-card-copy">当前还没有主通告地址的成功/失败历史。</p>
+          {{end}}
         </section>
 
         <section class="panel panel-inline">
