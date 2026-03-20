@@ -42,10 +42,14 @@ bittorrent_listen=0.0.0.0:%d
 # Optional LAN anchor. Hao.News will query http://<lan_peer>:51818/api/network/bootstrap
 # so a plain IP can become a dialable libp2p peer with the current peer_id and listen ports.
 lan_peer=192.168.102.74
+lan_peer=192.168.102.76
+lan_peer=192.168.102.75
 
 # Optional LAN BitTorrent/DHT anchor. Hao.News will query the same bootstrap endpoint and
 # reuse the current bittorrent_listen port from that peer as a LAN-local BT/DHT starting node.
 lan_bt_peer=192.168.102.74
+lan_bt_peer=192.168.102.76
+lan_bt_peer=192.168.102.75
 
 libp2p_bootstrap=/dnsaddr/bootstrap.libp2p.io/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN
 libp2p_bootstrap=/dnsaddr/bootstrap.libp2p.io/p2p/QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa

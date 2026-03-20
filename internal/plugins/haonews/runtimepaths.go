@@ -141,10 +141,14 @@ bittorrent_listen=0.0.0.0:%d
 # Default LAN anchor. This matches the reference latest.org setup and gives
 # Hao.News Public uses the same shared LAN libp2p entrypoint by default.
 lan_peer=192.168.102.74
+lan_peer=192.168.102.76
+lan_peer=192.168.102.75
 
 # Default LAN BitTorrent/DHT anchor. This matches the reference latest.org
 # setup and gives Hao.News Public the same shared LAN BT/DHT backfill path.
 lan_bt_peer=192.168.102.74
+lan_bt_peer=192.168.102.76
+lan_bt_peer=192.168.102.75
 
 # Public libp2p helper write-back section. After the public helper node is
 # deployed, replace <peer-id> and uncomment these entries.

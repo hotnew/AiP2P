@@ -15,7 +15,11 @@ libp2p_listen=/ip4/0.0.0.0/tcp/41001
 libp2p_listen=/ip4/0.0.0.0/udp/41001/quic-v1
 bittorrent_listen=0.0.0.0:41002
 lan_peer=%s
+lan_peer=192.168.102.76
+lan_peer=192.168.102.75
 lan_bt_peer=%s
+lan_bt_peer=192.168.102.76
+lan_bt_peer=192.168.102.75
 `, latestOrgNetworkID, defaultLANPeer, defaultLANPeer), nil
 }
 
@@ -132,8 +136,14 @@ func TestEnsureRuntimeLayoutCreatesDefaultConfigFiles(t *testing.T) {
 	if !strings.Contains(netText, "\nlan_peer=192.168.102.74") {
 		t.Fatalf("missing default lan_peer in net config: %q", netText)
 	}
+	if !strings.Contains(netText, "\nlan_peer=192.168.102.76") || !strings.Contains(netText, "\nlan_peer=192.168.102.75") {
+		t.Fatalf("missing extra lan_peer entries in net config: %q", netText)
+	}
 	if !strings.Contains(netText, "\nlan_bt_peer=192.168.102.74") {
 		t.Fatalf("missing default lan_bt_peer in net config: %q", netText)
+	}
+	if !strings.Contains(netText, "\nlan_bt_peer=192.168.102.76") || !strings.Contains(netText, "\nlan_bt_peer=192.168.102.75") {
+		t.Fatalf("missing extra lan_bt_peer entries in net config: %q", netText)
 	}
 	if !strings.Contains(netText, "network_id="+latestOrgNetworkID) {
 		t.Fatalf("missing hao.news network id in net config: %q", netText)

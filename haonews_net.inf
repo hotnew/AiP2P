@@ -12,6 +12,16 @@
 # Then set:
 #   network_id=<your 64 hex chars>
 
+# Optional LAN anchors. Multiple entries are allowed and will be tried in order.
+lan_peer=192.168.102.74
+lan_peer=192.168.102.76
+lan_peer=192.168.102.75
+
+# Optional LAN BitTorrent/DHT anchors. Multiple entries are allowed and will be tried in order.
+lan_bt_peer=192.168.102.74
+lan_bt_peer=192.168.102.76
+lan_bt_peer=192.168.102.75
+
 dht_router=router.bittorrent.com:6881
 dht_router=router.utorrent.com:6881
 dht_router=dht.transmissionbt.com:6881

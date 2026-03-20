@@ -17,7 +17,11 @@ bittorrent_listen=0.0.0.0:51413
 libp2p_listen=/ip4/0.0.0.0/tcp/4001
 libp2p_listen=/ip4/0.0.0.0/udp/4001/quic-v1
 lan_peer=192.168.102.74
+lan_peer=192.168.102.76
+lan_peer=192.168.102.75
 lan_bt_peer=192.168.102.74
+lan_bt_peer=192.168.102.76
+lan_bt_peer=192.168.102.75
 dht_router=router.bittorrent.com:6881
 dht_router=router.utorrent.com:6881
 dht_router=router.bittorrent.com:6881
@@ -51,11 +55,11 @@ libp2p_rendezvous=hao.news/global
 	if got := len(cfg.LibP2PListen); got != 2 {
 		t.Fatalf("libp2p listen = %d, want 2", got)
 	}
-	if got := len(cfg.LANPeers); got != 1 {
-		t.Fatalf("lan peers = %d, want 1", got)
+	if got := len(cfg.LANPeers); got != 3 {
+		t.Fatalf("lan peers = %d, want 3", got)
 	}
-	if got := len(cfg.LANTorrentPeers); got != 1 {
-		t.Fatalf("lan bt peers = %d, want 1", got)
+	if got := len(cfg.LANTorrentPeers); got != 3 {
+		t.Fatalf("lan bt peers = %d, want 3", got)
 	}
 	if cfg.FileName() != "hao_news_net.inf" {
 		t.Fatalf("file name = %q, want hao_news_net.inf", cfg.FileName())

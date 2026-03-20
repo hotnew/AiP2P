@@ -60,11 +60,15 @@ func TestLoadNetworkBootstrapConfig(t *testing.T) {
 
 	root := t.TempDir()
 	path := filepath.Join(root, "haonews_net.inf")
-	content := `network_id=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+content := `network_id=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 dht_router=router.bittorrent.com:6881
 dht_router=router.utorrent.com:6881
 lan_peer=192.168.102.74
+lan_peer=192.168.102.76
+lan_peer=192.168.102.75
 lan_bt_peer=192.168.102.74
+lan_bt_peer=192.168.102.76
+lan_bt_peer=192.168.102.75
 libp2p_bootstrap=/dnsaddr/bootstrap.libp2p.io/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN
 `
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
@@ -83,11 +87,11 @@ libp2p_bootstrap=/dnsaddr/bootstrap.libp2p.io/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVw
 	if cfg.NetworkID == "" {
 		t.Fatal("expected network id to load")
 	}
-	if len(cfg.LANPeers) != 1 {
-		t.Fatalf("lan peers = %d, want 1", len(cfg.LANPeers))
+	if len(cfg.LANPeers) != 3 {
+		t.Fatalf("lan peers = %d, want 3", len(cfg.LANPeers))
 	}
-	if len(cfg.LANTorrentPeers) != 1 {
-		t.Fatalf("lan bt peers = %d, want 1", len(cfg.LANTorrentPeers))
+	if len(cfg.LANTorrentPeers) != 3 {
+		t.Fatalf("lan bt peers = %d, want 3", len(cfg.LANTorrentPeers))
 	}
 }
 
