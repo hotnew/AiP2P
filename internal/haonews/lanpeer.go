@@ -424,7 +424,7 @@ func fetchLANBootstrapPayload(ctx context.Context, target, configuredValue, expe
 	if err != nil {
 		return lanBootstrapResponse{}, fmt.Errorf("lan_peer %q request: %w", configuredValue, err)
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := doLANHTTPRequest(req, 5*time.Second, []string{target})
 	if err != nil {
 		return lanBootstrapResponse{}, fmt.Errorf("lan_peer %q query %s: %w", configuredValue, endpoint, err)
 	}
@@ -550,7 +550,7 @@ func fetchLANHistoryManifest(ctx context.Context, value, cursor, expectedNetwork
 	if err != nil {
 		return lanHistoryManifestResponse{}, fmt.Errorf("lan_peer %q request: %w", value, err)
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := doLANHTTPRequest(req, 5*time.Second, []string{value})
 	if err != nil {
 		return lanHistoryManifestResponse{}, fmt.Errorf("lan_peer %q query %s: %w", value, endpoint, err)
 	}

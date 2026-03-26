@@ -56,6 +56,7 @@ const (
 	defaultSyncRefTimeout = 20 * time.Second
 	maxSyncRefsPerPass    = 3
 	lanHealthProbeEvery   = 60 * time.Second
+	recentRealtimeWindow  = 2 * time.Hour
 )
 
 func RunSync(ctx context.Context, opts SyncOptions, logf func(string, ...any)) error {
@@ -387,7 +388,12 @@ func (r *syncRuntime) processQueue(ctx context.Context, direct []string, timeout
 	if err != nil {
 		return err
 	}
-	refs := append(realtimeRefs, historyRefs...)
+	refs := append([]SyncRef(nil), realtimeRefs...)
+	if r.historyBootstrap.FirstSyncCompleted {
+		refs = append(refs, historyRefs...)
+	} else if logf != nil && len(historyRefs) > 0 {
+		logf("history bootstrap recent mode: defer %d history refs until realtime path is healthy", len(historyRefs))
+	}
 	if len(refs) > maxSyncRefsPerPass {
 		refs = refs[:maxSyncRefsPerPass]
 	}
@@ -827,7 +833,11 @@ func (r *syncRuntime) enqueueHistoryFromLANPeers(ctx context.Context, logf func(
 				if !reserveDailyQuota(dayCounts, announcement.CreatedAt, r.subscriptions.MaxItemsPerDay) {
 					continue
 				}
-				enqueued, err := enqueueSyncRef(r.historyQueuePath, ref)
+				queuePath := r.historyQueuePath
+				if shouldPromoteHistoryAnnouncementToRealtime(page, announcement) {
+					queuePath = r.queuePath
+				}
+				enqueued, err := enqueueSyncRef(queuePath, ref)
 				if err != nil {
 					return added, err
 				}
@@ -849,6 +859,22 @@ func (r *syncRuntime) enqueueHistoryFromLANPeers(ctx context.Context, logf func(
 
 func (r *syncRuntime) inRecentHistoryBootstrap() bool {
 	return !r.historyBootstrap.FirstSyncCompleted
+}
+
+func shouldPromoteHistoryAnnouncementToRealtime(page int, announcement SyncAnnouncement) bool {
+	if page != 1 {
+		return false
+	}
+	createdAt := strings.TrimSpace(announcement.CreatedAt)
+	if createdAt == "" {
+		return false
+	}
+	parsed, err := time.Parse(time.RFC3339, createdAt)
+	if err != nil {
+		return false
+	}
+	age := time.Since(parsed.UTC())
+	return age >= 0 && age <= recentRealtimeWindow
 }
 
 func (r *syncRuntime) ensureHistoryBootstrapStarted() error {

@@ -21,7 +21,6 @@ func fetchTorrentFallback(ctx context.Context, store *Store, ref SyncRef, lanPee
 	if _, err := os.Stat(target); err == nil {
 		return target, nil
 	}
-	client := &http.Client{Timeout: 5 * time.Second}
 	var lastErr error
 	for _, endpoint := range candidateTorrentURLs(ref, lanPeers) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
@@ -29,7 +28,7 @@ func fetchTorrentFallback(ctx context.Context, store *Store, ref SyncRef, lanPee
 			lastErr = err
 			continue
 		}
-		resp, err := client.Do(req)
+		resp, err := doLANHTTPRequest(req, 5*time.Second, lanPeers)
 		if err != nil {
 			lastErr = err
 			continue
@@ -86,7 +85,6 @@ func fetchBundleFallback(ctx context.Context, store *Store, ref SyncRef, lanPeer
 		maxBytes = defaultMaxBundleMB
 	}
 	maxBytes *= 1024 * 1024
-	client := &http.Client{Timeout: 12 * time.Second}
 	var lastErr error
 	for _, endpoint := range candidateBundleURLs(ref, lanPeers) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
@@ -94,7 +92,7 @@ func fetchBundleFallback(ctx context.Context, store *Store, ref SyncRef, lanPeer
 			lastErr = err
 			continue
 		}
-		resp, err := client.Do(req)
+		resp, err := doLANHTTPRequest(req, 12*time.Second, lanPeers)
 		if err != nil {
 			lastErr = err
 			continue

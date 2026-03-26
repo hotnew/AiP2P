@@ -392,11 +392,21 @@ func TestEnqueueHistoryFromLANPeersRecentBootstrapLimitsPages(t *testing.T) {
 		t.Fatalf("read history queue: %v", err)
 	}
 	text := string(queueData)
-	if !strings.Contains(text, "dn=page-1") || !strings.Contains(text, "dn=page-3") {
+	if strings.Contains(text, "dn=page-1") {
+		t.Fatalf("history queue should not include recent page 1 entry: %q", text)
+	}
+	if !strings.Contains(text, "dn=page-2") || !strings.Contains(text, "dn=page-3") {
 		t.Fatalf("history queue missing recent pages: %q", text)
 	}
 	if strings.Contains(text, "dn=page-4") {
 		t.Fatalf("history queue should not include page 4 during bootstrap: %q", text)
+	}
+	realtimeData, err := os.ReadFile(queues.RealtimePath)
+	if err != nil {
+		t.Fatalf("read realtime queue: %v", err)
+	}
+	if !strings.Contains(string(realtimeData), "dn=page-1") {
+		t.Fatalf("realtime queue missing recent page 1 entry: %q", string(realtimeData))
 	}
 	state, err := loadHistoryBootstrapState(store)
 	if err != nil {
@@ -502,6 +512,100 @@ func TestEnqueueHistoryFromLANPeersRecentBootstrapRespectsHistoryDays(t *testing
 	}
 	if strings.Contains(string(queueData), "dn=old") {
 		t.Fatalf("history queue should not include stale entry: %q", string(queueData))
+	}
+}
+
+func TestEnqueueHistoryFromLANPeersPromotesRecentPageOneEntriesToRealtime(t *testing.T) {
+	t.Parallel()
+
+	store, err := OpenStore(filepath.Join(t.TempDir(), ".haonews"))
+	if err != nil {
+		t.Fatalf("OpenStore error = %v", err)
+	}
+	queues, err := ensureSyncLayout(store, "")
+	if err != nil {
+		t.Fatalf("ensureSyncLayout error = %v", err)
+	}
+	recentInfoHash := strings.Repeat("b", 40)
+	olderInfoHash := strings.Repeat("c", 40)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		page := strings.TrimSpace(r.URL.Query().Get("cursor"))
+		if page == "" {
+			page = "1"
+		}
+		payload := HistoryManifest{
+			Protocol:     ProtocolVersion,
+			Type:         historyManifestType,
+			Project:      "hao.news",
+			NetworkID:    latestOrgNetworkID,
+			Page:         1,
+			PageSize:     2,
+			EntryCount:   2,
+			TotalEntries: 2,
+			TotalPages:   1,
+			Cursor:       "1",
+			HasMore:      false,
+			Entries: []SyncAnnouncement{
+				{
+					InfoHash:  recentInfoHash,
+					Magnet:    "magnet:?xt=urn:btih:" + recentInfoHash + "&dn=recent",
+					Kind:      "post",
+					Author:    "agent://pc75/main",
+					Project:   "hao.news",
+					NetworkID: latestOrgNetworkID,
+					CreatedAt: time.Now().UTC().Add(-30 * time.Minute).Format(time.RFC3339),
+				},
+				{
+					InfoHash:  olderInfoHash,
+					Magnet:    "magnet:?xt=urn:btih:" + olderInfoHash + "&dn=older",
+					Kind:      "post",
+					Author:    "agent://pc75/main",
+					Project:   "hao.news",
+					NetworkID: latestOrgNetworkID,
+					CreatedAt: time.Now().UTC().Add(-6 * time.Hour).Format(time.RFC3339),
+				},
+			},
+		}
+		_ = json.NewEncoder(w).Encode(payload)
+	}))
+	defer srv.Close()
+
+	runtime := &syncRuntime{
+		store:            store,
+		queuePath:        queues.RealtimePath,
+		historyQueuePath: queues.HistoryPath,
+		netCfg: NetworkBootstrapConfig{
+			NetworkID: latestOrgNetworkID,
+			LANPeers:  []string{srv.URL},
+		},
+		subscriptions: SyncSubscriptions{},
+	}
+	added, err := runtime.enqueueHistoryFromLANPeers(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("enqueueHistoryFromLANPeers error = %v", err)
+	}
+	if added != 2 {
+		t.Fatalf("added = %d, want 2", added)
+	}
+	realtimeData, err := os.ReadFile(queues.RealtimePath)
+	if err != nil {
+		t.Fatalf("read realtime queue: %v", err)
+	}
+	if !strings.Contains(string(realtimeData), "dn=recent") {
+		t.Fatalf("realtime queue missing recent entry: %q", string(realtimeData))
+	}
+	if strings.Contains(string(realtimeData), "dn=older") {
+		t.Fatalf("realtime queue should not include older entry: %q", string(realtimeData))
+	}
+	historyData, err := os.ReadFile(queues.HistoryPath)
+	if err != nil {
+		t.Fatalf("read history queue: %v", err)
+	}
+	if !strings.Contains(string(historyData), "dn=older") {
+		t.Fatalf("history queue missing older entry: %q", string(historyData))
+	}
+	if strings.Contains(string(historyData), "dn=recent") {
+		t.Fatalf("history queue should not include promoted recent entry: %q", string(historyData))
 	}
 }
 
