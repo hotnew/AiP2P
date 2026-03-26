@@ -424,7 +424,7 @@ func TestAnnouncementWatcherHandleArchiveNotice(t *testing.T) {
 	if len(events) != 1 || events[0].Type != TypeArchiveNotice {
 		t.Fatalf("events = %#v, want single archive_notice", events)
 	}
-	queueBody, err := os.ReadFile(filepath.Join(root, "sync", "magnets.txt"))
+	queueBody, err := os.ReadFile(filepath.Join(root, "sync", "realtime.txt"))
 	if err != nil {
 		t.Fatalf("read queue error = %v", err)
 	}

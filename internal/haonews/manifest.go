@@ -5,10 +5,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,19 +18,27 @@ import (
 )
 
 const (
-	historyManifestKind   = "manifest"
-	historyManifestType   = "history"
-	historyManifestAuthor = "agent://haonews-sync/history-manifest"
+	historyManifestKind     = "manifest"
+	historyManifestType     = "history"
+	historyManifestAuthor   = "agent://haonews-sync/history-manifest"
+	historyManifestPageSize = 200
 )
 
 type HistoryManifest struct {
-	Protocol    string             `json:"protocol"`
-	Type        string             `json:"type"`
-	Project     string             `json:"project,omitempty"`
-	NetworkID   string             `json:"network_id,omitempty"`
-	GeneratedAt string             `json:"generated_at"`
-	EntryCount  int                `json:"entry_count"`
-	Entries     []SyncAnnouncement `json:"entries"`
+	Protocol     string             `json:"protocol"`
+	Type         string             `json:"type"`
+	Project      string             `json:"project,omitempty"`
+	NetworkID    string             `json:"network_id,omitempty"`
+	GeneratedAt  string             `json:"generated_at"`
+	Page         int                `json:"page,omitempty"`
+	PageSize     int                `json:"page_size,omitempty"`
+	TotalEntries int                `json:"total_entries,omitempty"`
+	TotalPages   int                `json:"total_pages,omitempty"`
+	Cursor       string             `json:"cursor,omitempty"`
+	NextCursor   string             `json:"next_cursor,omitempty"`
+	HasMore      bool               `json:"has_more,omitempty"`
+	EntryCount   int                `json:"entry_count"`
+	Entries      []SyncAnnouncement `json:"entries"`
 }
 
 type historyManifestState struct {
@@ -68,28 +78,62 @@ func ensureHistoryManifests(store *Store, netCfg NetworkBootstrapConfig, listenA
 		grouped[project] = append(grouped[project], announcement)
 	}
 	for project, entries := range grouped {
-		if err := ensureHistoryManifest(store, project, netCfg.NetworkID, entries); err != nil {
+		if err := ensureHistoryManifestPages(store, project, netCfg.NetworkID, entries); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func ensureHistoryManifest(store *Store, project, networkID string, entries []SyncAnnouncement) error {
+func ensureHistoryManifestPages(store *Store, project, networkID string, entries []SyncAnnouncement) error {
 	if len(entries) == 0 {
 		return nil
 	}
 	sort.Slice(entries, func(i, j int) bool {
-		return entries[i].CreatedAt < entries[j].CreatedAt
+		if entries[i].CreatedAt != entries[j].CreatedAt {
+			return entries[i].CreatedAt > entries[j].CreatedAt
+		}
+		return strings.ToLower(strings.TrimSpace(entries[i].InfoHash)) < strings.ToLower(strings.TrimSpace(entries[j].InfoHash))
 	})
+	totalEntries := len(entries)
+	totalPages := totalEntries / historyManifestPageSize
+	if totalEntries%historyManifestPageSize != 0 {
+		totalPages++
+	}
+	for page := 1; page <= totalPages; page++ {
+		start := (page - 1) * historyManifestPageSize
+		end := start + historyManifestPageSize
+		if end > totalEntries {
+			end = totalEntries
+		}
+		if err := ensureHistoryManifest(store, project, networkID, entries[start:end], page, totalEntries, totalPages); err != nil {
+			return err
+		}
+	}
+	return cleanupHistoryManifestStatePages(store, strings.TrimSpace(project), normalizeNetworkID(networkID), totalPages)
+}
+
+func ensureHistoryManifest(store *Store, project, networkID string, entries []SyncAnnouncement, page, totalEntries, totalPages int) error {
+	if len(entries) == 0 {
+		return nil
+	}
 	manifest := HistoryManifest{
-		Protocol:    ProtocolVersion,
-		Type:        historyManifestType,
-		Project:     strings.TrimSpace(project),
-		NetworkID:   normalizeNetworkID(networkID),
-		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
-		EntryCount:  len(entries),
-		Entries:     make([]SyncAnnouncement, 0, len(entries)),
+		Protocol:     ProtocolVersion,
+		Type:         historyManifestType,
+		Project:      strings.TrimSpace(project),
+		NetworkID:    normalizeNetworkID(networkID),
+		GeneratedAt:  time.Now().UTC().Format(time.RFC3339),
+		Page:         page,
+		PageSize:     historyManifestPageSize,
+		TotalEntries: totalEntries,
+		TotalPages:   totalPages,
+		Cursor:       strconv.Itoa(page),
+		HasMore:      page < totalPages,
+		EntryCount:   len(entries),
+		Entries:      make([]SyncAnnouncement, 0, len(entries)),
+	}
+	if manifest.HasMore {
+		manifest.NextCursor = strconv.Itoa(page + 1)
 	}
 	topicsSeen := map[string]struct{}{reservedTopicAll: {}}
 	topics := []string{reservedTopicAll}
@@ -116,7 +160,7 @@ func ensureHistoryManifest(store *Store, project, networkID string, entries []Sy
 	body = append(body, '\n')
 	bodySHA := sha256.Sum256(body)
 	bodyHash := hex.EncodeToString(bodySHA[:])
-	statePath := historyManifestStatePath(store, manifest.Project, manifest.NetworkID)
+	statePath := historyManifestStatePath(store, manifest.Project, manifest.NetworkID, page)
 	state, _ := loadHistoryManifestState(statePath)
 	if state.BodySHA256 == bodyHash && state.ContentDir != "" && state.TorrentFile != "" {
 		if _, err := os.Stat(state.ContentDir); err == nil {
@@ -129,16 +173,23 @@ func ensureHistoryManifest(store *Store, project, networkID string, entries []Sy
 		Kind:      historyManifestKind,
 		Author:    historyManifestAuthor,
 		Channel:   manifest.Project + "/history",
-		Title:     manifest.Project + " history manifest",
+		Title:     historyManifestTitle(manifest.Project, page, totalPages),
 		Body:      string(body),
 		Tags:      []string{"history-manifest"},
 		CreatedAt: time.Now().UTC(),
 		Extensions: map[string]any{
-			"project":       manifest.Project,
-			"network_id":    manifest.NetworkID,
-			"manifest_type": historyManifestType,
-			"entry_count":   manifest.EntryCount,
-			"topics":        topics,
+			"project":                manifest.Project,
+			"network_id":             manifest.NetworkID,
+			"manifest_type":          historyManifestType,
+			"entry_count":            manifest.EntryCount,
+			"manifest_page":          manifest.Page,
+			"manifest_page_size":     manifest.PageSize,
+			"manifest_total_pages":   manifest.TotalPages,
+			"manifest_total_entries": manifest.TotalEntries,
+			"manifest_cursor":        manifest.Cursor,
+			"manifest_next_cursor":   manifest.NextCursor,
+			"manifest_has_more":      manifest.HasMore,
+			"topics":                 topics,
 		},
 	})
 	if err != nil {
@@ -160,7 +211,7 @@ func ensureHistoryManifest(store *Store, project, networkID string, entries []Sy
 	})
 }
 
-func enqueueHistoryManifestRefs(store *Store, queuePath string, subscriptions SyncSubscriptions, networkID string) (int, error) {
+func enqueueHistoryManifestRefs(store *Store, queuePath string, subscriptions SyncSubscriptions, networkID string, maxAdds int) (int, error) {
 	entries, err := os.ReadDir(store.DataDir)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -194,7 +245,7 @@ func enqueueHistoryManifestRefs(store *Store, queuePath string, subscriptions Sy
 			if networkID != "" && announcement.NetworkID != "" && !strings.EqualFold(announcement.NetworkID, networkID) {
 				continue
 			}
-			if !matchesAnnouncement(announcement, subscriptions) {
+			if !matchesHistoryAnnouncement(announcement, subscriptions) {
 				continue
 			}
 			ref, err := syncRefFromAnnouncement(announcement)
@@ -213,6 +264,9 @@ func enqueueHistoryManifestRefs(store *Store, queuePath string, subscriptions Sy
 			}
 			if enqueued {
 				added++
+				if maxAdds > 0 && added >= maxAdds {
+					return added, nil
+				}
 			}
 		}
 	}
@@ -241,6 +295,36 @@ func parseHistoryManifest(body string, msg Message) (HistoryManifest, error) {
 	if manifest.NetworkID == "" {
 		manifest.NetworkID = nestedString(msg.Extensions, "network_id")
 	}
+	if manifest.Page <= 0 {
+		manifest.Page = nestedInt(msg.Extensions, "manifest_page")
+	}
+	if manifest.Page <= 0 {
+		manifest.Page = 1
+	}
+	if manifest.PageSize <= 0 {
+		manifest.PageSize = nestedInt(msg.Extensions, "manifest_page_size")
+	}
+	if manifest.PageSize <= 0 {
+		manifest.PageSize = historyManifestPageSize
+	}
+	if manifest.TotalPages <= 0 {
+		manifest.TotalPages = nestedInt(msg.Extensions, "manifest_total_pages")
+	}
+	if manifest.TotalEntries <= 0 {
+		manifest.TotalEntries = nestedInt(msg.Extensions, "manifest_total_entries")
+	}
+	if manifest.Cursor == "" {
+		manifest.Cursor = nestedString(msg.Extensions, "manifest_cursor")
+	}
+	if manifest.Cursor == "" {
+		manifest.Cursor = strconv.Itoa(manifest.Page)
+	}
+	if manifest.NextCursor == "" {
+		manifest.NextCursor = nestedString(msg.Extensions, "manifest_next_cursor")
+	}
+	if !manifest.HasMore {
+		manifest.HasMore = nestedBool(msg.Extensions, "manifest_has_more")
+	}
 	if !strings.EqualFold(manifest.Type, historyManifestType) {
 		return HistoryManifest{}, errors.New("unsupported manifest type")
 	}
@@ -254,7 +338,11 @@ func parseHistoryManifest(body string, msg Message) (HistoryManifest, error) {
 	return manifest, nil
 }
 
-func historyManifestStatePath(store *Store, project, networkID string) string {
+func historyManifestStatePath(store *Store, project, networkID string, page int) string {
+	return filepath.Join(historyManifestStateDir(store, project, networkID), historyManifestStateFile(page))
+}
+
+func historyManifestStateDir(store *Store, project, networkID string) string {
 	name := slugify(project)
 	if name == "" {
 		name = "project"
@@ -262,7 +350,14 @@ func historyManifestStatePath(store *Store, project, networkID string) string {
 	if networkID != "" {
 		name += "-" + networkID[:12]
 	}
-	return filepath.Join(store.Root, "sync", "manifests", name+".json")
+	return filepath.Join(store.Root, "sync", "manifests", name)
+}
+
+func historyManifestStateFile(page int) string {
+	if page <= 0 {
+		page = 1
+	}
+	return fmt.Sprintf("page-%04d.json", page)
 }
 
 func loadHistoryManifestState(path string) (historyManifestState, error) {
@@ -286,6 +381,105 @@ func writeHistoryManifestState(path string, state historyManifestState) error {
 		return err
 	}
 	return os.WriteFile(path, append(data, '\n'), 0o644)
+}
+
+func cleanupHistoryManifestStatePages(store *Store, project, networkID string, keepPages int) error {
+	dir := historyManifestStateDir(store, project, networkID)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+		page := historyManifestPageFromFile(entry.Name())
+		if page <= 0 || page <= keepPages {
+			continue
+		}
+		statePath := filepath.Join(dir, entry.Name())
+		state, err := loadHistoryManifestState(statePath)
+		if err == nil {
+			if state.ContentDir != "" {
+				_ = os.RemoveAll(state.ContentDir)
+			}
+			if state.TorrentFile != "" {
+				_ = os.Remove(state.TorrentFile)
+			}
+		}
+		_ = os.Remove(statePath)
+	}
+	return nil
+}
+
+func historyManifestPageFromFile(name string) int {
+	name = strings.TrimSpace(name)
+	name = strings.TrimPrefix(name, "page-")
+	name = strings.TrimSuffix(name, ".json")
+	value, err := strconv.Atoi(name)
+	if err != nil || value <= 0 {
+		return 0
+	}
+	return value
+}
+
+func historyManifestTitle(project string, page, totalPages int) string {
+	project = strings.TrimSpace(project)
+	if project == "" {
+		project = "hao.news"
+	}
+	if totalPages <= 1 || page <= 1 {
+		return project + " history manifest"
+	}
+	return fmt.Sprintf("%s history manifest page %d", project, page)
+}
+
+func nestedInt(value map[string]any, key string) int {
+	if value == nil {
+		return 0
+	}
+	raw, ok := value[key]
+	if !ok {
+		return 0
+	}
+	switch v := raw.(type) {
+	case int:
+		return v
+	case int64:
+		return int(v)
+	case float64:
+		return int(v)
+	case json.Number:
+		n, _ := v.Int64()
+		return int(n)
+	case string:
+		n, _ := strconv.Atoi(strings.TrimSpace(v))
+		return n
+	default:
+		return 0
+	}
+}
+
+func nestedBool(value map[string]any, key string) bool {
+	if value == nil {
+		return false
+	}
+	raw, ok := value[key]
+	if !ok {
+		return false
+	}
+	switch v := raw.(type) {
+	case bool:
+		return v
+	case string:
+		parsed, _ := strconv.ParseBool(strings.TrimSpace(v))
+		return parsed
+	default:
+		return false
+	}
 }
 
 func syncRefFromAnnouncement(announcement SyncAnnouncement) (SyncRef, error) {

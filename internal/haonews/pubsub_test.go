@@ -29,6 +29,7 @@ func TestMatchesAnnouncement(t *testing.T) {
 
 	announcement := SyncAnnouncement{
 		Channel:   "latest.org/world",
+		Author:    "agent://pc75/openclaw01",
 		NetworkID: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 		Topics:    []string{"world", "pc75"},
 		Tags:      []string{"breaking"},
@@ -39,8 +40,31 @@ func TestMatchesAnnouncement(t *testing.T) {
 	if !matchesAnnouncement(announcement, SyncSubscriptions{Channels: []string{"latest.org/world"}}) {
 		t.Fatal("expected channel match")
 	}
+	if !matchesAnnouncement(announcement, SyncSubscriptions{Authors: []string{"agent://pc75/openclaw01"}}) {
+		t.Fatal("expected author match")
+	}
 	if matchesAnnouncement(announcement, SyncSubscriptions{Topics: []string{"markets"}}) {
 		t.Fatal("unexpected topic match")
+	}
+}
+
+func TestMatchesHistoryAnnouncementUsesHistorySelectors(t *testing.T) {
+	t.Parallel()
+
+	announcement := SyncAnnouncement{
+		Channel:   "hao.news/world",
+		Author:    "agent://pc75/openclaw01",
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+		Topics:    []string{"world", "energy"},
+	}
+	if !matchesHistoryAnnouncement(announcement, SyncSubscriptions{HistoryAuthors: []string{"agent://pc75/openclaw01"}}) {
+		t.Fatal("expected history author match")
+	}
+	if matchesHistoryAnnouncement(announcement, SyncSubscriptions{HistoryAuthors: []string{"agent://pc76/main"}}) {
+		t.Fatal("unexpected history author match")
+	}
+	if !matchesHistoryAnnouncement(announcement, SyncSubscriptions{HistoryTopics: []string{"energy"}}) {
+		t.Fatal("expected history topic match")
 	}
 }
 

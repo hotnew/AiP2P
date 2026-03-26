@@ -224,6 +224,12 @@ func buildLiveNodeStatus(index Index, storeState, storeTone string, torrentCount
 
 	syncDaemonValue := fmt.Sprintf("pid %d · %s", syncStatus.PID, syncStatus.Mode)
 	syncDaemonDetail := fmt.Sprintf("Queue refs %d, imported %d, skipped %d, failed %d.", syncStatus.SyncActivity.QueueRefs, syncStatus.SyncActivity.Imported, syncStatus.SyncActivity.Skipped, syncStatus.SyncActivity.Failed)
+	if syncStatus.HistoryBootstrap.Mode != "" {
+		syncDaemonDetail = fmt.Sprintf("%s History bootstrap: %s.", syncDaemonDetail, syncStatus.HistoryBootstrap.Mode)
+		if !syncStatus.HistoryBootstrap.FirstSyncCompleted && syncStatus.HistoryBootstrap.RecentRefsLimit > 0 {
+			syncDaemonDetail = fmt.Sprintf("%s Recent window %d refs / %d pages.", syncDaemonDetail, syncStatus.HistoryBootstrap.RecentRefsLimit, syncStatus.HistoryBootstrap.RecentPagesLimit)
+		}
+	}
 	if syncStatus.SyncActivity.LastStatus != "" {
 		syncDaemonDetail = fmt.Sprintf("%s Last result: %s.", syncDaemonDetail, syncStatus.SyncActivity.LastStatus)
 	}

@@ -8,18 +8,19 @@ import (
 )
 
 type SyncRuntimeStatus struct {
-	UpdatedAt     time.Time            `json:"updated_at"`
-	StartedAt     time.Time            `json:"started_at"`
-	PID           int                  `json:"pid"`
-	StoreRoot     string               `json:"store_root"`
-	QueuePath     string               `json:"queue_path"`
-	Mode          string               `json:"mode"`
-	Seed          bool                 `json:"seed"`
-	NetworkID     string               `json:"network_id"`
-	LibP2P        SyncLibP2PStatus     `json:"libp2p"`
-	BitTorrentDHT SyncBitTorrentStatus `json:"bittorrent_dht"`
-	PubSub        SyncPubSubStatus     `json:"pubsub"`
-	SyncActivity  SyncActivityStatus   `json:"sync_activity"`
+	UpdatedAt        time.Time                  `json:"updated_at"`
+	StartedAt        time.Time                  `json:"started_at"`
+	PID              int                        `json:"pid"`
+	StoreRoot        string                     `json:"store_root"`
+	QueuePath        string                     `json:"queue_path"`
+	Mode             string                     `json:"mode"`
+	Seed             bool                       `json:"seed"`
+	NetworkID        string                     `json:"network_id"`
+	LibP2P           SyncLibP2PStatus           `json:"libp2p"`
+	BitTorrentDHT    SyncBitTorrentStatus       `json:"bittorrent_dht"`
+	PubSub           SyncPubSubStatus           `json:"pubsub"`
+	SyncActivity     SyncActivityStatus         `json:"sync_activity"`
+	HistoryBootstrap SyncHistoryBootstrapStatus `json:"history_bootstrap"`
 }
 
 type SyncLibP2PStatus struct {
@@ -93,6 +94,8 @@ type SyncPubSubStatus struct {
 
 type SyncActivityStatus struct {
 	QueueRefs          int        `json:"queue_refs"`
+	RealtimeQueueRefs  int        `json:"realtime_queue_refs,omitempty"`
+	HistoryQueueRefs   int        `json:"history_queue_refs,omitempty"`
 	Imported           int        `json:"imported"`
 	DirectImported     int        `json:"direct_imported"`
 	BitTorrentImported int        `json:"bittorrent_imported"`
@@ -104,6 +107,14 @@ type SyncActivityStatus struct {
 	LastTransport      string     `json:"last_transport,omitempty"`
 	LastMessage        string     `json:"last_message,omitempty"`
 	LastEventAt        *time.Time `json:"last_event_at,omitempty"`
+}
+
+type SyncHistoryBootstrapStatus struct {
+	FirstSyncCompleted     bool       `json:"first_sync_completed"`
+	Mode                   string     `json:"mode,omitempty"`
+	LastHistoryBootstrapAt *time.Time `json:"last_history_bootstrap_at,omitempty"`
+	RecentPagesLimit       int        `json:"recent_pages_limit,omitempty"`
+	RecentRefsLimit        int        `json:"recent_refs_limit,omitempty"`
 }
 
 func syncStatusPath(store *Store) string {

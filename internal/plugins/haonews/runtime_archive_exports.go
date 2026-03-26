@@ -8,7 +8,13 @@ import (
 	"time"
 )
 
+const defaultHistoryListPageSize = 200
+
 func (a *App) LatestHistoryListPayload() (HistoryManifestAPIResponse, error) {
+	return a.HistoryListPayload("", defaultHistoryListPageSize)
+}
+
+func (a *App) HistoryListPayload(cursor string, pageSize int) (HistoryManifestAPIResponse, error) {
 	index, err := a.index()
 	if err != nil {
 		return HistoryManifestAPIResponse{}, err
@@ -20,8 +26,36 @@ func (a *App) LatestHistoryListPayload() (HistoryManifestAPIResponse, error) {
 	if syncStatus, err := a.syncRuntimeStatus(); err == nil {
 		networkID = strings.TrimSpace(syncStatus.NetworkID)
 	}
-	entries := make([]HistoryManifestEntry, 0, len(index.Bundles))
-	for _, bundle := range index.Bundles {
+	page, pageSize := normalizeHistoryPage(cursor, pageSize)
+	bundles := make([]Bundle, len(index.Bundles))
+	copy(bundles, index.Bundles)
+	sort.Slice(bundles, func(i, j int) bool {
+		if !bundles[i].CreatedAt.Equal(bundles[j].CreatedAt) {
+			return bundles[i].CreatedAt.After(bundles[j].CreatedAt)
+		}
+		return strings.ToLower(strings.TrimSpace(bundles[i].InfoHash)) < strings.ToLower(strings.TrimSpace(bundles[j].InfoHash))
+	})
+	totalEntries := len(bundles)
+	totalPages := totalEntries / pageSize
+	if totalEntries%pageSize != 0 {
+		totalPages++
+	}
+	if totalPages == 0 {
+		totalPages = 1
+	}
+	if page > totalPages {
+		page = totalPages
+	}
+	start := (page - 1) * pageSize
+	if start > totalEntries {
+		start = totalEntries
+	}
+	end := start + pageSize
+	if end > totalEntries {
+		end = totalEntries
+	}
+	entries := make([]HistoryManifestEntry, 0, end-start)
+	for _, bundle := range bundles[start:end] {
 		originAuthor, originAgentID, originKeyType, originPublicKey, originSigned := originSummary(bundle.Message.Origin)
 		delegated, parentAgentID, parentKeyType, parentPublicKey := delegationSummary(bundle.Delegation)
 		entries = append(entries, HistoryManifestEntry{
@@ -50,14 +84,40 @@ func (a *App) LatestHistoryListPayload() (HistoryManifestAPIResponse, error) {
 			SharedByLocalNode: bundle.SharedByLocalNode,
 		})
 	}
+	nextCursor := ""
+	hasMore := end < totalEntries
+	if hasMore {
+		nextCursor = strconv.Itoa(page + 1)
+	}
 	return HistoryManifestAPIResponse{
-		Project:     a.project,
-		Version:     a.version,
-		NetworkID:   networkID,
-		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
-		EntryCount:  len(entries),
-		Entries:     entries,
+		Project:      a.project,
+		Version:      a.version,
+		NetworkID:    networkID,
+		GeneratedAt:  time.Now().UTC().Format(time.RFC3339),
+		Page:         page,
+		PageSize:     pageSize,
+		TotalEntries: totalEntries,
+		TotalPages:   totalPages,
+		Cursor:       strconv.Itoa(page),
+		NextCursor:   nextCursor,
+		HasMore:      hasMore,
+		EntryCount:   len(entries),
+		Entries:      entries,
 	}, nil
+}
+
+func normalizeHistoryPage(cursor string, pageSize int) (int, int) {
+	if pageSize <= 0 {
+		pageSize = defaultHistoryListPageSize
+	}
+	if pageSize > 1000 {
+		pageSize = 1000
+	}
+	page := 1
+	if value, err := strconv.Atoi(strings.TrimSpace(cursor)); err == nil && value > 0 {
+		page = value
+	}
+	return page, pageSize
 }
 
 func BuildArchiveDays(index Index) []ArchiveDay {

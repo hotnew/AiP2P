@@ -36,6 +36,13 @@ type lanHistoryManifestResponse struct {
 	NetworkID        string             `json:"network_id"`
 	ManifestInfoHash string             `json:"manifest_infohash"`
 	GeneratedAt      string             `json:"generated_at"`
+	Page             int                `json:"page,omitempty"`
+	PageSize         int                `json:"page_size,omitempty"`
+	TotalEntries     int                `json:"total_entries,omitempty"`
+	TotalPages       int                `json:"total_pages,omitempty"`
+	Cursor           string             `json:"cursor,omitempty"`
+	NextCursor       string             `json:"next_cursor,omitempty"`
+	HasMore          bool               `json:"has_more,omitempty"`
 	EntryCount       int                `json:"entry_count"`
 	Entries          []SyncAnnouncement `json:"entries"`
 }
@@ -532,8 +539,8 @@ func lanBootstrapEndpoint(value string) (string, error) {
 	return u.String(), nil
 }
 
-func fetchLANHistoryManifest(ctx context.Context, value, expectedNetworkID string) (lanHistoryManifestResponse, error) {
-	endpoint, err := lanHistoryManifestEndpoint(value)
+func fetchLANHistoryManifest(ctx context.Context, value, cursor, expectedNetworkID string) (lanHistoryManifestResponse, error) {
+	endpoint, err := lanHistoryManifestEndpoint(value, cursor)
 	if err != nil {
 		return lanHistoryManifestResponse{}, fmt.Errorf("lan_peer %q: %w", value, err)
 	}
@@ -561,7 +568,7 @@ func fetchLANHistoryManifest(ctx context.Context, value, expectedNetworkID strin
 	return payload, nil
 }
 
-func lanHistoryManifestEndpoint(value string) (string, error) {
+func lanHistoryManifestEndpoint(value, cursor string) (string, error) {
 	value = strings.TrimSpace(value)
 	if value == "" {
 		return "", fmt.Errorf("empty lan_peer")
@@ -587,7 +594,11 @@ func lanHistoryManifestEndpoint(value string) (string, error) {
 	u.Scheme = "http"
 	u.Host = host
 	u.Path = "/api/history/list"
-	u.RawQuery = ""
+	q := u.Query()
+	if strings.TrimSpace(cursor) != "" {
+		q.Set("cursor", strings.TrimSpace(cursor))
+	}
+	u.RawQuery = q.Encode()
 	u.Fragment = ""
 	return u.String(), nil
 }

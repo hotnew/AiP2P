@@ -626,6 +626,9 @@ func matchesAnnouncement(announcement SyncAnnouncement, rules SyncSubscriptions)
 	if containsFold(rules.Channels, announcement.Channel) {
 		return true
 	}
+	if containsFold(rules.Authors, announcement.Author) {
+		return true
+	}
 	for _, topic := range announcement.Topics {
 		if containsFold(rules.Topics, topic) {
 			return true

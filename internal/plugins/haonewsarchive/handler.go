@@ -4,6 +4,7 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -173,7 +174,7 @@ func handleAPIHistoryList(app *newsplugin.App, w http.ResponseWriter, r *http.Re
 		http.NotFound(w, r)
 		return
 	}
-	payload, err := app.LatestHistoryListPayload()
+	payload, err := app.HistoryListPayload(r.URL.Query().Get("cursor"), parseHistoryPageSize(r.URL.Query().Get("page_size")))
 	if err != nil {
 		if os.IsNotExist(err) {
 			http.NotFound(w, r)
@@ -183,4 +184,16 @@ func handleAPIHistoryList(app *newsplugin.App, w http.ResponseWriter, r *http.Re
 		return
 	}
 	newsplugin.WriteJSON(w, http.StatusOK, payload)
+}
+
+func parseHistoryPageSize(raw string) int {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value <= 0 {
+		return 0
+	}
+	return value
 }

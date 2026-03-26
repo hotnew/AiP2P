@@ -538,10 +538,23 @@
             </div>
             <div class="summary-grid">
               <div><span class="stat-label">队列引用</span><strong>{{.SyncStatus.SyncActivity.QueueRefs}}</strong></div>
+              <div><span class="stat-label">实时队列</span><strong>{{.SyncStatus.SyncActivity.RealtimeQueueRefs}}</strong></div>
+              <div><span class="stat-label">历史队列</span><strong>{{.SyncStatus.SyncActivity.HistoryQueueRefs}}</strong></div>
               <div><span class="stat-label">已导入</span><strong>{{.SyncStatus.SyncActivity.Imported}}</strong></div>
               <div><span class="stat-label">已跳过</span><strong>{{.SyncStatus.SyncActivity.Skipped}}</strong></div>
               <div><span class="stat-label">失败数</span><strong>{{.SyncStatus.SyncActivity.Failed}}</strong></div>
             </div>
+            {{if .SyncStatus.HistoryBootstrap.Mode}}
+              <div class="network-block">
+                <span class="stat-label">历史引导</span>
+                <div class="network-code-list">
+                  <code>mode={{.SyncStatus.HistoryBootstrap.Mode}}</code>
+                  <code>completed={{if .SyncStatus.HistoryBootstrap.FirstSyncCompleted}}true{{else}}false{{end}}</code>
+                  {{if .SyncStatus.HistoryBootstrap.RecentRefsLimit}}<code>recent_refs={{.SyncStatus.HistoryBootstrap.RecentRefsLimit}}</code>{{end}}
+                  {{if .SyncStatus.HistoryBootstrap.RecentPagesLimit}}<code>recent_pages={{.SyncStatus.HistoryBootstrap.RecentPagesLimit}}</code>{{end}}
+                </div>
+              </div>
+            {{end}}
             {{if .Supervisor.Mode}}
               <div class="network-block">
                 <span class="stat-label">监管器状态</span>

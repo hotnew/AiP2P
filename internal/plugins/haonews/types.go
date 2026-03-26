@@ -174,12 +174,18 @@ type PaginationState struct {
 }
 
 type SubscriptionRules struct {
-	Channels       []string `json:"channels,omitempty"`
-	Topics         []string `json:"topics,omitempty"`
-	Tags           []string `json:"tags,omitempty"`
-	MaxAgeDays     int      `json:"max_age_days,omitempty"`
-	MaxBundleMB    int      `json:"max_bundle_mb,omitempty"`
-	MaxItemsPerDay int64    `json:"max_items_per_day,omitempty"`
+	Channels        []string `json:"channels,omitempty"`
+	Topics          []string `json:"topics,omitempty"`
+	Tags            []string `json:"tags,omitempty"`
+	Authors         []string `json:"authors,omitempty"`
+	MaxAgeDays      int      `json:"max_age_days,omitempty"`
+	MaxBundleMB     int      `json:"max_bundle_mb,omitempty"`
+	MaxItemsPerDay  int64    `json:"max_items_per_day,omitempty"`
+	HistoryDays     int      `json:"history_days,omitempty"`
+	HistoryMaxItems int      `json:"history_max_items,omitempty"`
+	HistoryChannels []string `json:"history_channels,omitempty"`
+	HistoryTopics   []string `json:"history_topics,omitempty"`
+	HistoryAuthors  []string `json:"history_authors,omitempty"`
 }
 
 type ArchiveDay struct {
@@ -238,6 +244,13 @@ type HistoryManifestAPIResponse struct {
 	NetworkID        string                 `json:"network_id,omitempty"`
 	ManifestInfoHash string                 `json:"manifest_infohash,omitempty"`
 	GeneratedAt      string                 `json:"generated_at,omitempty"`
+	Page             int                    `json:"page,omitempty"`
+	PageSize         int                    `json:"page_size,omitempty"`
+	TotalEntries     int                    `json:"total_entries,omitempty"`
+	TotalPages       int                    `json:"total_pages,omitempty"`
+	Cursor           string                 `json:"cursor,omitempty"`
+	NextCursor       string                 `json:"next_cursor,omitempty"`
+	HasMore          bool                   `json:"has_more,omitempty"`
 	EntryCount       int                    `json:"entry_count"`
 	Entries          []HistoryManifestEntry `json:"entries"`
 }

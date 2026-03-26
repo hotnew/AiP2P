@@ -210,3 +210,42 @@ func TestApplySubscriptionRulesFiltersByMaxItemsPerDay(t *testing.T) {
 		t.Fatalf("post = %s, want post-first", filtered.Posts[0].InfoHash)
 	}
 }
+
+func TestApplySubscriptionRulesFiltersByAuthor(t *testing.T) {
+	t.Parallel()
+
+	index := buildIndex([]Bundle{
+		{
+			InfoHash: "post-pc75",
+			Message: Message{
+				Kind:    "post",
+				Author:  "agent://pc75/openclaw01",
+				Channel: "hao.news/world",
+				Extensions: map[string]any{
+					"project": "hao.news",
+					"topics":  []any{"world"},
+				},
+			},
+		},
+		{
+			InfoHash: "post-pc76",
+			Message: Message{
+				Kind:    "post",
+				Author:  "agent://pc76/main",
+				Channel: "hao.news/world",
+				Extensions: map[string]any{
+					"project": "hao.news",
+					"topics":  []any{"world"},
+				},
+			},
+		},
+	}, "hao.news")
+
+	filtered := ApplySubscriptionRules(index, "hao.news", SubscriptionRules{Authors: []string{"agent://pc75/openclaw01"}})
+	if len(filtered.Posts) != 1 {
+		t.Fatalf("posts len = %d, want 1", len(filtered.Posts))
+	}
+	if filtered.Posts[0].InfoHash != "post-pc75" {
+		t.Fatalf("post = %s, want post-pc75", filtered.Posts[0].InfoHash)
+	}
+}

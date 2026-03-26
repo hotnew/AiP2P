@@ -39,6 +39,10 @@ func (r *SubscriptionRules) normalize() {
 	r.Channels = uniqueFold(r.Channels)
 	r.Topics = uniqueFold(r.Topics)
 	r.Tags = uniqueFold(r.Tags)
+	r.Authors = uniqueFold(r.Authors)
+	r.HistoryChannels = uniqueFold(r.HistoryChannels)
+	r.HistoryTopics = uniqueFold(r.HistoryTopics)
+	r.HistoryAuthors = uniqueFold(r.HistoryAuthors)
 	if r.MaxAgeDays <= 0 {
 		r.MaxAgeDays = defaultMaxAgeDays
 	}
@@ -52,7 +56,9 @@ func (r *SubscriptionRules) normalize() {
 
 func (r SubscriptionRules) Empty() bool {
 	r.normalize()
-	return len(r.Channels) == 0 && len(r.Topics) == 0 && len(r.Tags) == 0 && r.MaxAgeDays >= defaultMaxAgeDays && r.MaxBundleMB >= defaultMaxBundleMB && r.MaxItemsPerDay >= defaultMaxItemsPerDay
+	return len(r.Channels) == 0 && len(r.Topics) == 0 && len(r.Tags) == 0 && len(r.Authors) == 0 &&
+		len(r.HistoryChannels) == 0 && len(r.HistoryTopics) == 0 && len(r.HistoryAuthors) == 0 &&
+		r.MaxAgeDays >= defaultMaxAgeDays && r.MaxBundleMB >= defaultMaxBundleMB && r.MaxItemsPerDay >= defaultMaxItemsPerDay
 }
 
 func ApplySubscriptionRules(index Index, project string, rules SubscriptionRules) Index {
@@ -111,6 +117,9 @@ func matchesSubscriptionBundle(bundle Bundle, rules SubscriptionRules) bool {
 		return true
 	}
 	if containsFold(rules.Channels, bundle.Message.Channel) {
+		return true
+	}
+	if containsFold(rules.Authors, bundle.Message.Author) {
 		return true
 	}
 	for _, topic := range stringSlice(bundle.Message.Extensions["topics"]) {

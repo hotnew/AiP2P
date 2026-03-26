@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -43,17 +44,60 @@ func TestCollectSyncRefsQueueAndDirect(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
-	queue := filepath.Join(root, "magnets.txt")
-	data := "# comment\n93a71a010a59022c8670e06e2c92fa279f98d974\nmagnet:?xt=urn:btih:93a71a010a59022c8670e06e2c92fa279f98d974&dn=test\n"
-	if err := os.WriteFile(queue, []byte(data), 0o644); err != nil {
-		t.Fatalf("write queue: %v", err)
+	realtimeQueue := filepath.Join(root, "realtime.txt")
+	historyQueue := filepath.Join(root, "history.txt")
+	if err := os.WriteFile(realtimeQueue, []byte("# comment\n93a71a010a59022c8670e06e2c92fa279f98d974\n"), 0o644); err != nil {
+		t.Fatalf("write realtime queue: %v", err)
 	}
-	refs, err := collectSyncRefs([]string{"90498b9d42e081acee4165af5f5a2554b5276cbb"}, queue)
+	if err := os.WriteFile(historyQueue, []byte("magnet:?xt=urn:btih:93a71a010a59022c8670e06e2c92fa279f98d974&dn=test\nmagnet:?xt=urn:btih:1111111111111111111111111111111111111111&dn=history-manifest\n"), 0o644); err != nil {
+		t.Fatalf("write history queue: %v", err)
+	}
+	realtimeRefs, historyRefs, err := collectSyncRefs([]string{"90498b9d42e081acee4165af5f5a2554b5276cbb"}, realtimeQueue, historyQueue)
 	if err != nil {
 		t.Fatalf("collect refs: %v", err)
 	}
-	if len(refs) != 2 {
-		t.Fatalf("refs len = %d, want 2", len(refs))
+	if len(realtimeRefs) != 2 {
+		t.Fatalf("realtime refs len = %d, want 2", len(realtimeRefs))
+	}
+	if len(historyRefs) != 1 {
+		t.Fatalf("history refs len = %d, want 1", len(historyRefs))
+	}
+	if historyRefs[0].Queue != historyQueue {
+		t.Fatalf("history queue path = %q, want %q", historyRefs[0].Queue, historyQueue)
+	}
+}
+
+func TestEnsureSyncLayoutMigratesLegacyQueueToHistory(t *testing.T) {
+	t.Parallel()
+
+	store, err := OpenStore(filepath.Join(t.TempDir(), ".haonews"))
+	if err != nil {
+		t.Fatalf("OpenStore error = %v", err)
+	}
+	legacyPath := filepath.Join(store.Root, "sync", "magnets.txt")
+	if err := os.MkdirAll(filepath.Dir(legacyPath), 0o755); err != nil {
+		t.Fatalf("mkdir sync dir: %v", err)
+	}
+	if err := os.WriteFile(legacyPath, []byte("magnet:?xt=urn:btih:93a71a010a59022c8670e06e2c92fa279f98d974&dn=test\n"), 0o644); err != nil {
+		t.Fatalf("write legacy queue: %v", err)
+	}
+	layout, err := ensureSyncLayout(store, "")
+	if err != nil {
+		t.Fatalf("ensureSyncLayout error = %v", err)
+	}
+	historyData, err := os.ReadFile(layout.HistoryPath)
+	if err != nil {
+		t.Fatalf("read history queue: %v", err)
+	}
+	if !strings.Contains(string(historyData), "93a71a010a59022c8670e06e2c92fa279f98d974") {
+		t.Fatalf("history queue missing migrated ref: %q", string(historyData))
+	}
+	legacyData, err := os.ReadFile(layout.LegacyPath)
+	if err != nil {
+		t.Fatalf("read legacy queue: %v", err)
+	}
+	if strings.Contains(string(legacyData), "93a71a010a59022c8670e06e2c92fa279f98d974") {
+		t.Fatalf("legacy queue still contains migrated ref: %q", string(legacyData))
 	}
 }
 
@@ -116,11 +160,23 @@ func TestLANBootstrapEndpointDefaultsToLatestPort(t *testing.T) {
 func TestLANHistoryManifestEndpointDefaultsToLatestPort(t *testing.T) {
 	t.Parallel()
 
-	value, err := lanHistoryManifestEndpoint("192.168.102.74")
+	value, err := lanHistoryManifestEndpoint("192.168.102.74", "")
 	if err != nil {
 		t.Fatalf("lanHistoryManifestEndpoint error = %v", err)
 	}
 	if value != "http://192.168.102.74:51818/api/history/list" {
+		t.Fatalf("endpoint = %q", value)
+	}
+}
+
+func TestLANHistoryManifestEndpointIncludesCursor(t *testing.T) {
+	t.Parallel()
+
+	value, err := lanHistoryManifestEndpoint("192.168.102.74", "2")
+	if err != nil {
+		t.Fatalf("lanHistoryManifestEndpoint error = %v", err)
+	}
+	if value != "http://192.168.102.74:51818/api/history/list?cursor=2" {
 		t.Fatalf("endpoint = %q", value)
 	}
 }
@@ -255,6 +311,200 @@ func TestProbeLANAnchorsWritesHealthCache(t *testing.T) {
 	}
 }
 
+func TestEnqueueHistoryFromLANPeersRecentBootstrapLimitsPages(t *testing.T) {
+	t.Parallel()
+
+	store, err := OpenStore(filepath.Join(t.TempDir(), ".haonews"))
+	if err != nil {
+		t.Fatalf("OpenStore error = %v", err)
+	}
+	queues, err := ensureSyncLayout(store, "")
+	if err != nil {
+		t.Fatalf("ensureSyncLayout error = %v", err)
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cursor := strings.TrimSpace(r.URL.Query().Get("cursor"))
+		page := 1
+		if cursor != "" {
+			switch cursor {
+			case "2":
+				page = 2
+			case "3":
+				page = 3
+			case "4":
+				page = 4
+			}
+		}
+		infohash := strings.Repeat(strconv.Itoa(page), 40)
+		nextCursor := ""
+		hasMore := false
+		if page < 4 {
+			nextCursor = strconv.Itoa(page + 1)
+			hasMore = true
+		}
+		_ = json.NewEncoder(w).Encode(HistoryManifest{
+			Protocol:     ProtocolVersion,
+			Type:         historyManifestType,
+			Project:      "hao.news",
+			NetworkID:    latestOrgNetworkID,
+			Page:         page,
+			PageSize:     1,
+			EntryCount:   1,
+			TotalEntries: 4,
+			TotalPages:   4,
+			Cursor:       strconv.Itoa(page),
+			NextCursor:   nextCursor,
+			HasMore:      hasMore,
+			Entries: []SyncAnnouncement{{
+				InfoHash:  infohash,
+				Magnet:    "magnet:?xt=urn:btih:" + infohash + "&dn=page-" + strconv.Itoa(page),
+				Kind:      "post",
+				Author:    "agent://pc75/main",
+				Project:   "hao.news",
+				NetworkID: latestOrgNetworkID,
+				CreatedAt: time.Now().UTC().Format(time.RFC3339),
+			}},
+		})
+	}))
+	defer srv.Close()
+
+	runtime := &syncRuntime{
+		store:            store,
+		queuePath:        queues.RealtimePath,
+		historyQueuePath: queues.HistoryPath,
+		netCfg: NetworkBootstrapConfig{
+			NetworkID: latestOrgNetworkID,
+			LANPeers:  []string{srv.URL},
+		},
+		subscriptions: SyncSubscriptions{},
+	}
+	added, err := runtime.enqueueHistoryFromLANPeers(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("enqueueHistoryFromLANPeers error = %v", err)
+	}
+	wantPages := max(1, (defaultHistoryMaxItems+historyManifestPageSize-1)/historyManifestPageSize)
+	if added != wantPages {
+		t.Fatalf("added = %d, want %d", added, wantPages)
+	}
+	queueData, err := os.ReadFile(queues.HistoryPath)
+	if err != nil {
+		t.Fatalf("read history queue: %v", err)
+	}
+	text := string(queueData)
+	if !strings.Contains(text, "dn=page-1") || !strings.Contains(text, "dn=page-3") {
+		t.Fatalf("history queue missing recent pages: %q", text)
+	}
+	if strings.Contains(text, "dn=page-4") {
+		t.Fatalf("history queue should not include page 4 during bootstrap: %q", text)
+	}
+	state, err := loadHistoryBootstrapState(store)
+	if err != nil {
+		t.Fatalf("loadHistoryBootstrapState error = %v", err)
+	}
+	if state.HistoryBootstrapMode != "recent" || state.FirstSyncCompleted {
+		t.Fatalf("bootstrap state = %#v, want recent incomplete", state)
+	}
+}
+
+func TestMaybeCompleteHistoryBootstrapMarksSteadyMode(t *testing.T) {
+	t.Parallel()
+
+	store, err := OpenStore(filepath.Join(t.TempDir(), ".haonews"))
+	if err != nil {
+		t.Fatalf("OpenStore error = %v", err)
+	}
+	queues, err := ensureSyncLayout(store, "")
+	if err != nil {
+		t.Fatalf("ensureSyncLayout error = %v", err)
+	}
+	runtime := &syncRuntime{
+		store:            store,
+		queuePath:        queues.RealtimePath,
+		historyQueuePath: queues.HistoryPath,
+		historyBootstrap: historyBootstrapState{
+			HistoryBootstrapMode: "recent",
+			RecentPagesLimit:     max(1, (defaultHistoryMaxItems+historyManifestPageSize-1)/historyManifestPageSize),
+			RecentRefsLimit:      defaultHistoryMaxItems,
+		},
+	}
+	if err := runtime.maybeCompleteHistoryBootstrap(nil); err != nil {
+		t.Fatalf("maybeCompleteHistoryBootstrap error = %v", err)
+	}
+	state, err := loadHistoryBootstrapState(store)
+	if err != nil {
+		t.Fatalf("loadHistoryBootstrapState error = %v", err)
+	}
+	if !state.FirstSyncCompleted || state.HistoryBootstrapMode != "steady" {
+		t.Fatalf("bootstrap state = %#v, want steady completed", state)
+	}
+}
+
+func TestEnqueueHistoryFromLANPeersRecentBootstrapRespectsHistoryDays(t *testing.T) {
+	t.Parallel()
+
+	store, err := OpenStore(filepath.Join(t.TempDir(), ".haonews"))
+	if err != nil {
+		t.Fatalf("OpenStore error = %v", err)
+	}
+	queues, err := ensureSyncLayout(store, "")
+	if err != nil {
+		t.Fatalf("ensureSyncLayout error = %v", err)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(HistoryManifest{
+			Protocol:     ProtocolVersion,
+			Type:         historyManifestType,
+			Project:      "hao.news",
+			NetworkID:    latestOrgNetworkID,
+			Page:         1,
+			PageSize:     1,
+			EntryCount:   1,
+			TotalEntries: 1,
+			TotalPages:   1,
+			Cursor:       "1",
+			HasMore:      false,
+			Entries: []SyncAnnouncement{{
+				InfoHash:  strings.Repeat("a", 40),
+				Magnet:    "magnet:?xt=urn:btih:" + strings.Repeat("a", 40) + "&dn=old",
+				Kind:      "post",
+				Author:    "agent://pc75/main",
+				Project:   "hao.news",
+				NetworkID: latestOrgNetworkID,
+				CreatedAt: time.Now().UTC().Add(-72 * time.Hour).Format(time.RFC3339),
+			}},
+		})
+	}))
+	defer srv.Close()
+
+	runtime := &syncRuntime{
+		store:            store,
+		queuePath:        queues.RealtimePath,
+		historyQueuePath: queues.HistoryPath,
+		netCfg: NetworkBootstrapConfig{
+			NetworkID: latestOrgNetworkID,
+			LANPeers:  []string{srv.URL},
+		},
+		subscriptions: SyncSubscriptions{
+			HistoryDays: 1,
+		},
+	}
+	added, err := runtime.enqueueHistoryFromLANPeers(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("enqueueHistoryFromLANPeers error = %v", err)
+	}
+	if added != 0 {
+		t.Fatalf("added = %d, want 0 for stale history entry", added)
+	}
+	queueData, err := os.ReadFile(queues.HistoryPath)
+	if err != nil {
+		t.Fatalf("read history queue: %v", err)
+	}
+	if strings.Contains(string(queueData), "dn=old") {
+		t.Fatalf("history queue should not include stale entry: %q", string(queueData))
+	}
+}
+
 func TestLoadTrackerListParsesDefaultStyleFile(t *testing.T) {
 	t.Parallel()
 
@@ -319,7 +569,9 @@ func TestHasCompleteLocalBundleRequiresBundleFiles(t *testing.T) {
 func TestHandleAnnouncementRemembersDirectPeer(t *testing.T) {
 	t.Parallel()
 
-	queue := filepath.Join(t.TempDir(), "magnets.txt")
+	queueRoot := t.TempDir()
+	queue := filepath.Join(queueRoot, "realtime.txt")
+	historyQueue := filepath.Join(queueRoot, "history.txt")
 	store, err := OpenStore(filepath.Join(t.TempDir(), "store"))
 	if err != nil {
 		t.Fatalf("OpenStore error = %v", err)
@@ -331,11 +583,12 @@ func TestHandleAnnouncementRemembersDirectPeer(t *testing.T) {
 	defer host.Close()
 
 	runtime := &syncRuntime{
-		store:         store,
-		queuePath:     queue,
-		netCfg:        NetworkBootstrapConfig{NetworkID: latestOrgNetworkID},
-		directPeers:   make(map[string][]peer.ID),
-		subscriptions: SyncSubscriptions{},
+		store:            store,
+		queuePath:        queue,
+		historyQueuePath: historyQueue,
+		netCfg:           NetworkBootstrapConfig{NetworkID: latestOrgNetworkID},
+		directPeers:      make(map[string][]peer.ID),
+		subscriptions:    SyncSubscriptions{},
 	}
 	enqueued, err := runtime.handleAnnouncement(SyncAnnouncement{
 		InfoHash:     "93a71a010a59022c8670e06e2c92fa279f98d974",
@@ -349,6 +602,13 @@ func TestHandleAnnouncementRemembersDirectPeer(t *testing.T) {
 	}
 	if !enqueued {
 		t.Fatal("expected announcement to enqueue")
+	}
+	data, err := os.ReadFile(queue)
+	if err != nil {
+		t.Fatalf("read realtime queue: %v", err)
+	}
+	if !strings.Contains(string(data), "93a71a010a59022c8670e06e2c92fa279f98d974") {
+		t.Fatalf("realtime queue missing announcement ref: %q", string(data))
 	}
 	peers := runtime.directPeerIDs("93a71a010a59022c8670e06e2c92fa279f98d974")
 	if len(peers) != 1 || peers[0] != host.ID() {
