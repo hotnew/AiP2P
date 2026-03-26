@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -543,6 +545,7 @@ func matchesQuery(post Post, query string) bool {
 }
 
 func summarize(body string, max int) string {
+	body = summarizePlainText(body)
 	body = strings.Join(strings.Fields(strings.TrimSpace(body)), " ")
 	if body == "" {
 		return ""
@@ -551,6 +554,22 @@ func summarize(body string, max int) string {
 		return body
 	}
 	return body[:max-3] + "..."
+}
+
+var htmlSummaryStripper = regexp.MustCompile(`(?is)<script[^>]*>.*?</script>|<style[^>]*>.*?</style>|<[^>]+>`)
+
+func summarizePlainText(body string) string {
+	body = strings.TrimSpace(body)
+	if body == "" {
+		return ""
+	}
+	if !looksLikeHTMLDocument(body) {
+		return body
+	}
+	body = htmlSummaryStripper.ReplaceAllString(body, " ")
+	body = html.UnescapeString(body)
+	body = strings.Join(strings.Fields(strings.TrimSpace(body)), " ")
+	return body
 }
 
 func sourceGroupName(msg Message) string {

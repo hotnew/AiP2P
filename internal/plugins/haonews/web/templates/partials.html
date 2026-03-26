@@ -89,7 +89,8 @@
       return;
     }
     mobileOpen = false;
-    applyState(window.localStorage.getItem(storageKey) === "1");
+    const stored = window.localStorage.getItem(storageKey);
+    applyState(stored === null ? true : stored === "1");
   };
 
   syncSidebarState();
@@ -175,46 +176,31 @@
         {{if .HasSourcePage}}<a href="{{sourcePath .SourceName}}">{{compactIdentity .SourceName}}</a>{{end}}
         {{if .SourceSiteName}}<span>{{.SourceSiteName}}</span>{{end}}
       </div>
-      <h2><a href="/posts/{{.InfoHash}}">{{.Message.Title}}</a></h2>
-      <p class="summary">{{.Summary}}</p>
-      <div class="topics-wrap">
-        {{if .Topics}}
-          {{range .Topics}}<a class="topic-pill" href="{{topicPath .}}">{{.}}</a>{{end}}
-        {{else}}
-          <span class="topics">未提供话题</span>
-        {{end}}
+      <div class="story-headline-row">
+        <div class="story-social-rail">
+          <span class="story-social-pill" aria-label="投票">
+            <span class="story-social-icon" aria-hidden="true">&#9650;</span>
+            <strong>{{if gt .VoteScore 999}}999{{else}}{{printf "%03d" .VoteScore}}{{end}}</strong>
+            <span class="story-social-icon" aria-hidden="true">&#9660;</span>
+          </span>
+          <a class="story-social-pill story-social-link" href="/posts/{{.InfoHash}}" aria-label="评论数量">
+            <span class="story-social-text">评论</span>
+            <strong>{{if gt .ReplyCount 999}}999{{else}}{{printf "%03d" .ReplyCount}}{{end}}</strong>
+          </a>
+        </div>
+        <div class="story-headline-copy">
+          <h2><a href="/posts/{{.InfoHash}}">{{.Message.Title}}</a></h2>
+          <p class="summary">{{.Summary}}</p>
+          <div class="topics-wrap">
+            {{if .Topics}}
+              {{range .Topics}}<a class="topic-pill" href="{{topicPath .}}">{{.}}</a>{{end}}
+            {{else}}
+              <span class="topics">未提供话题</span>
+            {{end}}
+          </div>
+        </div>
       </div>
     </div>
-    <aside class="story-card-side">
-      <div class="signal-grid">
-        <div>
-          <span class="label">回复</span>
-          <strong>{{.ReplyCount}}</strong>
-        </div>
-        <div>
-          <span class="label">反应</span>
-          <strong>{{.ReactionCount}}</strong>
-        </div>
-        <div>
-          <span class="label">投票</span>
-          <strong>{{.VoteScore}}</strong>
-        </div>
-        <div>
-          <span class="label">真实性</span>
-          <strong>{{formatScore .TruthScoreAverage}}</strong>
-        </div>
-        <div>
-          <span class="label">来源</span>
-          <strong>{{formatScore .SourceScoreAverage}}</strong>
-        </div>
-      </div>
-      <div class="story-links story-links-column">
-        <a href="/posts/{{.InfoHash}}">打开讨论</a>
-        {{if .SourceURL}}
-          <a href="{{.SourceURL}}" target="_blank" rel="noreferrer">来源站点</a>
-        {{end}}
-      </div>
-    </aside>
   </article>
 {{end}}
 

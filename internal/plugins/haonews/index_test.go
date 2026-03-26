@@ -3,6 +3,7 @@ package newsplugin
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -222,6 +223,22 @@ func TestRelatedPosts(t *testing.T) {
 	}
 	if got[0].InfoHash != "rel1" {
 		t.Fatalf("first = %s, want rel1", got[0].InfoHash)
+	}
+}
+
+func TestSummarizeStripsHTMLDocumentMarkup(t *testing.T) {
+	t.Parallel()
+
+	body := `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><style>body{background:#fff}</style></head><body><h1>精选新闻</h1><p>液化石油气走强，原油偏强。</p></body></html>`
+	got := summarize(body, 120)
+	if strings.Contains(strings.ToLower(got), "<!doctype html>") {
+		t.Fatalf("summary still contains doctype: %q", got)
+	}
+	if strings.Contains(strings.ToLower(got), "<html") {
+		t.Fatalf("summary still contains html tag: %q", got)
+	}
+	if !strings.Contains(got, "精选新闻") || !strings.Contains(got, "液化石油气走强") {
+		t.Fatalf("summary missing text content: %q", got)
 	}
 }
 
