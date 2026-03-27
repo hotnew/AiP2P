@@ -8,7 +8,9 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -20,6 +22,8 @@ type localIPCandidate struct {
 }
 
 var listLocalUnicastCandidates = localUnicastCandidates
+var routedSourceIPForTarget = routedSourceIP
+var defaultGatewayTarget = systemDefaultGatewayTarget
 
 const (
 	advertiseHostRecentSuccessWindow = 24 * time.Hour
@@ -55,10 +59,6 @@ func (a *App) SyncSupervisorStatus() (SyncSupervisorState, error) {
 
 func (a *App) NetworkBootstrap() (NetworkBootstrapConfig, error) {
 	return a.networkBootstrap()
-}
-
-func (a *App) LANBTStatus(ctx context.Context, cfg NetworkBootstrapConfig) ([]LANBTAnchorStatus, bool, string) {
-	return a.lanBTStatus(ctx, cfg)
 }
 
 func (a *App) LANPeerHealth() ([]LANPeerHealthStatus, []LANPeerHealthStatus, error) {
@@ -105,16 +105,8 @@ func DialableLibP2PAddrs(status SyncRuntimeStatus, host string) []string {
 	return dialableLibP2PAddrs(status, host, NetworkBootstrapConfig{})
 }
 
-func DialableBitTorrentNodes(status SyncRuntimeStatus, host string) []string {
-	return dialableBitTorrentNodes(status, host, NetworkBootstrapConfig{})
-}
-
 func DialableLibP2PAddrsForConfig(status SyncRuntimeStatus, host string, cfg NetworkBootstrapConfig) []string {
 	return dialableLibP2PAddrs(status, host, cfg)
-}
-
-func DialableBitTorrentNodesForConfig(status SyncRuntimeStatus, host string, cfg NetworkBootstrapConfig) []string {
-	return dialableBitTorrentNodes(status, host, cfg)
 }
 
 func requestBootstrapHost(r *http.Request) string {
@@ -147,6 +139,9 @@ func preferredAdvertiseHost(status SyncRuntimeStatus, host string, cfg NetworkBo
 			return host
 		}
 	}
+	if preferred := preferredRoutedLANHost(cfg); preferred != "" {
+		return preferred
+	}
 
 	cache, _ := loadAdvertiseHostHealthCache(cfg)
 	best := ""
@@ -162,6 +157,108 @@ func preferredAdvertiseHost(status SyncRuntimeStatus, host string, cfg NetworkBo
 		return best
 	}
 	return host
+}
+
+func preferredRoutedLANHost(cfg NetworkBootstrapConfig) string {
+	if !cfg.AllowsLANDiscovery() {
+		return ""
+	}
+	if gateway := strings.TrimSpace(defaultGatewayTarget()); gateway != "" {
+		if host := routedSourceIPForTarget(gateway); host != "" {
+			return host
+		}
+	}
+	targets := make([]string, 0, len(cfg.LANPeers))
+	targets = append(targets, cfg.LANPeers...)
+	counts := make(map[string]int, len(targets))
+	best := ""
+	bestCount := 0
+	for _, target := range targets {
+		host := routedSourceIPForTarget(target)
+		if host == "" {
+			continue
+		}
+		counts[host]++
+		if counts[host] > bestCount {
+			best = host
+			bestCount = counts[host]
+		}
+	}
+	return best
+}
+
+func routedSourceIP(target string) string {
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return ""
+	}
+	host := target
+	if strings.Contains(target, "://") {
+		if u, err := url.Parse(target); err == nil {
+			host = strings.TrimSpace(u.Host)
+			if host == "" {
+				host = strings.TrimSpace(u.Path)
+			}
+		}
+	}
+	if value, _, err := net.SplitHostPort(host); err == nil {
+		host = strings.Trim(value, "[]")
+	} else {
+		host = strings.Trim(host, "[]")
+	}
+	ip := net.ParseIP(host)
+	if ip == nil || ip.IsLoopback() || ip.IsUnspecified() {
+		return ""
+	}
+	conn, err := net.DialUDP("udp", nil, &net.UDPAddr{IP: ip, Port: 9})
+	if err != nil {
+		return ""
+	}
+	defer conn.Close()
+	local, ok := conn.LocalAddr().(*net.UDPAddr)
+	if !ok || local == nil || local.IP == nil {
+		return ""
+	}
+	localIP := local.IP
+	if localIP.IsLoopback() || localIP.IsUnspecified() {
+		return ""
+	}
+	return localIP.String()
+}
+
+func systemDefaultGatewayTarget() string {
+	switch runtime.GOOS {
+	case "darwin":
+		out, err := exec.Command("route", "-n", "get", "default").CombinedOutput()
+		if err != nil {
+			return ""
+		}
+		for _, line := range strings.Split(string(out), "\n") {
+			line = strings.TrimSpace(line)
+			if !strings.HasPrefix(line, "gateway:") {
+				continue
+			}
+			value := strings.TrimSpace(strings.TrimPrefix(line, "gateway:"))
+			if ip := net.ParseIP(value); ip != nil {
+				return value
+			}
+		}
+	case "linux":
+		out, err := exec.Command("ip", "route", "show", "default").CombinedOutput()
+		if err != nil {
+			return ""
+		}
+		fields := strings.Fields(string(out))
+		for i := 0; i+1 < len(fields); i++ {
+			if fields[i] != "via" {
+				continue
+			}
+			if ip := net.ParseIP(fields[i+1]); ip != nil {
+				return fields[i+1]
+			}
+		}
+	}
+	return ""
 }
 
 func firstConfiguredPublicHost(cfg NetworkBootstrapConfig) string {
@@ -237,7 +334,9 @@ func dialableLibP2PAddrs(status SyncRuntimeStatus, host string, cfg NetworkBoots
 	requestIP := net.ParseIP(host)
 	forceRewrite := shouldForceAdvertiseHostRewrite(host, cfg)
 	values := append([]string(nil), status.LibP2P.ListenAddrs...)
-	values = append(values, status.LibP2P.ConfiguredListen...)
+	if len(values) == 0 {
+		values = append(values, status.LibP2P.ConfiguredListen...)
+	}
 	out := make([]string, 0, len(values))
 	seen := make(map[string]struct{})
 	for _, value := range values {
@@ -260,39 +359,8 @@ func dialableLibP2PAddrs(status SyncRuntimeStatus, host string, cfg NetworkBoots
 	return out
 }
 
-func dialableBitTorrentNodes(status SyncRuntimeStatus, host string, cfg NetworkBootstrapConfig) []string {
-	if !status.BitTorrentDHT.Enabled {
-		return nil
-	}
-	host = strings.TrimSpace(host)
-	forceRewrite := shouldForceAdvertiseHostRewrite(host, cfg)
-	values := make([]string, 0, 1+len(status.BitTorrentDHT.ListenAddrs))
-	if value := rewriteBitTorrentListenForHost(strings.TrimSpace(status.BitTorrentDHT.ConfiguredListen), host, forceRewrite); value != "" {
-		values = append(values, value)
-	}
-	for _, value := range status.BitTorrentDHT.ListenAddrs {
-		if value := rewriteBitTorrentListenForHost(strings.TrimSpace(value), host, forceRewrite); value != "" {
-			values = append(values, value)
-		}
-	}
-	requestIP := net.ParseIP(host)
-	out := make([]string, 0, len(values))
-	seen := make(map[string]struct{})
-	for _, value := range values {
-		if !forceRewrite && !torrentNodeMatchesRequestHost(value, requestIP) {
-			continue
-		}
-		if _, ok := seen[value]; ok {
-			continue
-		}
-		seen[value] = struct{}{}
-		out = append(out, value)
-	}
-	return out
-}
-
 func advertiseHostCandidates(status SyncRuntimeStatus) []localIPCandidate {
-	out := make([]localIPCandidate, 0, len(status.LibP2P.ListenAddrs)+len(status.LibP2P.ConfiguredListen)+len(status.BitTorrentDHT.ListenAddrs)+2)
+	out := make([]localIPCandidate, 0, len(status.LibP2P.ListenAddrs)+len(status.LibP2P.ConfiguredListen)+2)
 	seen := make(map[string]struct{})
 	appendIP := func(ip net.IP) {
 		if ip == nil {
@@ -308,32 +376,11 @@ func advertiseHostCandidates(status SyncRuntimeStatus) []localIPCandidate {
 		seen[value] = struct{}{}
 		out = append(out, localIPCandidate{IP: ip})
 	}
-	appendHost := func(value string) {
-		value = strings.TrimSpace(value)
-		if value == "" {
-			return
-		}
-		host, _, err := net.SplitHostPort(value)
-		if err == nil {
-			value = strings.Trim(host, "[]")
-		} else {
-			value = strings.Trim(value, "[]")
-		}
-		ip := net.ParseIP(value)
-		if ip == nil {
-			return
-		}
-		appendIP(ip)
-	}
 	for _, value := range status.LibP2P.ListenAddrs {
 		appendIP(multiaddrIP(value))
 	}
 	for _, value := range status.LibP2P.ConfiguredListen {
 		appendIP(multiaddrIP(value))
-	}
-	appendHost(strings.TrimSpace(status.BitTorrentDHT.ConfiguredListen))
-	for _, value := range status.BitTorrentDHT.ListenAddrs {
-		appendHost(value)
 	}
 	for _, candidate := range listLocalUnicastCandidates() {
 		if candidate.IP == nil {
@@ -793,30 +840,6 @@ func rewriteBootstrapAddrForHost(value, host string, force bool) string {
 		}
 	}
 	return value
-}
-
-func rewriteBitTorrentListenForHost(value, host string, force bool) string {
-	value = strings.TrimSpace(value)
-	host = strings.TrimSpace(host)
-	if value == "" {
-		return ""
-	}
-	listenHost, port, err := net.SplitHostPort(value)
-	if err != nil {
-		return ""
-	}
-	switch strings.TrimSpace(listenHost) {
-	case "", "0.0.0.0", "::", "[::]", "127.0.0.1", "::1", "[::1]":
-		if host == "" {
-			return ""
-		}
-		return net.JoinHostPort(host, port)
-	default:
-		if force && host != "" {
-			return net.JoinHostPort(host, port)
-		}
-		return net.JoinHostPort(strings.Trim(listenHost, "[]"), port)
-	}
 }
 
 func fetchNetworkBootstrapResponse(ctx context.Context, value, expectedNetworkID string) (NetworkBootstrapResponse, error) {

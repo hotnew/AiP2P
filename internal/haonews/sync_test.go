@@ -108,15 +108,10 @@ func TestLoadNetworkBootstrapConfig(t *testing.T) {
 	path := filepath.Join(root, "haonews_net.inf")
 	content := `network_id=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 network_mode=shared
-dht_router=router.bittorrent.com:6881
-dht_router=router.utorrent.com:6881
 libp2p_transfer_max_size=123456
 lan_peer=192.168.102.74
 lan_peer=192.168.102.76
 lan_peer=192.168.102.75
-lan_bt_peer=192.168.102.74
-lan_bt_peer=192.168.102.76
-lan_bt_peer=192.168.102.75
 public_peer=ai.jie.news
 relay_peer=relay.jie.news
 libp2p_bootstrap=/dnsaddr/bootstrap.libp2p.io/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN
@@ -127,9 +122,6 @@ libp2p_bootstrap=/dnsaddr/bootstrap.libp2p.io/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVw
 	cfg, err := LoadNetworkBootstrapConfig(path)
 	if err != nil {
 		t.Fatalf("load network config: %v", err)
-	}
-	if len(cfg.DHTRouters) != 2 {
-		t.Fatalf("dht routers = %d, want 2", len(cfg.DHTRouters))
 	}
 	if len(cfg.LibP2PBootstrap) != 1 {
 		t.Fatalf("libp2p peers = %d, want 1", len(cfg.LibP2PBootstrap))
@@ -145,9 +137,6 @@ libp2p_bootstrap=/dnsaddr/bootstrap.libp2p.io/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVw
 	}
 	if len(cfg.LANPeers) != 3 {
 		t.Fatalf("lan peers = %d, want 3", len(cfg.LANPeers))
-	}
-	if len(cfg.LANTorrentPeers) != 3 {
-		t.Fatalf("lan bt peers = %d, want 3", len(cfg.LANTorrentPeers))
 	}
 	if got := len(cfg.PublicPeers); got != 1 || cfg.PublicPeers[0] != "ai.jie.news" {
 		t.Fatalf("public peers = %#v", cfg.PublicPeers)
@@ -192,6 +181,30 @@ func TestLANHistoryManifestEndpointIncludesCursor(t *testing.T) {
 		t.Fatalf("lanHistoryManifestEndpoint error = %v", err)
 	}
 	if value != "http://192.168.102.74:51818/api/history/list?cursor=2" {
+		t.Fatalf("endpoint = %q", value)
+	}
+}
+
+func TestPublicBootstrapEndpointDefaultsToHTTPS(t *testing.T) {
+	t.Parallel()
+
+	value, err := lanBootstrapEndpoint("ai.jie.news")
+	if err != nil {
+		t.Fatalf("lanBootstrapEndpoint error = %v", err)
+	}
+	if value != "https://ai.jie.news/api/network/bootstrap" {
+		t.Fatalf("endpoint = %q", value)
+	}
+}
+
+func TestPublicHistoryManifestEndpointDefaultsToHTTPS(t *testing.T) {
+	t.Parallel()
+
+	value, err := lanHistoryManifestEndpoint("ai.jie.news", "2")
+	if err != nil {
+		t.Fatalf("lanHistoryManifestEndpoint error = %v", err)
+	}
+	if value != "https://ai.jie.news/api/history/list?cursor=2" {
 		t.Fatalf("endpoint = %q", value)
 	}
 }
@@ -250,38 +263,6 @@ func TestSanitizeSyncQueueFileRemovesDirtyPeerHints(t *testing.T) {
 	}
 }
 
-func TestResolveEffectiveDHTRoutersPrefersLANBTAnchors(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/network/bootstrap" {
-			http.NotFound(w, r)
-			return
-		}
-		_ = json.NewEncoder(w).Encode(lanBootstrapResponse{
-			NetworkID:       latestOrgNetworkID,
-			BitTorrentNodes: []string{"192.168.102.74:53396"},
-		})
-	}))
-	defer srv.Close()
-
-	cfg := NetworkBootstrapConfig{
-		NetworkID:       latestOrgNetworkID,
-		LANTorrentPeers: []string{srv.URL},
-		DHTRouters:      []string{"router.bittorrent.com:6881", "router.utorrent.com:6881"},
-	}
-	routers, err := resolveEffectiveDHTRouters(context.Background(), cfg)
-	if err != nil {
-		t.Fatalf("resolveEffectiveDHTRouters error = %v", err)
-	}
-	if len(routers) < 3 {
-		t.Fatalf("routers = %v, want LAN node plus public routers", routers)
-	}
-	if routers[0] != "192.168.102.74:53396" {
-		t.Fatalf("first router = %q, want LAN BT node first", routers[0])
-	}
-}
-
 func TestProbeLANAnchorsWritesHealthCache(t *testing.T) {
 	t.Parallel()
 
@@ -296,7 +277,6 @@ func TestProbeLANAnchorsWritesHealthCache(t *testing.T) {
 			NetworkID:       latestOrgNetworkID,
 			PeerID:          "QmTestPeer",
 			DialAddrs:       []string{"/ip4/192.168.102.75/tcp/50584"},
-			BitTorrentNodes: []string{"192.168.102.75:50585"},
 		})
 	}))
 	defer srv.Close()
@@ -307,10 +287,9 @@ func TestProbeLANAnchorsWritesHealthCache(t *testing.T) {
 
 	runtime := &syncRuntime{
 		netCfg: NetworkBootstrapConfig{
-			Path:            netPath,
-			NetworkID:       latestOrgNetworkID,
-			LANPeers:        []string{srv.URL},
-			LANTorrentPeers: []string{srv.URL},
+			Path:      netPath,
+			NetworkID: latestOrgNetworkID,
+			LANPeers:  []string{srv.URL},
 		},
 	}
 	if err := runtime.probeLANAnchors(context.Background(), nil); err != nil {
@@ -627,16 +606,97 @@ func TestEnqueueHistoryFromLANPeersPromotesRecentPageOneEntriesToRealtime(t *tes
 	}
 }
 
+func TestEnqueueHistoryFromLANPeersPromotesRecentDuplicateOutOfHistoryQueue(t *testing.T) {
+	t.Parallel()
+
+	store, err := OpenStore(filepath.Join(t.TempDir(), ".haonews"))
+	if err != nil {
+		t.Fatalf("OpenStore error = %v", err)
+	}
+	queues, err := ensureSyncLayout(store, "")
+	if err != nil {
+		t.Fatalf("ensureSyncLayout error = %v", err)
+	}
+	recentInfoHash := strings.Repeat("d", 40)
+	oldHistoryLine := "magnet:?xt=urn:btih:" + recentInfoHash + "&dn=stale-history-copy"
+	if err := os.WriteFile(queues.HistoryPath, []byte("# history.txt\n"+oldHistoryLine+"\n"), 0o644); err != nil {
+		t.Fatalf("write history queue: %v", err)
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		payload := HistoryManifest{
+			Protocol:     ProtocolVersion,
+			Type:         historyManifestType,
+			Project:      "hao.news",
+			NetworkID:    latestOrgNetworkID,
+			Page:         1,
+			PageSize:     1,
+			EntryCount:   1,
+			TotalEntries: 1,
+			TotalPages:   1,
+			Cursor:       "1",
+			HasMore:      false,
+			Entries: []SyncAnnouncement{{
+				InfoHash:  recentInfoHash,
+				Magnet:    "magnet:?xt=urn:btih:" + recentInfoHash + "&dn=recent-promoted",
+				Kind:      "post",
+				Author:    "agent://pc75/main",
+				Project:   "hao.news",
+				NetworkID: latestOrgNetworkID,
+				CreatedAt: time.Now().UTC().Add(-15 * time.Minute).Format(time.RFC3339),
+			}},
+		}
+		_ = json.NewEncoder(w).Encode(payload)
+	}))
+	defer srv.Close()
+
+	runtime := &syncRuntime{
+		store:            store,
+		queuePath:        queues.RealtimePath,
+		historyQueuePath: queues.HistoryPath,
+		netCfg: NetworkBootstrapConfig{
+			NetworkID: latestOrgNetworkID,
+			LANPeers:  []string{srv.URL},
+		},
+		subscriptions: SyncSubscriptions{},
+	}
+	added, err := runtime.enqueueHistoryFromLANPeers(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("enqueueHistoryFromLANPeers error = %v", err)
+	}
+	if added != 1 {
+		t.Fatalf("added = %d, want 1", added)
+	}
+
+	realtimeData, err := os.ReadFile(queues.RealtimePath)
+	if err != nil {
+		t.Fatalf("read realtime queue: %v", err)
+	}
+	if !strings.Contains(string(realtimeData), "dn=recent-promoted") {
+		t.Fatalf("realtime queue missing promoted entry: %q", string(realtimeData))
+	}
+
+	historyData, err := os.ReadFile(queues.HistoryPath)
+	if err != nil {
+		t.Fatalf("read history queue: %v", err)
+	}
+	if strings.Contains(string(historyData), recentInfoHash) {
+		t.Fatalf("history queue still contains promoted duplicate: %q", string(historyData))
+	}
+}
+
 func TestEnqueueHistoryFromLANPeersUsesConfiguredPublicPeers(t *testing.T) {
 	t.Parallel()
 
 	now := time.Now().UTC()
+	const sourcePeerID = "12D3KooWQYdFguTJNhMWvYr5MZYqeg4RZZ9tx6c1nw7cX7cGCGzb"
 	announcement := SyncAnnouncement{
-		Magnet:    "magnet:?xt=urn:btih:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-		InfoHash:  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-		Title:     "public peer history",
-		CreatedAt: now.Format(time.RFC3339),
-		NetworkID: latestOrgNetworkID,
+		Magnet:       "magnet:?xt=urn:btih:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		InfoHash:     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		Title:        "public peer history",
+		CreatedAt:    now.Format(time.RFC3339),
+		NetworkID:    latestOrgNetworkID,
+		LibP2PPeerID: sourcePeerID,
 	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/history/list" {
@@ -684,6 +744,10 @@ func TestEnqueueHistoryFromLANPeersUsesConfiguredPublicPeers(t *testing.T) {
 	if len(realtimeRefs) != 1 {
 		t.Fatalf("realtime refs = %d, want 1", len(realtimeRefs))
 	}
+	peers := runtime.directPeerIDs(announcement.InfoHash)
+	if len(peers) != 1 || peers[0].String() != announcement.LibP2PPeerID {
+		t.Fatalf("direct peers = %v", peers)
+	}
 	if len(historyRefs) != 0 {
 		t.Fatalf("history refs = %d, want 0", len(historyRefs))
 	}
@@ -709,27 +773,6 @@ func TestSyncPeerSourcesIncludesLANPublicAndRelayPeers(t *testing.T) {
 	}
 	if got[2] != "relay.jie.news" {
 		t.Fatalf("got[2] = %q, want relay peer third", got[2])
-	}
-}
-
-func TestLoadTrackerListParsesDefaultStyleFile(t *testing.T) {
-	t.Parallel()
-
-	root := t.TempDir()
-	path := filepath.Join(root, "Trackerlist.inf")
-	content := "# comment\ntracker=https://tracker.example.com/announce\nudp://tracker.opentrackr.org:1337/announce\n"
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		t.Fatalf("write tracker list: %v", err)
-	}
-	trackers, err := LoadTrackerList(path)
-	if err != nil {
-		t.Fatalf("LoadTrackerList error = %v", err)
-	}
-	if len(trackers) != 2 {
-		t.Fatalf("trackers len = %d, want 2", len(trackers))
-	}
-	if trackers[0] != "https://tracker.example.com/announce" {
-		t.Fatalf("first tracker = %q", trackers[0])
 	}
 }
 
@@ -872,11 +915,9 @@ func TestSyncRefImportsViaLibP2PDirectTransfer(t *testing.T) {
 
 	result := syncRef(
 		ctx,
-		nil,
 		requesterStore,
 		SyncRef{Raw: published.Magnet, Magnet: published.Magnet, InfoHash: published.InfoHash},
 		5*time.Second,
-		nil,
 		nil,
 		SyncSubscriptions{},
 		true,

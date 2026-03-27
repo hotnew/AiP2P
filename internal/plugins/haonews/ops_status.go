@@ -1,7 +1,6 @@
 package newsplugin
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -42,9 +41,9 @@ func (a *App) nodeStatus(index Index) NodeStatus {
 		discoveryTone = "good"
 		discoveryDetail = "Bootstrap profile is present on this node."
 	}
-	dhtValue := "disabled"
-	dhtTone := "warn"
-	dhtDetail := "BitTorrent transport is temporarily disabled. Hao.News now prefers libp2p plus HTTP fallback."
+	httpFallbackValue := "enabled"
+	httpFallbackTone := "good"
+	httpFallbackDetail := "Hao.News now uses libp2p direct transfer with HTTP fallback for bundle delivery."
 	libp2pValue := "not configured"
 	libp2pTone := "warn"
 	libp2pDetail := "Add libp2p_bootstrap peers to prepare the live control plane."
@@ -114,14 +113,14 @@ func (a *App) nodeStatus(index Index) NodeStatus {
 			{Label: "LAN mDNS", Value: "not running", Detail: "Local network discovery starts when the sync daemon is running.", Tone: "warn"},
 			{Label: "libp2p bootstrap", Value: libp2pValue, Detail: libp2pDetail, Tone: libp2pTone},
 			{Label: "libp2p rendezvous", Value: rendezvousValue, Detail: rendezvousDetail, Tone: rendezvousTone},
-			{Label: "BitTorrent DHT", Value: dhtValue, Detail: dhtDetail, Tone: dhtTone},
+			{Label: "HTTP fallback", Value: httpFallbackValue, Detail: httpFallbackDetail, Tone: httpFallbackTone},
 		},
 		Dashboard: []NodeStatusCard{
 			{Label: "Node mode", Value: summary, Detail: summaryDetail, Tone: summaryTone},
 			{Label: "libp2p pubsub", Value: "not running", Detail: "Pubsub topic joins start when the sync daemon is running.", Tone: "warn"},
 			{Label: "LAN mDNS", Value: "not running", Detail: "Local network discovery starts when the sync daemon is running.", Tone: "warn"},
 			{Label: "libp2p bootstrap", Value: libp2pValue, Detail: libp2pDetail, Tone: libp2pTone},
-			{Label: "BitTorrent DHT", Value: dhtValue, Detail: dhtDetail, Tone: dhtTone},
+			{Label: "HTTP fallback", Value: httpFallbackValue, Detail: httpFallbackDetail, Tone: httpFallbackTone},
 			{Label: "Discovery profile", Value: discoveryValue, Detail: discoveryDetail, Tone: discoveryTone},
 			{Label: "Network ID", Value: networkIDValue, Detail: networkIDDetail, Tone: networkIDTone},
 		},
@@ -182,9 +181,9 @@ func buildLiveNodeStatus(index Index, storeState, storeTone string, torrentCount
 		rendezvousTone = "good"
 	}
 
-	dhtValue := "disabled"
-	dhtTone := "warn"
-	dhtDetail := "BitTorrent transport is temporarily disabled. Sync now uses libp2p direct transfer and HTTP fallback."
+	httpFallbackValue := "enabled"
+	httpFallbackTone := "good"
+	httpFallbackDetail := "Sync now uses libp2p direct transfer and HTTP fallback."
 
 	pubsubValue := "disabled"
 	pubsubTone := "warn"
@@ -292,14 +291,14 @@ func buildLiveNodeStatus(index Index, storeState, storeTone string, torrentCount
 			{Label: "LAN mDNS", Value: mdnsValue, Detail: mdnsDetail, Tone: mdnsTone},
 			{Label: "libp2p bootstrap", Value: libp2pValue, Detail: libp2pDetail, Tone: libp2pTone},
 			{Label: "libp2p rendezvous", Value: rendezvousValue, Detail: rendezvousDetail, Tone: rendezvousTone},
-			{Label: "BitTorrent DHT", Value: dhtValue, Detail: dhtDetail, Tone: dhtTone},
+			{Label: "HTTP fallback", Value: httpFallbackValue, Detail: httpFallbackDetail, Tone: httpFallbackTone},
 		},
 		Dashboard: []NodeStatusCard{
 			{Label: "Node mode", Value: summary, Detail: summaryDetail, Tone: summaryTone},
 			{Label: "libp2p pubsub", Value: pubsubValue, Detail: pubsubDetail, Tone: pubsubTone},
 			{Label: "LAN mDNS", Value: mdnsValue, Detail: mdnsDetail, Tone: mdnsTone},
 			{Label: "libp2p bootstrap", Value: libp2pValue, Detail: libp2pDetail, Tone: libp2pTone},
-			{Label: "BitTorrent DHT", Value: dhtValue, Detail: dhtDetail, Tone: dhtTone},
+			{Label: "HTTP fallback", Value: httpFallbackValue, Detail: httpFallbackDetail, Tone: httpFallbackTone},
 			{Label: "Sync daemon", Value: syncDaemonValue, Detail: syncDaemonDetail, Tone: "good"},
 			{Label: "Network ID", Value: networkIDValue, Detail: networkIDDetail, Tone: networkIDTone},
 		},
@@ -412,40 +411,6 @@ func (a *App) advertiseHostHealth() ([]AdvertiseHostHealthStatus, error) {
 		})
 	}
 	return out, nil
-}
-
-func (a *App) lanBTStatus(ctx context.Context, cfg NetworkBootstrapConfig) ([]LANBTAnchorStatus, bool, string) {
-	if len(cfg.LANTorrentPeers) == 0 || a.fetchLANBT == nil {
-		return nil, false, "not configured"
-	}
-	anchors := make([]LANBTAnchorStatus, 0, len(cfg.LANTorrentPeers))
-	hasMatch := false
-	for _, peer := range cfg.LANTorrentPeers {
-		anchor := LANBTAnchorStatus{Peer: strings.TrimSpace(peer)}
-		payload, err := a.fetchLANBT(ctx, peer, cfg.NetworkID)
-		if err != nil {
-			anchor.Error = err.Error()
-			anchors = append(anchors, anchor)
-			continue
-		}
-		anchor.Nodes = append(anchor.Nodes, payload.BitTorrentNodes...)
-		for _, node := range anchor.Nodes {
-			if strings.HasPrefix(node, strings.TrimSpace(peer)+":") {
-				anchor.MatchedNode = node
-				hasMatch = true
-				break
-			}
-		}
-		anchors = append(anchors, anchor)
-	}
-	overall := "not reached"
-	switch {
-	case hasMatch:
-		overall = "live node resolved"
-	case len(anchors) > 0:
-		overall = "anchor configured"
-	}
-	return anchors, hasMatch, overall
 }
 
 func mapLANPeerHealthStatus(values []corehaonews.LANPeerHealthStatus) []LANPeerHealthStatus {

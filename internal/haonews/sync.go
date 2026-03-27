@@ -14,8 +14,6 @@ import (
 	"sync"
 	"time"
 
-	anacrolixdht "github.com/anacrolix/dht/v2"
-	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
@@ -24,10 +22,8 @@ type SyncOptions struct {
 	StoreRoot          string
 	QueuePath          string
 	NetPath            string
-	TrackerListPath    string
 	SubscriptionsPath  string
 	CreditIdentityFile string
-	ListenAddr         string
 	Refs               []string
 	PollInterval       time.Duration
 	Timeout            time.Duration
@@ -74,12 +70,6 @@ func RunSync(ctx context.Context, opts SyncOptions, logf func(string, ...any)) e
 	if opts.Timeout <= 0 {
 		opts.Timeout = defaultSyncRefTimeout
 	}
-	if strings.TrimSpace(opts.TrackerListPath) == "" {
-		opts.TrackerListPath = defaultTrackerListPath(opts.NetPath)
-	}
-	if err := EnsureDefaultTrackerList(opts.TrackerListPath); err != nil {
-		return fmt.Errorf("ensure tracker list: %w", err)
-	}
 	if err := ensureNetworkID(opts.NetPath, latestOrgNetworkID); err != nil {
 		return fmt.Errorf("ensure latest.org network id: %w", err)
 	}
@@ -100,11 +90,6 @@ func RunSync(ctx context.Context, opts SyncOptions, logf func(string, ...any)) e
 	if err != nil {
 		return fmt.Errorf("load subscriptions: %w", err)
 	}
-	trackers, err := LoadTrackerList(opts.TrackerListPath)
-	if err != nil {
-		return fmt.Errorf("load tracker list: %w", err)
-	}
-
 	libp2pRuntime, err := startLibP2PRuntime(ctx, netCfg, store)
 	if err != nil {
 		return err
@@ -120,7 +105,6 @@ func RunSync(ctx context.Context, opts SyncOptions, logf func(string, ...any)) e
 		startedAt:        time.Now().UTC(),
 		libp2p:           libp2pRuntime,
 		netCfg:           netCfg,
-		trackers:         trackers,
 		subscriptions:    subscriptions,
 		announced:        make(map[string]struct{}),
 		announcedProofs:  make(map[string]struct{}),
@@ -162,7 +146,7 @@ func RunSync(ctx context.Context, opts SyncOptions, logf func(string, ...any)) e
 			logf("network bootstrap file: %s", netCfg.FileName())
 			logf("configured libp2p peers: %d", len(netCfg.LibP2PBootstrap))
 			logf("configured libp2p rendezvous namespaces: %d", len(netCfg.LibP2PRendezvous))
-			logf("bittorrent transport: disabled")
+			logf("legacy transport compatibility: disabled")
 		} else if strings.TrimSpace(opts.NetPath) != "" {
 			logf("network bootstrap file not found: %s", opts.NetPath)
 		}
@@ -233,13 +217,11 @@ type syncRuntime struct {
 	mode               string
 	seed               bool
 	startedAt          time.Time
-	torrentClient      *torrent.Client
 	libp2p             *libp2pRuntime
 	pubsub             *pubsubRuntime
 	creditStore        *CreditStore
 	creditIdentity     *AgentIdentity
 	netCfg             NetworkBootstrapConfig
-	trackers           []string
 	subscriptions      SyncSubscriptions
 	announced          map[string]struct{}
 	announcedProofs    map[string]struct{}
@@ -247,7 +229,6 @@ type syncRuntime struct {
 	directTransfer     bool
 	directPeers        map[string][]peer.ID
 	activity           SyncActivityStatus
-	configuredBTListen string
 	lastLANProbeAt     time.Time
 	historyBootstrap   historyBootstrapState
 }
@@ -290,8 +271,6 @@ func (r *syncRuntime) recordResult(result SyncItemResult) {
 		switch result.Transport {
 		case "libp2p":
 			r.activity.DirectImported++
-		case "bittorrent":
-			r.activity.BitTorrentImported++
 		}
 	case "skipped":
 		r.activity.Skipped++
@@ -321,6 +300,9 @@ func (r *syncRuntime) rememberDirectPeer(infoHash, peerValue string) {
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.directPeers == nil {
+		r.directPeers = make(map[string][]peer.ID)
+	}
 	current := r.directPeers[infoHash]
 	for _, existing := range current {
 		if existing == peerID {
@@ -384,7 +366,6 @@ func (r *syncRuntime) writeStatus(ctx context.Context) error {
 		},
 	}
 	status.LibP2P = r.libp2p.Status(ctx)
-	status.BitTorrentDHT = torrentStatus(nil, 0, "")
 	status.PubSub = r.pubsub.Status()
 	return writeSyncStatus(r.store, status)
 }
@@ -414,7 +395,7 @@ func (r *syncRuntime) processQueue(ctx context.Context, direct []string, timeout
 		logf("write sync status: %v", err)
 	}
 	for _, ref := range refs {
-		result := syncRef(ctx, nil, r.store, ref, timeout, syncPeerSources(r.netCfg), r.trackers, r.subscriptions, r.directTransfer, r.libp2p, r.directPeerIDs(ref.InfoHash))
+		result := syncRef(ctx, r.store, ref, timeout, syncPeerSources(r.netCfg), r.subscriptions, r.directTransfer, r.libp2p, r.directPeerIDs(ref.InfoHash))
 		if result.Status == "imported" && result.ContentDir != "" {
 			if err := r.importCreditBundle(result.ContentDir, logf); err != nil && logf != nil {
 				logf("import credit bundle: %v", err)
@@ -485,7 +466,11 @@ func (r *syncRuntime) announceLocalBundles(ctx context.Context, logf func(string
 	if r.pubsub == nil {
 		return nil
 	}
-	if err := ensureHistoryManifests(r.store, r.netCfg, nil); err != nil {
+	localPeerID := ""
+	if r.libp2p != nil && r.libp2p.host != nil {
+		localPeerID = r.libp2p.host.ID().String()
+	}
+	if err := ensureHistoryManifests(r.store, r.netCfg, nil, localPeerID); err != nil {
 		return err
 	}
 	announcements, err := localAnnouncements(r.store)
@@ -527,33 +512,6 @@ func (r *syncRuntime) announceLocalBundles(ctx context.Context, logf func(string
 		logf("write sync status: %v", err)
 	}
 	return nil
-}
-
-func (r *syncRuntime) seedLocalTorrents(logf func(string, ...any)) error {
-	if r == nil || r.torrentClient == nil {
-		return nil
-	}
-	return r.store.WalkTorrentFiles(func(infoHash, path string) error {
-		r.mu.Lock()
-		_, seen := r.seeded[infoHash]
-		if !seen {
-			r.seeded[infoHash] = struct{}{}
-		}
-		r.mu.Unlock()
-		if seen {
-			return nil
-		}
-		if _, err := r.torrentClient.AddTorrentFromFile(path); err != nil {
-			r.mu.Lock()
-			delete(r.seeded, infoHash)
-			r.mu.Unlock()
-			return err
-		}
-		if logf != nil {
-			logf("seeding: %s", infoHash)
-		}
-		return nil
-	})
 }
 
 func (r *syncRuntime) handleAnnouncement(announcement SyncAnnouncement) (bool, error) {
@@ -840,17 +798,19 @@ func (r *syncRuntime) enqueueHistoryFromLANPeers(ctx context.Context, logf func(
 				if err != nil || ref.InfoHash == "" {
 					continue
 				}
+				r.rememberDirectPeer(ref.InfoHash, announcement.LibP2PPeerID)
 				if hasCompleteLocalBundle(r.store, ref.InfoHash) {
 					continue
 				}
 				if !reserveDailyQuota(dayCounts, announcement.CreatedAt, r.subscriptions.MaxItemsPerDay) {
 					continue
 				}
-				queuePath := r.historyQueuePath
+				enqueued := false
 				if shouldPromoteHistoryAnnouncementToRealtime(page, announcement) {
-					queuePath = r.queuePath
+					enqueued, err = promoteSyncRefToRealtime(r.queuePath, r.historyQueuePath, ref)
+				} else {
+					enqueued, err = enqueueSyncRef(r.historyQueuePath, ref)
 				}
-				enqueued, err := enqueueSyncRef(queuePath, ref)
 				if err != nil {
 					return added, err
 				}
@@ -955,63 +915,10 @@ func (r *syncRuntime) probeLANAnchors(ctx context.Context, logf func(string, ...
 		}
 	}
 
-	if len(r.netCfg.LANTorrentPeers) > 0 {
-		if logf != nil {
-			logf("LAN BT anchors: disabled")
-		}
-	}
-
 	if len(errs) > 0 {
 		return errors.New(strings.Join(errs, "; "))
 	}
 	return nil
-}
-
-func torrentStatus(client *torrent.Client, configuredRouters int, configuredListen string) SyncBitTorrentStatus {
-	if client == nil {
-		return SyncBitTorrentStatus{
-			Enabled:           false,
-			ConfiguredListen:  configuredListen,
-			ConfiguredRouters: configuredRouters,
-			LastError:         "disabled",
-		}
-	}
-	listenAddrs := make([]string, 0, len(client.ListenAddrs()))
-	for _, addr := range client.ListenAddrs() {
-		listenAddrs = append(listenAddrs, addr.String())
-	}
-	status := SyncBitTorrentStatus{
-		Enabled:           len(client.DhtServers()) > 0,
-		ConfiguredListen:  configuredListen,
-		ListenAddrs:       listenAddrs,
-		ConfiguredRouters: configuredRouters,
-		Servers:           len(client.DhtServers()),
-	}
-	for _, server := range client.DhtServers() {
-		stats, ok := server.Stats().(anacrolixdht.ServerStats)
-		if !ok {
-			continue
-		}
-		status.GoodNodes += stats.GoodNodes
-		status.Nodes += stats.Nodes
-		status.OutstandingTransactions += stats.OutstandingTransactions
-	}
-	return status
-}
-
-func normalizeBitTorrentListen(value string) string {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return value
-	}
-	host, port, err := net.SplitHostPort(value)
-	if err != nil {
-		return value
-	}
-	if host == "" || host == "0.0.0.0" || host == "::" || host == "[::]" {
-		return ":" + port
-	}
-	return value
 }
 
 func enqueueSyncRef(queuePath string, ref SyncRef) (bool, error) {
@@ -1047,6 +954,13 @@ func enqueueSyncRef(queuePath string, ref SyncRef) (bool, error) {
 		return false, err
 	}
 	return true, nil
+}
+
+func promoteSyncRefToRealtime(realtimePath, historyPath string, ref SyncRef) (bool, error) {
+	if err := removeSyncRef(historyPath, ref); err != nil {
+		return false, err
+	}
+	return enqueueSyncRef(realtimePath, ref)
 }
 
 func removeSyncRef(queuePath string, ref SyncRef) error {
@@ -1118,7 +1032,7 @@ func isTerminalSyncFailure(ref SyncRef, result SyncItemResult) bool {
 	if isHistoryManifestRef(ref) {
 		return true
 	}
-	return strings.Contains(message, "/api/torrents/")
+	return strings.Contains(message, "/api/bundles/")
 }
 
 func withPeerHints(magnet string, addrs []net.Addr, lanPeers []string) string {
@@ -1205,125 +1119,6 @@ func syncMode(once bool) string {
 		return "once"
 	}
 	return "daemon"
-}
-
-func resolveEffectiveDHTRouters(ctx context.Context, cfg NetworkBootstrapConfig) ([]string, error) {
-	merged := make([]string, 0, len(cfg.LANTorrentPeers)+len(cfg.DHTRouters))
-	lanRouters, err := resolveLANTorrentRouters(ctx, cfg)
-	seen := make(map[string]struct{}, len(cfg.LANTorrentPeers)+len(cfg.DHTRouters))
-	for _, value := range lanRouters {
-		value = strings.TrimSpace(value)
-		if value == "" {
-			continue
-		}
-		if _, ok := seen[value]; ok {
-			continue
-		}
-		seen[value] = struct{}{}
-		merged = append(merged, value)
-	}
-	for _, value := range cfg.DHTRouters {
-		value = strings.TrimSpace(value)
-		if value == "" {
-			continue
-		}
-		if _, ok := seen[value]; ok {
-			continue
-		}
-		seen[value] = struct{}{}
-		merged = append(merged, value)
-	}
-	return merged, err
-}
-
-func effectiveDHTRouterCount(cfg NetworkBootstrapConfig) int {
-	count := len(cfg.DHTRouters)
-	if len(cfg.LANTorrentPeers) > 0 {
-		count += len(cfg.LANTorrentPeers)
-	}
-	return count
-}
-
-func resolveDHTRouters(network string, routers []string) ([]anacrolixdht.Addr, error) {
-	if len(routers) == 0 {
-		return anacrolixdht.GlobalBootstrapAddrs(network)
-	}
-	out := make([]anacrolixdht.Addr, 0, len(routers))
-	seen := make(map[string]struct{})
-	for _, raw := range routers {
-		raw = strings.TrimSpace(raw)
-		if raw == "" {
-			continue
-		}
-		host, port, err := net.SplitHostPort(raw)
-		if err != nil {
-			return nil, fmt.Errorf("parse dht router %q: %w", raw, err)
-		}
-		addrs, err := net.LookupIP(host)
-		if err != nil {
-			return nil, fmt.Errorf("resolve dht router %q: %w", raw, err)
-		}
-		for _, ip := range addrs {
-			addr := net.JoinHostPort(ip.String(), port)
-			if _, ok := seen[addr]; ok {
-				continue
-			}
-			seen[addr] = struct{}{}
-			udpAddr, err := net.ResolveUDPAddr(network, addr)
-			if err != nil {
-				return nil, fmt.Errorf("resolve udp addr %q: %w", addr, err)
-			}
-			out = append(out, anacrolixdht.NewAddr(udpAddr))
-		}
-	}
-	if len(out) > 0 {
-		return out, nil
-	}
-	return anacrolixdht.GlobalBootstrapAddrs(network)
-}
-
-func bootstrapTorrentDHT(client *torrent.Client, routers []string) error {
-	addrs, err := resolveRouterUDPAddrs(routers)
-	if err != nil {
-		return err
-	}
-	for _, server := range client.DhtServers() {
-		for _, addr := range addrs {
-			server.Ping(addr)
-		}
-	}
-	return nil
-}
-
-func resolveRouterUDPAddrs(routers []string) ([]*net.UDPAddr, error) {
-	if len(routers) == 0 {
-		return nil, nil
-	}
-	out := make([]*net.UDPAddr, 0, len(routers))
-	seen := make(map[string]struct{})
-	for _, raw := range routers {
-		host, port, err := net.SplitHostPort(strings.TrimSpace(raw))
-		if err != nil {
-			return nil, fmt.Errorf("parse dht router %q: %w", raw, err)
-		}
-		ips, err := net.LookupIP(host)
-		if err != nil {
-			return nil, fmt.Errorf("resolve dht router %q: %w", raw, err)
-		}
-		for _, ip := range ips {
-			addr := net.JoinHostPort(ip.String(), port)
-			if _, ok := seen[addr]; ok {
-				continue
-			}
-			seen[addr] = struct{}{}
-			udpAddr, err := net.ResolveUDPAddr("udp", addr)
-			if err != nil {
-				return nil, fmt.Errorf("resolve udp dht router %q: %w", addr, err)
-			}
-			out = append(out, udpAddr)
-		}
-	}
-	return out, nil
 }
 
 func ensureSyncLayout(store *Store, queuePath string) (syncQueueLayout, error) {
@@ -1531,14 +1326,14 @@ func ParseSyncRef(raw string) (SyncRef, error) {
 		return SyncRef{}, errors.New("empty sync ref")
 	}
 	if strings.HasPrefix(strings.ToLower(raw), "magnet:?") {
-		spec, err := torrent.TorrentSpecFromMagnetUri(raw)
+		infoHash, err := extractInfoHashFromMagnet(raw)
 		if err != nil {
 			return SyncRef{}, fmt.Errorf("parse magnet: %w", err)
 		}
 		return SyncRef{
 			Raw:      raw,
 			Magnet:   raw,
-			InfoHash: strings.ToLower(spec.InfoHash.HexString()),
+			InfoHash: infoHash,
 		}, nil
 	}
 	if isHexInfoHash(raw) {
@@ -1550,6 +1345,25 @@ func ParseSyncRef(raw string) (SyncRef, error) {
 		}, nil
 	}
 	return SyncRef{}, fmt.Errorf("unsupported sync ref %q", raw)
+}
+
+func extractInfoHashFromMagnet(raw string) (string, error) {
+	uri, err := url.Parse(raw)
+	if err != nil {
+		return "", err
+	}
+	for _, value := range uri.Query()["xt"] {
+		value = strings.TrimSpace(value)
+		if !strings.HasPrefix(strings.ToLower(value), "urn:btih:") {
+			continue
+		}
+		infoHash := strings.TrimSpace(value[len("urn:btih:"):])
+		if !isHexInfoHash(infoHash) {
+			return "", fmt.Errorf("unsupported btih %q", infoHash)
+		}
+		return strings.ToLower(infoHash), nil
+	}
+	return "", errors.New("missing btih in magnet")
 }
 
 func sanitizeSyncQueueFile(queuePath string, peerSources []string) (int, error) {
@@ -1648,12 +1462,10 @@ func syncPeerSources(cfg NetworkBootstrapConfig) []string {
 
 func syncRef(
 	ctx context.Context,
-	client *torrent.Client,
 	store *Store,
 	ref SyncRef,
 	timeout time.Duration,
 	peerSources []string,
-	trackers []string,
 	rules SyncSubscriptions,
 	directTransfer bool,
 	libp2pRuntime *libp2pRuntime,

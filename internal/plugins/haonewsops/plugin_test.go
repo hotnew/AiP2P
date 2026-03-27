@@ -44,7 +44,6 @@ func TestPluginBuildServesLANPeerHealth(t *testing.T) {
 	advertiseHealthPath := filepath.Join(root, "config", "advertise_host_health.json")
 	netText := `network_id=2c2d6cf7b255ba20d6ad01135654933851b02bd00c65c2a6a54b97ab56590475
 lan_peer=192.168.102.74
-lan_bt_peer=192.168.102.76
 `
 	if err := os.WriteFile(netPath, []byte(netText), 0o644); err != nil {
 		t.Fatalf("WriteFile(netPath) error = %v", err)
@@ -56,17 +55,10 @@ lan_bt_peer=192.168.102.76
       "last_success_at": %q,
       "observed_primary_host": "192.168.102.75",
       "observed_primary_from": "lan_peer"
-    },
-    "lan_bt_peer|192.168.102.76": {
-      "last_failure_at": %q,
-      "consecutive_failure": 2,
-      "last_error": "dial timeout",
-      "observed_primary_host": "192.168.102.75",
-      "observed_primary_from": "lan_bt_peer"
     }
   }
 }
-`, now.Add(-2*time.Minute).Format(time.RFC3339), now.Add(-3*time.Minute).Format(time.RFC3339))
+`, now.Add(-2*time.Minute).Format(time.RFC3339))
 	if err := os.WriteFile(healthPath, []byte(healthText), 0o644); err != nil {
 		t.Fatalf("WriteFile(healthPath) error = %v", err)
 	}
@@ -110,9 +102,7 @@ lan_bt_peer=192.168.102.76
 	for _, want := range []string{
 		"局域网锚点健康",
 		"libp2p 锚点健康",
-		"BT/DHT 锚点健康",
 		"主通告 libp2p",
-		"主通告 BT",
 		"Relay Reservation",
 		"实际可达地址",
 		"主通告候选地址",
@@ -129,9 +119,6 @@ lan_bt_peer=192.168.102.76
 		"known-good",
 		"QmKnownGood",
 		"preferred",
-		"cooldown",
-		"最近失败，冷却后排：dial timeout",
-		"dial timeout",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("expected network page to contain %q, got %q", want, body)
@@ -161,7 +148,6 @@ func TestPluginBuildServesBootstrapExplainAPI(t *testing.T) {
 	}
 	netText := `network_id=2c2d6cf7b255ba20d6ad01135654933851b02bd00c65c2a6a54b97ab56590475
 lan_peer=192.168.102.75
-lan_bt_peer=192.168.102.75
 `
 	if err := os.WriteFile(netPath, []byte(netText), 0o644); err != nil {
 		t.Fatalf("WriteFile(netPath) error = %v", err)
@@ -188,11 +174,6 @@ lan_bt_peer=192.168.102.75
       "last_success_at": "2026-03-20T10:00:00Z",
       "observed_primary_host": "192.168.102.76",
       "observed_primary_from": "lan_peer"
-    },
-    "lan_bt_peer|192.168.102.75": {
-      "last_success_at": "2026-03-20T10:00:30Z",
-      "observed_primary_host": "192.168.102.76",
-      "observed_primary_from": "lan_bt_peer"
     }
   }
 }
@@ -226,9 +207,6 @@ lan_bt_peer=192.168.102.75
 			LastError:      "",
 			Peers:          nil,
 			ConnectedPeers: 1,
-		},
-		BitTorrentDHT: newsplugin.SyncBitTorrentStatus{
-			ConfiguredListen: "0.0.0.0:50585",
 		},
 	}
 	data, err := json.Marshal(status)
@@ -278,7 +256,7 @@ lan_bt_peer=192.168.102.75
 	if payload.ExplainDetail.SuccessCount < 2 || payload.ExplainDetail.FailureCount != 1 {
 		t.Fatalf("payload.ExplainDetail = %#v", payload.ExplainDetail)
 	}
-	if payload.ExplainDetail.LANLibP2P == nil || payload.ExplainDetail.LANBT == nil {
+	if payload.ExplainDetail.LANLibP2P == nil {
 		t.Fatalf("payload.ExplainDetail = %#v, want lan detail", payload.ExplainDetail)
 	}
 	if payload.ExplainDetail.LANLibP2P.ObservedPrimaryHost != "192.168.102.76" {
@@ -286,12 +264,6 @@ lan_bt_peer=192.168.102.75
 	}
 	if payload.ExplainDetail.LANLibP2P.ObservedPrimaryFrom != "lan_peer" {
 		t.Fatalf("payload.ExplainDetail.LANLibP2P = %#v, want observed_primary_from", payload.ExplainDetail.LANLibP2P)
-	}
-	if payload.ExplainDetail.LANBT.ObservedPrimaryHost != "192.168.102.76" {
-		t.Fatalf("payload.ExplainDetail.LANBT = %#v, want observed_primary_host", payload.ExplainDetail.LANBT)
-	}
-	if payload.ExplainDetail.LANBT.ObservedPrimaryFrom != "lan_bt_peer" {
-		t.Fatalf("payload.ExplainDetail.LANBT = %#v, want observed_primary_from", payload.ExplainDetail.LANBT)
 	}
 }
 
@@ -329,11 +301,6 @@ public_peer=ai.jie.news
 				"/ip4/0.0.0.0/udp/50584/quic-v1",
 			},
 		},
-		BitTorrentDHT: newsplugin.SyncBitTorrentStatus{
-			Enabled:          true,
-			ConfiguredListen: "0.0.0.0:50585",
-			ListenAddrs:      []string{"10.219.147.1:50585"},
-		},
 	}
 	data, err := json.Marshal(status)
 	if err != nil {
@@ -368,9 +335,6 @@ public_peer=ai.jie.news
 		if !strings.Contains(value, "/dns/ai.jie.news/") {
 			t.Fatalf("payload.DialAddrs = %#v, want dns ai.jie.news", payload.DialAddrs)
 		}
-	}
-	if len(payload.BitTorrentNodes) == 0 || payload.BitTorrentNodes[0] != "ai.jie.news:50585" {
-		t.Fatalf("payload.BitTorrentNodes = %#v, want ai.jie.news:50585", payload.BitTorrentNodes)
 	}
 }
 

@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -20,6 +23,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	mdns "github.com/libp2p/go-libp2p/p2p/discovery/mdns"
 	"github.com/libp2p/go-libp2p/p2p/protocol/ping"
+	ma "github.com/multiformats/go-multiaddr"
 )
 
 type libp2pRuntime struct {
@@ -100,6 +104,12 @@ func startLibP2PRuntime(ctx context.Context, cfg NetworkBootstrapConfig, store *
 			return nil, fmt.Errorf("resolve libp2p listen addrs: %w", err)
 		}
 		hostOptions = append(hostOptions, libp2p.ListenAddrStrings(resolvedListen...))
+	}
+	if factory := BuildLibP2PAddrsFactory(cfg); factory != nil {
+		hostOptions = append(hostOptions, libp2p.AddrsFactory(factory))
+	}
+	if cfg.IsPublicMode() {
+		hostOptions = append(hostOptions, libp2p.EnableRelayService())
 	}
 	if cfg.IsSharedMode() && len(relayBootstrapPeers) > 0 {
 		hostOptions = append(hostOptions,
@@ -205,6 +215,155 @@ func startLibP2PRuntime(ctx context.Context, cfg NetworkBootstrapConfig, store *
 	}
 	rt.startEventWatchers(ctx)
 	return rt, nil
+}
+
+func BuildLibP2PAddrsFactory(cfg NetworkBootstrapConfig) func([]ma.Multiaddr) []ma.Multiaddr {
+	if cfg.IsPublicMode() {
+		host := strings.TrimSpace(firstNonEmpty(cfg.PublicPeers...))
+		if host == "" {
+			return nil
+		}
+		return func(addrs []ma.Multiaddr) []ma.Multiaddr {
+			return rewriteAdvertiseAddrs(addrs, host)
+		}
+	}
+	if cfg.IsSharedMode() {
+		host := strings.TrimSpace(preferredSharedAdvertiseHost(cfg))
+		if host == "" {
+			return nil
+		}
+		return func(addrs []ma.Multiaddr) []ma.Multiaddr {
+			return rewriteAdvertiseAddrs(addrs, host)
+		}
+	}
+	return nil
+}
+
+func preferredSharedAdvertiseHost(cfg NetworkBootstrapConfig) string {
+	if gateway := strings.TrimSpace(systemDefaultGatewayTarget()); gateway != "" {
+		if host := routedSourceIPForAdvertise(gateway); host != "" {
+			return host
+		}
+	}
+	for _, target := range cfg.LANPeers {
+		if host := routedSourceIPForAdvertise(target); host != "" {
+			return host
+		}
+	}
+	return ""
+}
+
+func systemDefaultGatewayTarget() string {
+	switch runtime.GOOS {
+	case "darwin":
+		out, err := exec.Command("route", "-n", "get", "default").CombinedOutput()
+		if err != nil {
+			return ""
+		}
+		for _, line := range strings.Split(string(out), "\n") {
+			line = strings.TrimSpace(line)
+			if !strings.HasPrefix(line, "gateway:") {
+				continue
+			}
+			value := strings.TrimSpace(strings.TrimPrefix(line, "gateway:"))
+			if ip := net.ParseIP(value); ip != nil {
+				return value
+			}
+		}
+	case "linux":
+		out, err := exec.Command("ip", "route", "show", "default").CombinedOutput()
+		if err != nil {
+			return ""
+		}
+		fields := strings.Fields(string(out))
+		for i := 0; i+1 < len(fields); i++ {
+			if fields[i] != "via" {
+				continue
+			}
+			if ip := net.ParseIP(fields[i+1]); ip != nil {
+				return fields[i+1]
+			}
+		}
+	}
+	return ""
+}
+
+func routedSourceIPForAdvertise(target string) string {
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return ""
+	}
+	host := target
+	if value, _, err := net.SplitHostPort(target); err == nil {
+		host = strings.Trim(value, "[]")
+	}
+	ip := net.ParseIP(host)
+	if ip == nil || ip.IsLoopback() || ip.IsUnspecified() {
+		return ""
+	}
+	conn, err := net.DialUDP("udp", nil, &net.UDPAddr{IP: ip, Port: 9})
+	if err != nil {
+		return ""
+	}
+	defer conn.Close()
+	local, ok := conn.LocalAddr().(*net.UDPAddr)
+	if !ok || local == nil || local.IP == nil || local.IP.IsLoopback() || local.IP.IsUnspecified() {
+		return ""
+	}
+	return local.IP.String()
+}
+
+func rewriteAdvertiseAddrs(addrs []ma.Multiaddr, host string) []ma.Multiaddr {
+	host = strings.TrimSpace(host)
+	if host == "" {
+		return addrs
+	}
+	out := make([]ma.Multiaddr, 0, len(addrs))
+	seen := make(map[string]struct{}, len(addrs))
+	for _, addr := range addrs {
+		rewritten, ok := rewriteAdvertiseAddr(addr, host)
+		if !ok {
+			continue
+		}
+		value := rewritten.String()
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, rewritten)
+	}
+	return out
+}
+
+func rewriteAdvertiseAddr(addr ma.Multiaddr, host string) (ma.Multiaddr, bool) {
+	parts := strings.Split(strings.TrimPrefix(addr.String(), "/"), "/")
+	if len(parts) < 2 {
+		return nil, false
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		if ip.To4() != nil {
+			parts[0], parts[1] = "ip4", ip.String()
+		} else {
+			parts[0], parts[1] = "ip6", ip.String()
+		}
+	} else {
+		parts[0], parts[1] = "dns", host
+	}
+	rewritten, err := ma.NewMultiaddr("/" + strings.Join(parts, "/"))
+	if err != nil {
+		return nil, false
+	}
+	return rewritten, true
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func (r *libp2pRuntime) Close() error {
@@ -486,7 +645,7 @@ func EffectiveLibP2PBootstrapPeers(lanPeers, publicPeers []string) []string {
 func EffectiveLibP2PBootstrapPeersWithKnownGood(lanPeers, knownGoodPeers, publicPeers []string) []string {
 	values := make([]string, 0, len(lanPeers)+len(knownGoodPeers)+len(publicPeers))
 	seen := make(map[string]struct{}, len(lanPeers)+len(publicPeers))
-	for _, group := range [][]string{lanPeers, knownGoodPeers, publicPeers} {
+	for _, group := range [][]string{lanPeers, publicPeers, knownGoodPeers} {
 		for _, value := range group {
 			value = strings.TrimSpace(value)
 			if value == "" {

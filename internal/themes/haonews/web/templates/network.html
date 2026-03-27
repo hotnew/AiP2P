@@ -17,7 +17,7 @@
         <div class="hero-heading">
           <div>
             <h1>网络</h1>
-            <p class="hero-copy">专门用于查看内置同步守护进程、libp2p 可达性、局域网 mDNS 发现和 BitTorrent DHT 健康状态的页面。</p>
+            <p class="hero-copy">专门用于查看内置同步守护进程、libp2p 可达性、局域网 mDNS 发现和公网 / 共享模式状态的页面。</p>
           </div>
           <div class="hero-actions">
             <a class="button-link" href="/">返回信息流</a>
@@ -52,10 +52,6 @@
           <div class="hero-stat-card">
             <span class="stat-label">主通告 libp2p</span>
             <strong class="network-value-wrap">{{if .PrimaryLibP2P}}{{.PrimaryLibP2P}}{{else}}尚未选出{{end}}</strong>
-          </div>
-          <div class="hero-stat-card">
-            <span class="stat-label">主通告 BT</span>
-            <strong class="network-value-wrap">{{if .PrimaryBTNode}}{{.PrimaryBTNode}}{{else}}尚未选出{{end}}</strong>
           </div>
         </div>
       </header>
@@ -100,17 +96,6 @@
                 <strong>未配置</strong>
               {{end}}
               <p class="micro-copy">用于将普通局域网 IP 解析为可拨号的 libp2p 地址。</p>
-            </article>
-            <article class="ops-card ops-card-wide">
-              <span class="stat-label">局域网 BT/DHT 锚点</span>
-              {{if .LANBTAnchors}}
-                <div class="network-code-list">
-                  {{range .LANBTAnchors}}<code>{{.Peer}}</code>{{end}}
-                </div>
-              {{else}}
-                <strong>未配置</strong>
-              {{end}}
-              <p class="micro-copy">在公共 DHT 路由之前，优先作为局域网回填来源。</p>
             </article>
           </div>
         </section>
@@ -177,7 +162,7 @@
           <div class="panel-head">
             <div>
               <p class="panel-label">局域网锚点健康</p>
-              <p class="network-summary-copy">显示 `lan_peer` / `lan_bt_peer` 的最近成功、失败冷却和当前优先级。</p>
+              <p class="network-summary-copy">显示 `lan_peer` 的最近成功、失败冷却和当前优先级。</p>
             </div>
           </div>
           <div class="network-layout">
@@ -211,35 +196,6 @@
               {{end}}
             </section>
 
-            <section class="panel">
-              <div class="panel-head">
-                <div>
-                  <p class="panel-label">BT/DHT 锚点健康</p>
-                </div>
-              </div>
-              {{if .LANBTHealth}}
-                <div class="network-peer-list">
-                  {{range .LANBTHealth}}
-                    <article class="network-peer-card">
-                      <div class="network-peer-head">
-                        <strong class="network-code-inline">{{.Peer}}</strong>
-                        <span class="status-pill status-{{if eq .State "preferred"}}good{{else if eq .State "cooldown"}}warn{{else}}warn{{end}}">{{.State}}</span>
-                      </div>
-                      <div class="summary-grid">
-                        <div><span class="stat-label">最近成功</span><strong>{{formatOptionalTime .LastSuccessAt}}</strong></div>
-                        <div><span class="stat-label">最近失败</span><strong>{{formatOptionalTime .LastFailureAt}}</strong></div>
-                        <div><span class="stat-label">连续失败</span><strong>{{.ConsecutiveFailure}}</strong></div>
-                      </div>
-                      {{if .ObservedPrimaryHost}}<p class="micro-copy">观察到的主地址：<code>{{.ObservedPrimaryHost}}</code>{{if .ObservedPrimaryFrom}}<span>，来源：{{.ObservedPrimaryFrom}}</span>{{end}}</p>{{end}}
-                      <p class="micro-copy">{{.Reason}}</p>
-                      {{if .LastError}}<p class="micro-copy network-error-copy">{{.LastError}}</p>{{end}}
-                    </article>
-                  {{end}}
-                </div>
-              {{else}}
-                <p class="network-card-copy">当前还没有 `lan_bt_peer` 健康缓存。</p>
-              {{end}}
-            </section>
           </div>
         </section>
 
@@ -519,73 +475,9 @@
             {{end}}
           </section>
 
-          <section class="panel">
-            <div class="panel-head">
-              <div>
-                <p class="panel-label">局域网 BT/DHT</p>
-                <p class="network-card-copy">使用 `lan_bt_peer` 作为 BitTorrent/DHT 局域网回填锚点。</p>
-              </div>
-              <span class="status-pill status-{{if .LANBTHasMatch}}good{{else}}warn{{end}}">{{.LANBTOverall}}</span>
-            </div>
-            {{if .LANBTAnchors}}
-              <div class="network-peer-list">
-                {{range .LANBTAnchors}}
-                  <article class="network-peer-card">
-                    <div class="network-peer-head">
-                      <strong class="network-code-inline">{{.Peer}}</strong>
-                      <span class="status-pill status-{{if .MatchedNode}}good{{else}}warn{{end}}">{{if .MatchedNode}}已获端口{{else if .Error}}查询失败{{else}}等待中{{end}}</span>
-                    </div>
-                    {{if .MatchedNode}}
-                      <div class="network-block">
-                        <span class="stat-label">匹配节点</span>
-                        <code class="network-code-inline">{{.MatchedNode}}</code>
-                      </div>
-                    {{end}}
-                    {{if .Nodes}}
-                      <div class="network-block">
-                        <span class="stat-label">bittorrent_nodes</span>
-                        <div class="network-code-list">
-                          {{range .Nodes}}<code>{{.}}</code>{{end}}
-                        </div>
-                      </div>
-                    {{end}}
-                    {{if .Error}}<p class="micro-copy network-error-copy">{{.Error}}</p>{{end}}
-                  </article>
-                {{end}}
-              </div>
-            {{else}}
-              <p class="network-card-copy"><code>hao_news_net.inf</code> 中尚未配置 `lan_bt_peer`。</p>
-            {{end}}
-          </section>
         </div>
 
         <div class="network-layout">
-          <section class="panel">
-            <div class="panel-head">
-              <div>
-                <p class="panel-label">BitTorrent DHT</p>
-                <p class="network-card-copy">用于不可变 bundle 获取的辅助层状态。</p>
-              </div>
-              <span class="status-pill status-{{if gt .SyncStatus.BitTorrentDHT.GoodNodes 0}}good{{else}}warn{{end}}">{{.SyncStatus.BitTorrentDHT.GoodNodes}} 个良好节点</span>
-            </div>
-            <div class="summary-grid">
-              <div><span class="stat-label">配置监听地址</span><strong class="network-value-wrap network-code-inline">{{if .SyncStatus.BitTorrentDHT.ConfiguredListen}}{{.SyncStatus.BitTorrentDHT.ConfiguredListen}}{{else}}自动{{end}}</strong></div>
-              <div><span class="stat-label">服务端</span><strong>{{.SyncStatus.BitTorrentDHT.Servers}}</strong></div>
-              <div><span class="stat-label">节点数</span><strong>{{.SyncStatus.BitTorrentDHT.Nodes}}</strong></div>
-              <div><span class="stat-label">良好节点</span><strong>{{.SyncStatus.BitTorrentDHT.GoodNodes}}</strong></div>
-              <div><span class="stat-label">未完成事务</span><strong>{{.SyncStatus.BitTorrentDHT.OutstandingTransactions}}</strong></div>
-            </div>
-            {{if .SyncStatus.BitTorrentDHT.ListenAddrs}}
-              <div class="network-block">
-                <span class="stat-label">实际监听地址</span>
-                <div class="network-code-list">
-                  {{range .SyncStatus.BitTorrentDHT.ListenAddrs}}<code>{{.}}</code>{{end}}
-                </div>
-              </div>
-            {{end}}
-            {{if .SyncStatus.BitTorrentDHT.LastError}}<p class="micro-copy network-error-copy">{{.SyncStatus.BitTorrentDHT.LastError}}</p>{{end}}
-          </section>
-
           <section class="panel">
             <div class="panel-head">
               <div>

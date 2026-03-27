@@ -72,7 +72,7 @@ func TestLANPeerHealthCacheRoundTrip(t *testing.T) {
 	}
 	cache := &lanPeerHealthCache{}
 	cache.recordSuccess("lan_peer", "192.168.102.75", "192.168.102.76")
-	cache.recordFailure("lan_bt_peer", "192.168.102.76", errString("timeout"))
+	cache.recordFailure("lan_peer", "192.168.102.76", errString("timeout"))
 
 	if err := saveLANPeerHealthCache(cfg, cache); err != nil {
 		t.Fatalf("saveLANPeerHealthCache() error = %v", err)
@@ -91,7 +91,7 @@ func TestLANPeerHealthCacheRoundTrip(t *testing.T) {
 	if source := loaded.entry("lan_peer", "192.168.102.75").ObservedPrimaryFrom; source != "lan_peer" {
 		t.Fatalf("ObservedPrimaryFrom = %q, want lan_peer", source)
 	}
-	entry := loaded.entry("lan_bt_peer", "192.168.102.76")
+	entry := loaded.entry("lan_peer", "192.168.102.76")
 	if entry.ConsecutiveFailure != 1 {
 		t.Fatalf("entry.ConsecutiveFailure = %d, want 1", entry.ConsecutiveFailure)
 	}
@@ -120,40 +120,6 @@ func TestLANPeerBootstrapTargetsPreferObservedPrimaryHost(t *testing.T) {
 	}
 	if got[1] != "192.168.102.74" {
 		t.Fatalf("got[1] = %q, want configured peer second", got[1])
-	}
-}
-
-func TestLANPeerBootstrapTargetsUsesSiblingObservedPrimaryHost(t *testing.T) {
-	t.Parallel()
-
-	cache := &lanPeerHealthCache{
-		Entries: map[string]lanPeerHealthEntry{
-			lanPeerHealthKey("lan_bt_peer", "192.168.102.74"): {
-				ObservedPrimaryHost: "192.168.102.75",
-			},
-		},
-	}
-
-	got := cache.bootstrapTargets("lan_peer", "192.168.102.74")
-	if len(got) != 2 {
-		t.Fatalf("len(got) = %d, want 2", len(got))
-	}
-	if got[0] != "192.168.102.75" {
-		t.Fatalf("got[0] = %q, want sibling observed primary host first", got[0])
-	}
-}
-
-func TestLANPeerRecordSuccessSharesObservedPrimaryHostAcrossKinds(t *testing.T) {
-	t.Parallel()
-
-	cache := &lanPeerHealthCache{}
-	cache.recordSuccess("lan_peer", "192.168.102.74", "192.168.102.75")
-
-	if observed := cache.entry("lan_bt_peer", "192.168.102.74").ObservedPrimaryHost; observed != "192.168.102.75" {
-		t.Fatalf("sibling ObservedPrimaryHost = %q, want 192.168.102.75", observed)
-	}
-	if source := cache.entry("lan_bt_peer", "192.168.102.74").ObservedPrimaryFrom; source != "lan_peer" {
-		t.Fatalf("sibling ObservedPrimaryFrom = %q, want lan_peer", source)
 	}
 }
 
@@ -191,7 +157,7 @@ func TestEffectiveLibP2PBootstrapPeersPrefersLAN(t *testing.T) {
 	}
 }
 
-func TestEffectiveLibP2PBootstrapPeersWithKnownGoodPrefersKnownGoodBeforePublic(t *testing.T) {
+func TestEffectiveLibP2PBootstrapPeersWithKnownGoodPrefersExplicitPublicBeforeKnownGood(t *testing.T) {
 	t.Parallel()
 
 	got := EffectiveLibP2PBootstrapPeersWithKnownGood(
@@ -209,8 +175,11 @@ func TestEffectiveLibP2PBootstrapPeersWithKnownGoodPrefersKnownGoodBeforePublic(
 	if got[0] != "/ip4/192.168.102.75/tcp/50584/p2p/lan-peer" {
 		t.Fatalf("got[0] = %q, want LAN peer first", got[0])
 	}
-	if got[1] != "/ip4/192.168.102.80/tcp/50584/p2p/cached-peer" {
-		t.Fatalf("got[1] = %q, want known-good peer before public peers", got[1])
+	if got[1] != "/dnsaddr/bootstrap.libp2p.io/p2p/public-1" {
+		t.Fatalf("got[1] = %q, want explicit public peer before known-good cache", got[1])
+	}
+	if got[2] != "/dnsaddr/bootstrap.libp2p.io/p2p/cached-peer" {
+		t.Fatalf("got[2] = %q, want explicit public cached peer before known-good cache", got[2])
 	}
 }
 

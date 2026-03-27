@@ -38,7 +38,6 @@ func StartManagedSyncIfNeeded(parent context.Context, cfg apphost.Config, option
 		NetPath:          cfg.NetPath,
 		RulesPath:        cfg.RulesPath,
 		WriterPolicyPath: cfg.WriterPolicyPath,
-		Trackers:         cfg.TrackerPath,
 		StaleAfter:       cfg.SyncStaleAfter,
 		Logf:             cfg.Logf,
 	})

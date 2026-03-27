@@ -37,7 +37,6 @@ type Config struct {
 	RulesPath        string
 	WriterPolicyPath string
 	NetPath          string
-	TrackerPath      string
 	SyncMode         string
 	SyncBinaryPath   string
 	SyncStaleAfter   time.Duration
@@ -174,7 +173,6 @@ func New(ctx context.Context, cfg Config) (*Instance, error) {
 		RulesPath:        cfg.RulesPath,
 		WriterPolicyPath: cfg.WriterPolicyPath,
 		NetPath:          cfg.NetPath,
-		TrackerPath:      cfg.TrackerPath,
 		SyncMode:         cfg.SyncMode,
 		SyncBinaryPath:   cfg.SyncBinaryPath,
 		SyncStaleAfter:   cfg.SyncStaleAfter,
@@ -341,9 +339,6 @@ func applyAppBundleConfig(cfg Config, appCfg workspace.AppConfig) (Config, error
 	}
 	if strings.TrimSpace(cfg.NetPath) == "" {
 		cfg.NetPath = appCfg.NetPath
-	}
-	if strings.TrimSpace(cfg.TrackerPath) == "" {
-		cfg.TrackerPath = appCfg.TrackerPath
 	}
 	if strings.TrimSpace(cfg.SyncMode) == "" {
 		cfg.SyncMode = appCfg.SyncMode

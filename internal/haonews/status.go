@@ -17,7 +17,6 @@ type SyncRuntimeStatus struct {
 	Seed             bool                       `json:"seed"`
 	NetworkID        string                     `json:"network_id"`
 	LibP2P           SyncLibP2PStatus           `json:"libp2p"`
-	BitTorrentDHT    SyncBitTorrentStatus       `json:"bittorrent_dht"`
 	PubSub           SyncPubSubStatus           `json:"pubsub"`
 	SyncActivity     SyncActivityStatus         `json:"sync_activity"`
 	HistoryBootstrap SyncHistoryBootstrapStatus `json:"history_bootstrap"`
@@ -77,18 +76,6 @@ type SyncPeerRef struct {
 	Error     string `json:"error,omitempty"`
 }
 
-type SyncBitTorrentStatus struct {
-	Enabled                 bool     `json:"enabled"`
-	ConfiguredListen        string   `json:"configured_listen,omitempty"`
-	ListenAddrs             []string `json:"listen_addrs,omitempty"`
-	ConfiguredRouters       int      `json:"configured_routers"`
-	Servers                 int      `json:"servers"`
-	GoodNodes               int      `json:"good_nodes"`
-	Nodes                   int      `json:"nodes"`
-	OutstandingTransactions int      `json:"outstanding_transactions"`
-	LastError               string   `json:"last_error,omitempty"`
-}
-
 type SyncPubSubStatus struct {
 	Enabled             bool       `json:"enabled"`
 	JoinedTopics        []string   `json:"joined_topics,omitempty"`
@@ -114,7 +101,6 @@ type SyncActivityStatus struct {
 	HistoryQueueRefs   int        `json:"history_queue_refs,omitempty"`
 	Imported           int        `json:"imported"`
 	DirectImported     int        `json:"direct_imported"`
-	BitTorrentImported int        `json:"bittorrent_imported"`
 	Skipped            int        `json:"skipped"`
 	Failed             int        `json:"failed"`
 	LastRef            string     `json:"last_ref,omitempty"`

@@ -33,7 +33,7 @@ func TestEnsureHistoryManifestsCreatesStableBundle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("publish post: %v", err)
 	}
-	if err := ensureHistoryManifests(store, NetworkBootstrapConfig{NetworkID: latestOrgNetworkID}, nil); err != nil {
+	if err := ensureHistoryManifests(store, NetworkBootstrapConfig{NetworkID: latestOrgNetworkID}, nil, "12D3KooWManifestPeer"); err != nil {
 		t.Fatalf("ensure manifests: %v", err)
 	}
 	manifestDirs := collectManifestDirs(t, store)
@@ -60,10 +60,13 @@ func TestEnsureHistoryManifestsCreatesStableBundle(t *testing.T) {
 	if manifest.EntryCount != 1 || len(manifest.Entries) != 1 {
 		t.Fatalf("manifest entries = %d/%d, want 1", manifest.EntryCount, len(manifest.Entries))
 	}
+	if manifest.Entries[0].LibP2PPeerID != "12D3KooWManifestPeer" {
+		t.Fatalf("manifest peer id = %q", manifest.Entries[0].LibP2PPeerID)
+	}
 	if manifest.Page != 1 || manifest.PageSize != historyManifestPageSize || manifest.TotalPages != 1 || manifest.TotalEntries != 1 {
 		t.Fatalf("manifest paging = page=%d size=%d total_pages=%d total_entries=%d", manifest.Page, manifest.PageSize, manifest.TotalPages, manifest.TotalEntries)
 	}
-	if err := ensureHistoryManifests(store, NetworkBootstrapConfig{NetworkID: latestOrgNetworkID}, nil); err != nil {
+	if err := ensureHistoryManifests(store, NetworkBootstrapConfig{NetworkID: latestOrgNetworkID}, nil, "12D3KooWManifestPeer"); err != nil {
 		t.Fatalf("ensure manifests second pass: %v", err)
 	}
 	manifestDirs = collectManifestDirs(t, store)
@@ -165,7 +168,7 @@ func TestEnsureHistoryManifestsSplitsIntoPages(t *testing.T) {
 			t.Fatalf("publish post %d: %v", i, err)
 		}
 	}
-	if err := ensureHistoryManifests(store, NetworkBootstrapConfig{NetworkID: latestOrgNetworkID}, nil); err != nil {
+	if err := ensureHistoryManifests(store, NetworkBootstrapConfig{NetworkID: latestOrgNetworkID}, nil, "12D3KooWManifestPeer"); err != nil {
 		t.Fatalf("ensure manifests: %v", err)
 	}
 	manifestDirs := collectManifestDirs(t, store)

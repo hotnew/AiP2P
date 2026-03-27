@@ -86,9 +86,7 @@ func handleNetwork(app *newsplugin.App, w http.ResponseWriter, r *http.Request) 
 	requestHost := newsplugin.RequestBootstrapHost(r)
 	advertiseHost := newsplugin.PreferredAdvertiseHostForConfig(syncStatus, requestHost, netCfg)
 	dialAddrs := newsplugin.DialableLibP2PAddrsForConfig(syncStatus, advertiseHost, netCfg)
-	btNodes := newsplugin.DialableBitTorrentNodesForConfig(syncStatus, advertiseHost, netCfg)
-	anchors, hasLANBTMatch, lanBTOverall := app.LANBTStatus(r.Context(), netCfg)
-	lanPeerHealth, lanBTHealth, err := app.LANPeerHealth()
+	lanPeerHealth, _, err := app.LANPeerHealth()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -108,7 +106,7 @@ func handleNetwork(app *newsplugin.App, w http.ResponseWriter, r *http.Request) 
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	primaryExplainDetail := buildPrimaryAdvertiseExplainDetail(requestHost, advertiseHost, lanPeerHealth, lanBTHealth, advertiseHostHealth, syncStatus, netCfg)
+	primaryExplainDetail := buildPrimaryAdvertiseExplainDetail(requestHost, advertiseHost, lanPeerHealth, advertiseHostHealth, syncStatus, netCfg)
 	primaryExplain := buildPrimaryAdvertiseExplanation(primaryExplainDetail)
 	data := newsplugin.NetworkPageData{
 		Project:             app.ProjectName(),
@@ -117,7 +115,6 @@ func handleNetwork(app *newsplugin.App, w http.ResponseWriter, r *http.Request) 
 		NetworkMode:         netCfg.NetworkMode,
 		RequestHost:         advertiseHost,
 		PrimaryLibP2P:       firstString(dialAddrs),
-		PrimaryBTNode:       firstString(btNodes),
 		PrimaryHostExplain:  primaryExplain,
 		AdvertiseCandidates: advertiseCandidates,
 		PageNav:             opsPageNav(app, "/network"),
@@ -127,12 +124,8 @@ func handleNetwork(app *newsplugin.App, w http.ResponseWriter, r *http.Request) 
 		Supervisor:          supervisorStatus,
 		LANPeers:            append([]string(nil), netCfg.LANPeers...),
 		LANPeerHealth:       lanPeerHealth,
-		LANBTHealth:         lanBTHealth,
 		AdvertiseHostHealth: advertiseHostHealth,
 		KnownGoodLibP2P:     knownGoodPeers,
-		LANBTAnchors:        anchors,
-		LANBTHasMatch:       hasLANBTMatch,
-		LANBTOverall:        lanBTOverall,
 	}
 	if err := app.Templates().ExecuteTemplate(w, "network.html", data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -170,7 +163,7 @@ func buildPrimaryAdvertiseExplanation(detail *newsplugin.NetworkBootstrapExplain
 	return lines
 }
 
-func buildPrimaryAdvertiseExplainDetail(requestHost, primaryHost string, lanPeerHealth, lanBTHealth []newsplugin.LANPeerHealthStatus, advertiseHealth []newsplugin.AdvertiseHostHealthStatus, syncStatus newsplugin.SyncRuntimeStatus, netCfg newsplugin.NetworkBootstrapConfig) *newsplugin.NetworkBootstrapExplainDetail {
+func buildPrimaryAdvertiseExplainDetail(requestHost, primaryHost string, lanPeerHealth []newsplugin.LANPeerHealthStatus, advertiseHealth []newsplugin.AdvertiseHostHealthStatus, syncStatus newsplugin.SyncRuntimeStatus, netCfg newsplugin.NetworkBootstrapConfig) *newsplugin.NetworkBootstrapExplainDetail {
 	primaryHost = strings.TrimSpace(primaryHost)
 	if primaryHost == "" {
 		return nil
@@ -207,19 +200,6 @@ func buildPrimaryAdvertiseExplainDetail(requestHost, primaryHost string, lanPeer
 			LastKOAt:            item.LastFailureAt,
 		}
 		detail.Reasons = append(detail.Reasons, "LAN libp2p 锚点状态："+item.State+"。"+strings.TrimSpace(item.Reason))
-	}
-	if item, ok := findLANPeerHealth(lanBTHealth, primaryHost); ok {
-		detail.LANBT = &newsplugin.NetworkBootstrapAnchorExplainDetail{
-			Peer:                item.Peer,
-			ObservedPrimaryHost: item.ObservedPrimaryHost,
-			ObservedPrimaryFrom: item.ObservedPrimaryFrom,
-			State:               item.State,
-			Reason:              item.Reason,
-			LastError:           item.LastError,
-			LastOKAt:            item.LastSuccessAt,
-			LastKOAt:            item.LastFailureAt,
-		}
-		detail.Reasons = append(detail.Reasons, "LAN BT/DHT 锚点状态："+item.State+"。"+strings.TrimSpace(item.Reason))
 	}
 	return detail
 }
@@ -491,19 +471,18 @@ func handleAPINetworkBootstrap(app *newsplugin.App, w http.ResponseWriter, r *ht
 	}
 	_ = newsplugin.RecordAdvertiseHostResult(netCfg, advertiseHost, true)
 	advertiseHostHealth, _ := app.AdvertiseHostHealth()
-	lanPeerHealth, lanBTHealth, _ := app.LANPeerHealth()
-	explainDetail := buildPrimaryAdvertiseExplainDetail(host, advertiseHost, lanPeerHealth, lanBTHealth, advertiseHostHealth, syncStatus, netCfg)
+	lanPeerHealth, _, _ := app.LANPeerHealth()
+	explainDetail := buildPrimaryAdvertiseExplainDetail(host, advertiseHost, lanPeerHealth, advertiseHostHealth, syncStatus, netCfg)
 	explain := buildPrimaryAdvertiseExplanation(explainDetail)
 	newsplugin.WriteJSON(w, http.StatusOK, newsplugin.NetworkBootstrapResponse{
-		Project:         app.ProjectName(),
-		Version:         app.VersionString(),
-		NetworkID:       syncStatus.NetworkID,
-		PeerID:          syncStatus.LibP2P.PeerID,
-		ListenAddrs:     append([]string(nil), syncStatus.LibP2P.ListenAddrs...),
-		DialAddrs:       dialAddrs,
-		BitTorrentNodes: newsplugin.DialableBitTorrentNodesForConfig(syncStatus, advertiseHost, netCfg),
-		Explain:         explain,
-		ExplainDetail:   explainDetail,
+		Project:       app.ProjectName(),
+		Version:       app.VersionString(),
+		NetworkID:     syncStatus.NetworkID,
+		PeerID:        syncStatus.LibP2P.PeerID,
+		ListenAddrs:   append([]string(nil), syncStatus.LibP2P.ListenAddrs...),
+		DialAddrs:     dialAddrs,
+		Explain:       explain,
+		ExplainDetail: explainDetail,
 	})
 }
 

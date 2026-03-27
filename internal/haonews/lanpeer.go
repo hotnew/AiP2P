@@ -21,11 +21,10 @@ const (
 )
 
 type lanBootstrapResponse struct {
-	NetworkID       string   `json:"network_id"`
-	PeerID          string   `json:"peer_id"`
-	DialAddrs       []string `json:"dial_addrs"`
-	BitTorrentNodes []string `json:"bittorrent_nodes"`
-	ExplainDetail   struct {
+	NetworkID     string   `json:"network_id"`
+	PeerID        string   `json:"peer_id"`
+	DialAddrs     []string `json:"dial_addrs"`
+	ExplainDetail struct {
 		PrimaryHost string `json:"primary_host"`
 	} `json:"explain_detail"`
 }
@@ -165,47 +164,13 @@ func fetchLANBootstrapPeer(ctx context.Context, targets []string, configuredValu
 	return nil, "", errors.New(strings.Join(errs, "; "))
 }
 
-func resolveLANTorrentRouters(ctx context.Context, cfg NetworkBootstrapConfig) ([]string, error) {
-	out := make([]string, 0, len(cfg.LANTorrentPeers))
-	var errs []string
-	seen := make(map[string]struct{})
-	cache, err := loadLANPeerHealthCache(cfg)
-	if err != nil {
-		errs = append(errs, fmt.Sprintf("load lan bt health cache: %v", err))
-		cache = &lanPeerHealthCache{}
-	}
-	for _, value := range sortLANPeerCandidates(cfg.LANTorrentPeers, cache, "lan_bt_peer", time.Now().UTC()) {
-		nodes, observedHost, err := fetchLANTorrentRouters(ctx, cache.bootstrapTargets("lan_bt_peer", value), value, cfg.NetworkID)
-		if err != nil {
-			cache.recordFailure("lan_bt_peer", value, err)
-			errs = append(errs, err.Error())
-			continue
-		}
-		cache.recordSuccess("lan_bt_peer", value, observedHost)
-		for _, node := range nodes {
-			if _, ok := seen[node]; ok {
-				continue
-			}
-			seen[node] = struct{}{}
-			out = append(out, node)
-		}
-	}
-	if err := saveLANPeerHealthCache(cfg, cache); err != nil {
-		errs = append(errs, fmt.Sprintf("save lan bt health cache: %v", err))
-	}
-	if len(errs) > 0 {
-		return out, errors.New(strings.Join(errs, "; "))
-	}
-	return out, nil
-}
-
 func ReadLANPeerHealthStatus(cfg NetworkBootstrapConfig) ([]LANPeerHealthStatus, []LANPeerHealthStatus, error) {
 	cache, err := loadLANPeerHealthCache(cfg)
 	if err != nil {
 		return nil, nil, err
 	}
 	now := time.Now().UTC()
-	return buildLANPeerHealthStatus(cfg.LANPeers, cache, "lan_peer", now), buildLANPeerHealthStatus(cfg.LANTorrentPeers, cache, "lan_bt_peer", now), nil
+	return buildLANPeerHealthStatus(cfg.LANPeers, cache, "lan_peer", now), nil, nil
 }
 
 func lanPeerHealthCachePath(cfg NetworkBootstrapConfig) string {
@@ -421,32 +386,6 @@ func lanPeerHealthState(entry lanPeerHealthEntry, now time.Time) string {
 	}
 }
 
-func fetchLANTorrentRouters(ctx context.Context, targets []string, configuredValue, expectedNetworkID string) ([]string, string, error) {
-	if len(targets) == 0 {
-		targets = []string{configuredValue}
-	}
-	var errs []string
-	for _, target := range targets {
-		payload, err := fetchLANBootstrapPayload(ctx, target, configuredValue, expectedNetworkID, false)
-		if err != nil {
-			errs = append(errs, err.Error())
-			continue
-		}
-		out := make([]string, 0, len(payload.BitTorrentNodes))
-		for _, node := range payload.BitTorrentNodes {
-			if node = strings.TrimSpace(node); node != "" {
-				out = append(out, node)
-			}
-		}
-		if len(out) == 0 {
-			errs = append(errs, fmt.Sprintf("lan_bt_peer %q returned no bittorrent_nodes", configuredValue))
-			continue
-		}
-		return out, normalizeObservedPrimaryHost(payload.ExplainDetail.PrimaryHost), nil
-	}
-	return nil, "", errors.New(strings.Join(errs, "; "))
-}
-
 func fetchLANBootstrapPayload(ctx context.Context, target, configuredValue, expectedNetworkID string, requirePeerID bool) (lanBootstrapResponse, error) {
 	endpoint, err := lanBootstrapEndpoint(target)
 	if err != nil {
@@ -499,9 +438,6 @@ func (c *lanPeerHealthCache) bootstrapTargets(kind, value string) []string {
 	}
 	entry := c.entry(kind, value)
 	appendTarget(entry.ObservedPrimaryHost)
-	for _, siblingKind := range siblingLANPeerKinds(kind) {
-		appendTarget(c.entry(siblingKind, value).ObservedPrimaryHost)
-	}
 	out = append(out, value)
 	return out
 }
@@ -514,24 +450,11 @@ func (c *lanPeerHealthCache) propagateObservedPrimaryHost(kind, value, observedH
 	if observedHost == "" {
 		return
 	}
-	for _, siblingKind := range siblingLANPeerKinds(kind) {
-		key := lanPeerHealthKey(siblingKind, value)
-		entry := c.Entries[key]
-		entry.ObservedPrimaryHost = observedHost
-		entry.ObservedPrimaryFrom = strings.TrimSpace(kind)
-		c.Entries[key] = entry
-	}
-}
-
-func siblingLANPeerKinds(kind string) []string {
-	switch strings.TrimSpace(kind) {
-	case "lan_peer":
-		return []string{"lan_bt_peer"}
-	case "lan_bt_peer":
-		return []string{"lan_peer"}
-	default:
-		return nil
-	}
+	key := lanPeerHealthKey(kind, value)
+	entry := c.Entries[key]
+	entry.ObservedPrimaryHost = observedHost
+	entry.ObservedPrimaryFrom = strings.TrimSpace(kind)
+	c.Entries[key] = entry
 }
 
 func normalizeObservedPrimaryHost(value string) string {
@@ -543,34 +466,7 @@ func normalizeObservedPrimaryHost(value string) string {
 }
 
 func lanBootstrapEndpoint(value string) (string, error) {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return "", fmt.Errorf("empty lan_peer")
-	}
-	if !strings.Contains(value, "://") {
-		value = "http://" + value
-	}
-	u, err := url.Parse(value)
-	if err != nil {
-		return "", err
-	}
-	host := strings.TrimSpace(u.Host)
-	if host == "" {
-		host = strings.TrimSpace(u.Path)
-		u.Path = ""
-	}
-	if host == "" {
-		return "", fmt.Errorf("missing host")
-	}
-	if _, _, err := net.SplitHostPort(host); err != nil {
-		host = net.JoinHostPort(strings.Trim(host, "[]"), "51818")
-	}
-	u.Scheme = "http"
-	u.Host = host
-	u.Path = "/api/network/bootstrap"
-	u.RawQuery = ""
-	u.Fragment = ""
-	return u.String(), nil
+	return peerAPIEndpoint(value, "/api/network/bootstrap", "")
 }
 
 func fetchLANHistoryManifest(ctx context.Context, value, cursor, expectedNetworkID string) (lanHistoryManifestResponse, error) {
@@ -603,11 +499,16 @@ func fetchLANHistoryManifest(ctx context.Context, value, cursor, expectedNetwork
 }
 
 func lanHistoryManifestEndpoint(value, cursor string) (string, error) {
+	return peerAPIEndpoint(value, "/api/history/list", cursor)
+}
+
+func peerAPIEndpoint(value, path, cursor string) (string, error) {
 	value = strings.TrimSpace(value)
 	if value == "" {
-		return "", fmt.Errorf("empty lan_peer")
+		return "", fmt.Errorf("empty peer value")
 	}
-	if !strings.Contains(value, "://") {
+	explicitScheme := strings.Contains(value, "://")
+	if !explicitScheme {
 		value = "http://" + value
 	}
 	u, err := url.Parse(value)
@@ -622,12 +523,25 @@ func lanHistoryManifestEndpoint(value, cursor string) (string, error) {
 	if host == "" {
 		return "", fmt.Errorf("missing host")
 	}
-	if _, _, err := net.SplitHostPort(host); err != nil {
-		host = net.JoinHostPort(strings.Trim(host, "[]"), "51818")
+	if !explicitScheme {
+		if hostOnly, _, err := net.SplitHostPort(host); err == nil {
+			host = hostOnly
+		}
+		hostOnly := strings.Trim(host, "[]")
+		if peerAPIPrefersHTTPS(hostOnly) {
+			u.Scheme = "https"
+			u.Host = hostOnly
+		} else {
+			u.Scheme = "http"
+			if _, _, err := net.SplitHostPort(host); err != nil {
+				host = net.JoinHostPort(hostOnly, "51818")
+			}
+			u.Host = host
+		}
+	} else {
+		u.Host = host
 	}
-	u.Scheme = "http"
-	u.Host = host
-	u.Path = "/api/history/list"
+	u.Path = path
 	q := u.Query()
 	if strings.TrimSpace(cursor) != "" {
 		q.Set("cursor", strings.TrimSpace(cursor))
@@ -635,4 +549,18 @@ func lanHistoryManifestEndpoint(value, cursor string) (string, error) {
 	u.RawQuery = q.Encode()
 	u.Fragment = ""
 	return u.String(), nil
+}
+
+func peerAPIPrefersHTTPS(host string) bool {
+	host = strings.Trim(strings.TrimSpace(host), "[]")
+	if host == "" {
+		return false
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return false
+	}
+	if strings.EqualFold(host, "localhost") {
+		return false
+	}
+	return true
 }

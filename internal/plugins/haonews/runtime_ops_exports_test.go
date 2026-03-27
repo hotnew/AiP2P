@@ -28,9 +28,6 @@ func TestPreferredAdvertiseHostFallsBackFromLoopbackToLANIP(t *testing.T) {
 				"/ip4/0.0.0.0/tcp/50584",
 			},
 		},
-		BitTorrentDHT: SyncBitTorrentStatus{
-			ConfiguredListen: "0.0.0.0:50585",
-		},
 	}
 
 	got := PreferredAdvertiseHost(status, "127.0.0.1")
@@ -63,20 +60,38 @@ func TestPreferredAdvertiseHostPublicModePrefersConfiguredPublicPeerFromLoopback
 	}
 }
 
-func TestDialableBitTorrentNodesUsesPreferredAdvertiseHost(t *testing.T) {
+func TestPreferredAdvertiseHostSharedModePrefersRoutedLANHost(t *testing.T) {
 	t.Parallel()
 
-	status := SyncRuntimeStatus{
-		BitTorrentDHT: SyncBitTorrentStatus{
-			Enabled:          false,
-			ConfiguredListen: "0.0.0.0:50585",
-		},
+	prevGateway := defaultGatewayTarget
+	prevRoute := routedSourceIPForTarget
+	defaultGatewayTarget = func() string {
+		return "192.168.102.1"
 	}
+	routedSourceIPForTarget = func(target string) string {
+		switch target {
+		case "192.168.102.1":
+			return "192.168.102.75"
+		case "192.168.102.74", "192.168.102.76":
+			return "192.168.102.75"
+		case "192.168.100.1":
+			return "192.168.100.75"
+		default:
+			return ""
+		}
+	}
+	t.Cleanup(func() {
+		defaultGatewayTarget = prevGateway
+		routedSourceIPForTarget = prevRoute
+	})
 
-	host := PreferredAdvertiseHost(status, "127.0.0.1")
-	got := dialableBitTorrentNodes(status, host, NetworkBootstrapConfig{})
-	if len(got) != 0 {
-		t.Fatalf("len(got) = %d, want 0 when bittorrent transport is disabled", len(got))
+	cfg := NetworkBootstrapConfig{
+		NetworkMode: "shared",
+		LANPeers:    []string{"192.168.102.74", "192.168.102.76", "192.168.100.1"},
+	}
+	got := PreferredAdvertiseHostForConfig(SyncRuntimeStatus{}, "127.0.0.1", cfg)
+	if got != "192.168.102.75" {
+		t.Fatalf("preferredAdvertiseHost() = %q, want routed LAN host 192.168.102.75", got)
 	}
 }
 
@@ -181,28 +196,6 @@ func TestDialableLibP2PAddrsForConfigPublicDomainRewritesPrivateAddrs(t *testing
 		}
 		if !strings.Contains(value, "/dns/ai.jie.news/") {
 			t.Fatalf("dial addr %q does not use public dns host", value)
-		}
-	}
-}
-
-func TestDialableBitTorrentNodesForConfigPublicDomainRewritesPrivateListen(t *testing.T) {
-	t.Parallel()
-
-	status := SyncRuntimeStatus{
-		BitTorrentDHT: SyncBitTorrentStatus{
-			Enabled:          true,
-			ConfiguredListen: "0.0.0.0:50585",
-			ListenAddrs:      []string{"10.219.147.1:50585"},
-		},
-	}
-	cfg := NetworkBootstrapConfig{NetworkMode: "public"}
-	got := DialableBitTorrentNodesForConfig(status, "ai.jie.news", cfg)
-	if len(got) == 0 {
-		t.Fatal("expected rewritten bittorrent nodes")
-	}
-	for _, value := range got {
-		if value != "ai.jie.news:50585" {
-			t.Fatalf("got node %q, want ai.jie.news:50585", value)
 		}
 	}
 }

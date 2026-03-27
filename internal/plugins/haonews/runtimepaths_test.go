@@ -14,14 +14,10 @@ func testDefaultLatestNetINF() (string, error) {
 network_id=%s
 libp2p_listen=/ip4/0.0.0.0/tcp/41001
 libp2p_listen=/ip4/0.0.0.0/udp/41001/quic-v1
-bittorrent_listen=0.0.0.0:41002
 lan_peer=%s
 lan_peer=192.168.102.76
 lan_peer=192.168.102.75
-lan_bt_peer=%s
-lan_bt_peer=192.168.102.76
-lan_bt_peer=192.168.102.75
-`, latestOrgNetworkID, defaultLANPeer, defaultLANPeer), nil
+`, latestOrgNetworkID, defaultLANPeer), nil
 }
 
 func TestDefaultRuntimePathsFromHome(t *testing.T) {
@@ -58,9 +54,6 @@ func TestDefaultRuntimePathsFromHome(t *testing.T) {
 	}
 	if paths.NetPath != "/tmp/example-home/.hao-news/hao_news_net.inf" {
 		t.Fatalf("net = %q", paths.NetPath)
-	}
-	if paths.TrackerPath != "/tmp/example-home/.hao-news/Trackerlist.inf" {
-		t.Fatalf("tracker = %q", paths.TrackerPath)
 	}
 }
 
@@ -131,33 +124,17 @@ func TestEnsureRuntimeLayoutCreatesDefaultConfigFiles(t *testing.T) {
 	if !strings.Contains(netText, "libp2p_listen=/ip4/0.0.0.0/tcp/") {
 		t.Fatalf("missing libp2p listen in net config: %q", netText)
 	}
-	if !strings.Contains(netText, "bittorrent_listen=0.0.0.0:") {
-		t.Fatalf("missing bittorrent listen in net config: %q", netText)
-	}
 	if !strings.Contains(netText, "\nlan_peer=192.168.102.74") {
 		t.Fatalf("missing default lan_peer in net config: %q", netText)
 	}
 	if !strings.Contains(netText, "\nlan_peer=192.168.102.76") || !strings.Contains(netText, "\nlan_peer=192.168.102.75") {
 		t.Fatalf("missing extra lan_peer entries in net config: %q", netText)
 	}
-	if !strings.Contains(netText, "\nlan_bt_peer=192.168.102.74") {
-		t.Fatalf("missing default lan_bt_peer in net config: %q", netText)
-	}
-	if !strings.Contains(netText, "\nlan_bt_peer=192.168.102.76") || !strings.Contains(netText, "\nlan_bt_peer=192.168.102.75") {
-		t.Fatalf("missing extra lan_bt_peer entries in net config: %q", netText)
-	}
 	if !strings.Contains(netText, "network_id="+latestOrgNetworkID) {
 		t.Fatalf("missing hao.news network id in net config: %q", netText)
 	}
 	if !strings.Contains(netText, "network_mode=lan\n") {
 		t.Fatalf("missing network_mode in net config: %q", netText)
-	}
-	trackerData, err := os.ReadFile(filepath.Join(root, "Trackerlist.inf"))
-	if err != nil {
-		t.Fatalf("ReadFile(Trackerlist.inf) error = %v", err)
-	}
-	if !strings.Contains(string(trackerData), "udp://tracker.opentrackr.org:1337/announce") {
-		t.Fatalf("missing default trackers in Trackerlist.inf: %q", string(trackerData))
 	}
 }
 
@@ -187,7 +164,7 @@ func TestEnsureRuntimeLayoutPublicModeDoesNotAppendLANPeers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadFile() error = %v", err)
 	}
-	if strings.Contains(string(data), "\nlan_peer=") || strings.Contains(string(data), "\nlan_bt_peer=") {
+	if strings.Contains(string(data), "\nlan_peer=") {
 		t.Fatalf("public mode should not append LAN peers: %q", string(data))
 	}
 }

@@ -16,43 +16,6 @@ type libp2pListenSpec struct {
 	parts     []string
 }
 
-func resolveBitTorrentListenAddr(addr string) (string, error) {
-	addr = normalizeBitTorrentListen(addr)
-	if strings.TrimSpace(addr) == "" {
-		return "", nil
-	}
-	host, portText, err := net.SplitHostPort(addr)
-	if err != nil {
-		return addr, nil
-	}
-	port, err := strconv.Atoi(strings.TrimSpace(portText))
-	if err != nil || port <= 0 {
-		return addr, nil
-	}
-	for candidate := port; candidate <= 65535; candidate++ {
-		bind := net.JoinHostPort(host, strconv.Itoa(candidate))
-		tcpListener, err := net.Listen("tcp", bind)
-		if err != nil {
-			if isAddrInUse(err) {
-				continue
-			}
-			return "", err
-		}
-		udpConn, err := net.ListenPacket("udp", bind)
-		if err != nil {
-			_ = tcpListener.Close()
-			if isAddrInUse(err) {
-				continue
-			}
-			return "", err
-		}
-		_ = udpConn.Close()
-		_ = tcpListener.Close()
-		return normalizeBitTorrentListen(bind), nil
-	}
-	return "", fmt.Errorf("no available bittorrent listen port found starting from %s", addr)
-}
-
 func resolveLibP2PListenAddrs(addrs []string) ([]string, error) {
 	out := append([]string(nil), addrs...)
 	if len(out) == 0 {

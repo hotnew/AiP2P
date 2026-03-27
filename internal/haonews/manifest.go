@@ -50,7 +50,7 @@ type historyManifestState struct {
 	TorrentFile string `json:"torrent_file"`
 }
 
-func ensureHistoryManifests(store *Store, netCfg NetworkBootstrapConfig, listenAddrs []net.Addr) error {
+func ensureHistoryManifests(store *Store, netCfg NetworkBootstrapConfig, listenAddrs []net.Addr, localPeerID string) error {
 	announcements, err := localAnnouncements(store)
 	if err != nil {
 		return err
@@ -73,6 +73,9 @@ func ensureHistoryManifests(store *Store, netCfg NetworkBootstrapConfig, listenA
 		}
 		if announcement.NetworkID == "" {
 			announcement.NetworkID = netCfg.NetworkID
+		}
+		if strings.TrimSpace(localPeerID) != "" {
+			announcement.LibP2PPeerID = strings.TrimSpace(localPeerID)
 		}
 		announcement.Magnet = withPeerHints(announcement.Magnet, listenAddrs, netCfg.LANPeers)
 		grouped[project] = append(grouped[project], announcement)

@@ -17,7 +17,6 @@ type SyncRuntimeStatus struct {
 	Seed             bool                       `json:"seed"`
 	NetworkID        string                     `json:"network_id"`
 	LibP2P           SyncLibP2PStatus           `json:"libp2p"`
-	BitTorrentDHT    SyncBitTorrentStatus       `json:"bittorrent_dht"`
 	PubSub           SyncPubSubStatus           `json:"pubsub"`
 	SyncActivity     SyncActivityStatus         `json:"sync_activity"`
 	HistoryBootstrap SyncHistoryBootstrapStatus `json:"history_bootstrap"`
@@ -73,18 +72,6 @@ type SyncPeerRef struct {
 	Reachable bool   `json:"reachable"`
 	RTT       string `json:"rtt"`
 	Error     string `json:"error"`
-}
-
-type SyncBitTorrentStatus struct {
-	Enabled                 bool     `json:"enabled"`
-	ConfiguredListen        string   `json:"configured_listen"`
-	ListenAddrs             []string `json:"listen_addrs"`
-	ConfiguredRouters       int      `json:"configured_routers"`
-	Servers                 int      `json:"servers"`
-	GoodNodes               int      `json:"good_nodes"`
-	Nodes                   int      `json:"nodes"`
-	OutstandingTransactions int      `json:"outstanding_transactions"`
-	LastError               string   `json:"last_error"`
 }
 
 type SyncPubSubStatus struct {

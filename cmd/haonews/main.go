@@ -1026,17 +1026,15 @@ func runSync(args []string) error {
 	storeRoot := fs.String("store", ".haonews", "store root")
 	queuePath := fs.String("queue", "", "line-based magnet/infohash queue file")
 	netPath := fs.String("net", "./haonews_net.inf", "network bootstrap config")
-	trackersPath := fs.String("trackers", "", "tracker list file; defaults to Trackerlist.inf next to the net config")
 	subscriptionsPath := fs.String("subscriptions", "", "subscription rules file for pubsub topic joins")
 	writerPolicyPath := fs.String("writer-policy", "", "writer policy file reserved for sync validation and filtering")
 	creditIdentityFile := fs.String("credit-identity-file", "", "path to credit identity JSON file for auto proof generation")
-	listenAddr := fs.String("listen", "", "bittorrent listen address; defaults to hao_news_net.inf when omitted")
 	magnets := fs.String("magnet", "", "comma-separated magnets or infohashes to sync immediately")
 	poll := fs.Duration("poll", 30*time.Second, "queue polling interval")
 	timeout := fs.Duration("timeout", 20*time.Second, "per-ref sync timeout")
 	once := fs.Bool("once", false, "run one sync pass and exit")
 	seed := fs.Bool("seed", true, "seed after download while daemon is running")
-	directTransfer := fs.Bool("direct-transfer", true, "prefer libp2p direct bundle transfer before bittorrent fallback")
+	directTransfer := fs.Bool("direct-transfer", true, "prefer libp2p direct bundle transfer before HTTP fallback")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -1049,10 +1047,8 @@ func runSync(args []string) error {
 		StoreRoot:          *storeRoot,
 		QueuePath:          *queuePath,
 		NetPath:            *netPath,
-		TrackerListPath:    *trackersPath,
 		SubscriptionsPath:  *subscriptionsPath,
 		CreditIdentityFile: *creditIdentityFile,
-		ListenAddr:         *listenAddr,
 		Refs:               splitCSV(*magnets),
 		PollInterval:       *poll,
 		Timeout:            *timeout,
@@ -1082,7 +1078,6 @@ func runServe(args []string) error {
 	rulesPath := fs.String("subscriptions", "", "subscription rules path override")
 	writerPolicy := fs.String("writer-policy", "", "writer policy path override")
 	netPath := fs.String("net", "", "network bootstrap config override")
-	trackersPath := fs.String("trackers", "", "tracker list override")
 	syncMode := fs.String("sync-mode", "", "sync mode override")
 	syncBinary := fs.String("sync-binary", "", "managed sync binary override")
 	syncStaleAfter := fs.Duration("sync-stale-after", 2*time.Minute, "managed sync stale restart threshold")
@@ -1111,7 +1106,6 @@ func runServe(args []string) error {
 		RulesPath:        *rulesPath,
 		WriterPolicyPath: *writerPolicy,
 		NetPath:          *netPath,
-		TrackerPath:      *trackersPath,
 		SyncMode:         *syncMode,
 		SyncBinaryPath:   *syncBinary,
 		SyncStaleAfter:   *syncStaleAfter,

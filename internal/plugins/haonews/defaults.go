@@ -34,9 +34,6 @@ func ApplyDefaultConfig(cfg apphost.Config) apphost.Config {
 	if cfg.NetPath == "" {
 		cfg.NetPath = runtime.NetPath
 	}
-	if cfg.TrackerPath == "" {
-		cfg.TrackerPath = runtime.TrackerPath
-	}
 	if cfg.SyncBinaryPath == "" {
 		cfg.SyncBinaryPath = runtime.SyncBinPath
 	}

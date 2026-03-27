@@ -18,13 +18,10 @@ type NetworkBootstrapConfig struct {
 	Exists           bool
 	NetworkMode      string
 	NetworkID        string
-	BitTorrentListen string
 	LibP2PListen     []string
 	LANPeers         []string
-	LANTorrentPeers  []string
 	PublicPeers      []string
 	RelayPeers       []string
-	DHTRouters       []string
 	LibP2PBootstrap  []string
 	LibP2PRendezvous []string
 }
@@ -45,10 +42,8 @@ func LoadNetworkBootstrapConfig(path string) (NetworkBootstrapConfig, error) {
 	cfg.Exists = true
 	seenListen := make(map[string]struct{})
 	seenLAN := make(map[string]struct{})
-	seenLANTorrent := make(map[string]struct{})
 	seenPublic := make(map[string]struct{})
 	seenRelay := make(map[string]struct{})
-	seenDHT := make(map[string]struct{})
 	seenLibP2P := make(map[string]struct{})
 	seenRendezvous := make(map[string]struct{})
 	for _, rawLine := range strings.Split(string(data), "\n") {
@@ -74,10 +69,6 @@ func LoadNetworkBootstrapConfig(path string) (NetworkBootstrapConfig, error) {
 			if cfg.NetworkID == "" {
 				cfg.NetworkID = normalizeNetworkID(value)
 			}
-		case "bittorrent_listen", "bt_listen":
-			if cfg.BitTorrentListen == "" {
-				cfg.BitTorrentListen = value
-			}
 		case "libp2p_listen":
 			if _, ok := seenListen[value]; ok {
 				continue
@@ -90,12 +81,6 @@ func LoadNetworkBootstrapConfig(path string) (NetworkBootstrapConfig, error) {
 			}
 			seenLAN[value] = struct{}{}
 			cfg.LANPeers = append(cfg.LANPeers, value)
-		case "lan_bt_peer", "lan_torrent_peer", "lan_dht_peer":
-			if _, ok := seenLANTorrent[value]; ok {
-				continue
-			}
-			seenLANTorrent[value] = struct{}{}
-			cfg.LANTorrentPeers = append(cfg.LANTorrentPeers, value)
 		case "public_peer", "public_http_peer", "public_sync_peer":
 			if _, ok := seenPublic[value]; ok {
 				continue
@@ -108,12 +93,6 @@ func LoadNetworkBootstrapConfig(path string) (NetworkBootstrapConfig, error) {
 			}
 			seenRelay[value] = struct{}{}
 			cfg.RelayPeers = append(cfg.RelayPeers, value)
-		case "dht_router":
-			if _, ok := seenDHT[value]; ok {
-				continue
-			}
-			seenDHT[value] = struct{}{}
-			cfg.DHTRouters = append(cfg.DHTRouters, value)
 		case "libp2p_bootstrap":
 			if _, ok := seenLibP2P[value]; ok {
 				continue

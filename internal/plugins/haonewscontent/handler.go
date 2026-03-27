@@ -39,9 +39,6 @@ func newHandler(app *newsplugin.App, staticFS fs.FS) http.Handler {
 	mux.HandleFunc("/api/posts/", func(w http.ResponseWriter, r *http.Request) {
 		handleAPIPost(app, w, r)
 	})
-	mux.HandleFunc("/api/torrents/", func(w http.ResponseWriter, r *http.Request) {
-		handleAPITorrent(app, w, r)
-	})
 	mux.HandleFunc("/api/bundles/", func(w http.ResponseWriter, r *http.Request) {
 		handleAPIBundle(app, w, r)
 	})
@@ -351,27 +348,6 @@ func handleAPIPost(app *newsplugin.App, w http.ResponseWriter, r *http.Request) 
 		"reactions": newsplugin.APIReactions(index.ReactionsByPost[strings.ToLower(infoHash)]),
 		"related":   newsplugin.APIPosts(index.RelatedPosts(infoHash, 4)),
 	})
-}
-
-func handleAPITorrent(app *newsplugin.App, w http.ResponseWriter, r *http.Request) {
-	infoHash := newsplugin.PathValue("/api/torrents/", r.URL.Path)
-	infoHash = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(infoHash)), ".torrent")
-	if infoHash == "" {
-		http.NotFound(w, r)
-		return
-	}
-	store := &haonews.Store{TorrentDir: filepath.Join(app.StoreRoot(), "torrents")}
-	path, err := store.ExistingTorrentPath(infoHash)
-	if err != nil {
-		if os.IsNotExist(err) {
-			http.NotFound(w, r)
-			return
-		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/x-bittorrent")
-	http.ServeFile(w, r, path)
 }
 
 func handleAPIBundle(app *newsplugin.App, w http.ResponseWriter, r *http.Request) {

@@ -7,34 +7,6 @@ import (
 	"testing"
 )
 
-func TestResolveBitTorrentListenAddrIncrementsWhenOccupied(t *testing.T) {
-	t.Parallel()
-
-	tcpListener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("Listen() error = %v", err)
-	}
-	defer tcpListener.Close()
-
-	host, portText, err := net.SplitHostPort(tcpListener.Addr().String())
-	if err != nil {
-		t.Fatalf("SplitHostPort() error = %v", err)
-	}
-	udpConn, err := net.ListenPacket("udp", net.JoinHostPort(host, portText))
-	if err != nil {
-		t.Fatalf("ListenPacket() error = %v", err)
-	}
-	defer udpConn.Close()
-
-	resolved, err := resolveBitTorrentListenAddr(net.JoinHostPort(host, portText))
-	if err != nil {
-		t.Fatalf("resolveBitTorrentListenAddr() error = %v", err)
-	}
-	if resolved == net.JoinHostPort(host, portText) {
-		t.Fatalf("resolveBitTorrentListenAddr() = %q, want incremented port", resolved)
-	}
-}
-
 func TestResolveLibP2PListenAddrsIncrementsSharedPort(t *testing.T) {
 	t.Parallel()
 

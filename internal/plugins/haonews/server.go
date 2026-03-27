@@ -1,7 +1,6 @@
 package newsplugin
 
 import (
-	"context"
 	"embed"
 	"html/template"
 	"io/fs"
@@ -34,7 +33,6 @@ type App struct {
 	loadNet    func(path string) (NetworkBootstrapConfig, error)
 	loadSync   func(storeRoot string) (SyncRuntimeStatus, error)
 	loadSuper  func(path string) (SyncSupervisorState, error)
-	fetchLANBT func(ctx context.Context, value, expectedNetworkID string) (NetworkBootstrapResponse, error)
 	options    AppOptions
 }
 
@@ -207,7 +205,6 @@ type NetworkPageData struct {
 	NetworkMode         string
 	RequestHost         string
 	PrimaryLibP2P       string
-	PrimaryBTNode       string
 	PrimaryHostExplain  []string
 	AdvertiseCandidates []AdvertiseHostCandidateStatus
 	PageNav             []NavItem
@@ -217,19 +214,8 @@ type NetworkPageData struct {
 	Supervisor          SyncSupervisorState
 	LANPeers            []string
 	LANPeerHealth       []LANPeerHealthStatus
-	LANBTHealth         []LANPeerHealthStatus
 	AdvertiseHostHealth []AdvertiseHostHealthStatus
 	KnownGoodLibP2P     []KnownGoodLibP2PPeerStatus
-	LANBTAnchors        []LANBTAnchorStatus
-	LANBTOverall        string
-	LANBTHasMatch       bool
-}
-
-type LANBTAnchorStatus struct {
-	Peer        string
-	Nodes       []string
-	MatchedNode string
-	Error       string
 }
 
 type LANPeerHealthStatus struct {
@@ -276,15 +262,14 @@ type AdvertiseHostCandidateStatus struct {
 }
 
 type NetworkBootstrapResponse struct {
-	Project         string                         `json:"project"`
-	Version         string                         `json:"version"`
-	NetworkID       string                         `json:"network_id"`
-	PeerID          string                         `json:"peer_id"`
-	ListenAddrs     []string                       `json:"listen_addrs"`
-	DialAddrs       []string                       `json:"dial_addrs"`
-	BitTorrentNodes []string                       `json:"bittorrent_nodes,omitempty"`
-	Explain         []string                       `json:"explain,omitempty"`
-	ExplainDetail   *NetworkBootstrapExplainDetail `json:"explain_detail,omitempty"`
+	Project       string                         `json:"project"`
+	Version       string                         `json:"version"`
+	NetworkID     string                         `json:"network_id"`
+	PeerID        string                         `json:"peer_id"`
+	ListenAddrs   []string                       `json:"listen_addrs"`
+	DialAddrs     []string                       `json:"dial_addrs"`
+	Explain       []string                       `json:"explain,omitempty"`
+	ExplainDetail *NetworkBootstrapExplainDetail `json:"explain_detail,omitempty"`
 }
 
 type NetworkBootstrapExplainDetail struct {
@@ -305,7 +290,6 @@ type NetworkBootstrapExplainDetail struct {
 	LastSuccessAt          *time.Time                           `json:"last_success_at,omitempty"`
 	LastFailureAt          *time.Time                           `json:"last_failure_at,omitempty"`
 	LANLibP2P              *NetworkBootstrapAnchorExplainDetail `json:"lan_libp2p,omitempty"`
-	LANBT                  *NetworkBootstrapAnchorExplainDetail `json:"lan_bt,omitempty"`
 	Reasons                []string                             `json:"reasons,omitempty"`
 }
 
@@ -394,7 +378,6 @@ func newApp(storeRoot, project, version, archiveRoot, rulesPath, writerPath, net
 		loadNet:    LoadNetworkBootstrapConfig,
 		loadSync:   loadSyncRuntimeStatus,
 		loadSuper:  loadSyncSupervisorState,
-		fetchLANBT: fetchNetworkBootstrapResponse,
 		options:    options,
 	}, nil
 }

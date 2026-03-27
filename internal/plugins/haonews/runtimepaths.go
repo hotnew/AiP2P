@@ -21,101 +21,10 @@ const defaultWriterPolicyJSON = "{\n  \"sync_mode\": \"all\",\n  \"trust_mode\":
 const legacyWriterPolicyJSONMixedAllowUnsigned = "{\n  \"sync_mode\": \"mixed\",\n  \"allow_unsigned\": true,\n  \"default_capability\": \"read_write\",\n  \"trusted_authorities\": {},\n  \"shared_registries\": [],\n  \"relay_default_trust\": \"neutral\",\n  \"relay_peer_trust\": {},\n  \"relay_host_trust\": {},\n  \"agent_capabilities\": {},\n  \"public_key_capabilities\": {},\n  \"allowed_agent_ids\": [],\n  \"allowed_public_keys\": [],\n  \"blocked_agent_ids\": [],\n  \"blocked_public_keys\": []\n}\n"
 const legacyWriterPolicyJSONAllAllowUnsigned = "{\n  \"sync_mode\": \"all\",\n  \"allow_unsigned\": true,\n  \"default_capability\": \"read_write\",\n  \"trusted_authorities\": {},\n  \"shared_registries\": [],\n  \"relay_default_trust\": \"neutral\",\n  \"relay_peer_trust\": {},\n  \"relay_host_trust\": {},\n  \"agent_capabilities\": {},\n  \"public_key_capabilities\": {},\n  \"allowed_agent_ids\": [],\n  \"allowed_public_keys\": [],\n  \"blocked_agent_ids\": [],\n  \"blocked_public_keys\": []\n}\n"
 
-const defaultTrackerListINF = `# Trackerlist.inf
-# One tracker URI per line. Lines starting with #, ;, or // are ignored.
-#
-# Public BitTorrent helper write-back section:
-# After a public tracker/helper is deployed, add the final tracker URLs here.
-# Example:
-# udp://free001.haonews.org:6969/announce
-# https://free001.haonews.org/announce
-http://1337.abcvg.info:80/announce
-http://bt.okmp3.ru:2710/announce
-http://ipv4.rer.lol:2710/announce
-http://ipv6.rer.lol:6969/announce
-http://lucke.fenesisu.moe:6969/announce
-http://nyaa.tracker.wf:7777/announce
-http://torrentsmd.com:8080/announce
-http://tr.cili001.com:8070/announce
-http://tracker.dhitechnical.com:6969/announce
-http://tracker.mywaifu.best:6969/announce
-http://tracker.renfei.net:8080/announce
-http://tracker.skyts.net:6969/announce
-http://tracker.waaa.moe:6969/announce
-http://tracker.xn--djrq4gl4hvoi.top:80/announce
-http://www.all4nothin.net:80/announce.php
-http://www.wareztorrent.com:80/announce
-https://1337.abcvg.info:443/announce
-https://shahidrazi.online:443/announce
-https://t.213891.xyz:443/announce
-https://torrent.tracker.durukanbal.com:443/announce
-https://tr.abiir.top:443/announce
-https://tr.abir.ga:443/announce
-https://tr.nyacat.pw:443/announce
-https://tracker.ghostchu-services.top:443/announce
-https://tracker.iochimari.moe:443/announce
-https://tracker.kuroy.me:443/announce
-https://tracker.manager.v6.navy:443/announce
-https://tracker.moeblog.cn:443/announce
-https://tracker.novy.vip:443/announce
-https://tracker.qingwapt.org:443/announce
-https://tracker.zhuqiy.com:443/announce
-https://tracker1.520.jp:443/announce
-udp://bittorrent-tracker.e-n-c-r-y-p-t.net:1337/announce
-udp://bt.rer.lol:6969/announce
-udp://d40969.acod.regrucolo.ru:6969/announce
-udp://evan.im:6969/announce
-udp://extracker.dahrkael.net:6969/announce
-udp://martin-gebhardt.eu:25/announce
-udp://ns575949.ip-51-222-82.net:6969/announce
-udp://open.demonii.com:1337/announce
-udp://open.dstud.io:6969/announce
-udp://open.stealth.si:80/announce
-udp://opentracker.io:6969/announce
-udp://p4p.arenabg.com:1337/announce
-udp://retracker.lanta.me:2710/announce
-udp://t.overflow.biz:6969/announce
-udp://torrentvpn.club:6990/announce
-udp://tracker-udp.gbitt.info:80/announce
-udp://tracker.1h.is:1337/announce
-udp://tracker.alaskantf.com:6969/announce
-udp://tracker.bittor.pw:1337/announce
-udp://tracker.bluefrog.pw:2710/announce
-udp://tracker.corpscorp.online:80/announce
-udp://tracker.dler.com:6969/announce
-udp://tracker.dler.org:6969/announce
-udp://tracker.flatuslifir.is:6969/announce
-udp://tracker.fnix.net:6969/announce
-udp://tracker.gmi.gd:6969/announce
-udp://tracker.ixuexi.click:6969/announce
-udp://tracker.opentorrent.top:6969/announce
-udp://tracker.opentrackr.org:1337/announce
-udp://tracker.playground.ru:6969/announce
-udp://tracker.qu.ax:6969/announce
-udp://tracker.riverarmy.xyz:6969/announce
-udp://tracker.skyts.net:6969/announce
-udp://tracker.srv00.com:6969/announce
-udp://tracker.t-1.org:6969/announce
-udp://tracker.theoks.net:6969/announce
-udp://tracker.therarbg.to:6969/announce
-udp://tracker.torrent.eu.org:451/announce
-udp://tracker.torrust-demo.com:6969/announce
-udp://tracker.tryhackx.org:6969/announce
-udp://tracker.wepzone.net:6969/announce
-udp://uabits.today:6990/announce
-udp://udp.tracker.projectk.org:23333/announce
-udp://wepzone.net:6969/announce
-wss://tracker.openwebtorrent.com:443/announce
-`
-
 var buildDefaultLatestNetINF = defaultLatestNetINF
 
 func defaultLatestNetINF() (string, error) {
 	libp2pPort, err := pickFreeTCPAndUDPPort()
-	if err != nil {
-		return "", err
-	}
-	bitTorrentPort, err := pickFreeTCPPort()
 	if err != nil {
 		return "", err
 	}
@@ -126,33 +35,23 @@ func defaultLatestNetINF() (string, error) {
 #   network_mode=lan|public|shared
 #   network_id=<64 hex chars>
 #   libp2p_listen=/ip4/.../tcp/<port>
-#   bittorrent_listen=0.0.0.0:<port>
 #   lan_peer=<host-or-ip>
-#   lan_bt_peer=<host-or-ip>
 #   public_peer=<host-or-domain>
 #   relay_peer=<host-or-domain>
 #   libp2p_bootstrap=/dnsaddr/.../p2p/<peer-id>
 #   libp2p_rendezvous=hao.news/<topic>
-#   dht_router=host:port
 #
 # Generated on first start. Reuse these ports on later restarts unless you intentionally change them.
 network_mode=lan
 network_id=%s
 libp2p_listen=/ip4/0.0.0.0/tcp/%d
 libp2p_listen=/ip4/0.0.0.0/udp/%d/quic-v1
-bittorrent_listen=0.0.0.0:%d
 
 # Default LAN anchor. This matches the reference latest.org setup and gives
 # Hao.News Public uses the same shared LAN libp2p entrypoint by default.
 lan_peer=192.168.102.74
 lan_peer=192.168.102.76
 lan_peer=192.168.102.75
-
-# Default LAN BitTorrent/DHT anchor. This matches the reference latest.org
-# setup and gives Hao.News Public the same shared LAN BT/DHT backfill path.
-lan_bt_peer=192.168.102.74
-lan_bt_peer=192.168.102.76
-lan_bt_peer=192.168.102.75
 
 # Public libp2p helper write-back section. After the public helper node is
 # deployed, replace <peer-id> and uncomment these entries.
@@ -166,12 +65,7 @@ libp2p_bootstrap=/dnsaddr/bootstrap.libp2p.io/p2p/QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKN
 libp2p_bootstrap=/ip4/104.131.131.82/tcp/4001/p2p/QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtfsmvsqQLuvuJ
 libp2p_rendezvous=hao.news/global
 libp2p_rendezvous=hao.news/world
-
-# BitTorrent DHT remains available as a bundle-transfer assist layer.
-dht_router=router.bittorrent.com:6881
-dht_router=router.utorrent.com:6881
-dht_router=dht.transmissionbt.com:6881
-`, latestOrgNetworkID, libp2pPort, libp2pPort, bitTorrentPort), nil
+`, latestOrgNetworkID, libp2pPort, libp2pPort), nil
 }
 
 type RuntimePaths struct {
@@ -187,7 +81,6 @@ type RuntimePaths struct {
 	WriterWhitelistPath string
 	WriterBlacklistPath string
 	NetPath             string
-	TrackerPath         string
 	StatusPath          string
 	MagnetsPath         string
 	SyncLogPath         string
@@ -232,7 +125,6 @@ func RuntimePathsFromRoot(root string) RuntimePaths {
 		WriterWhitelistPath: filepath.Join(root, writerWhitelistINFName),
 		WriterBlacklistPath: filepath.Join(root, writerBlacklistINFName),
 		NetPath:             filepath.Join(root, "hao_news_net.inf"),
-		TrackerPath:         filepath.Join(root, "Trackerlist.inf"),
 		StatusPath:          filepath.Join(storeRoot, "sync", "status.json"),
 		MagnetsPath:         filepath.Join(storeRoot, "sync", "magnets.txt"),
 		SyncLogPath:         filepath.Join(root, "hao-news-sync.log"),
@@ -366,8 +258,7 @@ func appendLANTorrentPeerIfMissing(path, lanPeer string) error {
 	if path == "" || lanPeer == "" {
 		return nil
 	}
-	data, err := os.ReadFile(path)
-	if err != nil {
+	if _, err := os.ReadFile(path); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil
 		}
@@ -380,11 +271,5 @@ func appendLANTorrentPeerIfMissing(path, lanPeer string) error {
 	if !cfg.AllowsLANDiscovery() {
 		return nil
 	}
-	if len(cfg.LANTorrentPeers) > 0 {
-		return nil
-	}
-	body := strings.TrimRight(string(data), "\n")
-	body += "\n\n# Optional LAN BitTorrent/DHT anchor for faster local backfill.\n"
-	body += "lan_bt_peer=" + lanPeer + "\n"
-	return os.WriteFile(path, []byte(body), 0o644)
+	return nil
 }

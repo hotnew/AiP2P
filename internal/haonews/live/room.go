@@ -671,6 +671,12 @@ func startTransport(ctx context.Context, cfg haonews.NetworkBootstrapConfig) (ho
 	resolvedLANPeers, _ := haonews.ResolveLANBootstrapPeers(ctx, cfg)
 	resolvedPublicPeers, _ := haonews.ResolveExplicitBootstrapPeers(ctx, cfg.PublicPeers, cfg.NetworkID, "public_peer")
 	resolvedRelayPeers, _ := haonews.ResolveExplicitBootstrapPeers(ctx, cfg.RelayPeers, cfg.NetworkID, "relay_peer")
+	if factory := haonews.BuildLibP2PAddrsFactory(cfg); factory != nil {
+		options = append(options, libp2p.AddrsFactory(factory))
+	}
+	if cfg.IsPublicMode() {
+		options = append(options, libp2p.EnableRelayService())
+	}
 	if cfg.IsSharedMode() {
 		if relayBootstrapPeers, err := parseBootstrapPeers(resolvedRelayPeers); err == nil && len(relayBootstrapPeers) > 0 {
 			options = append(options,

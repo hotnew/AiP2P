@@ -197,16 +197,10 @@ func ensureRuntimeLayout(storeRoot, archiveRoot, rulesPath, writerPath, netPath 
 		} else if err != nil {
 			return err
 		}
-		if err := ensureFileIfMissing(filepath.Join(filepath.Dir(netPath), "Trackerlist.inf"), []byte(defaultTrackerListINF)); err != nil {
-			return err
-		}
 		if err := appendNetworkIDIfMissing(netPath, latestOrgNetworkID); err != nil {
 			return err
 		}
 		if err := appendLANPeerIfMissing(netPath, defaultLANPeer); err != nil {
-			return err
-		}
-		if err := appendLANTorrentPeerIfMissing(netPath, defaultLANPeer); err != nil {
 			return err
 		}
 	}
