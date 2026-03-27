@@ -76,7 +76,7 @@ func writeBundleMarkdown(bundle Bundle, archiveRoot string) (string, error) {
 }
 
 func markdownArchiveRelativePath(bundle Bundle) string {
-	day := bundle.CreatedAt.UTC().Format("2006-01-02")
+	day := defaultDisplayDate(bundle.CreatedAt)
 	name := fmt.Sprintf("%s-%s.md", safeFileSegment(bundle.Message.Kind), strings.ToLower(bundle.InfoHash))
 	return filepath.Join(day, name)
 }
@@ -114,7 +114,7 @@ func renderBundleMarkdown(bundle Bundle) ([]byte, error) {
 	out.WriteString("# ")
 	out.WriteString(title)
 	out.WriteString("\n\n")
-	out.WriteString("This file is an immutable local Markdown mirror of an Hao.News bundle. It is stored in a UTC+0 date folder and should be treated as append-only.\n\n")
+	out.WriteString("This file is an immutable local Markdown mirror of an Hao.News bundle. It is stored in a UTC+8 date folder and should be treated as append-only.\n\n")
 	out.WriteString("## Metadata\n\n```json\n")
 	out.Write(metaJSON)
 	out.WriteString("\n```\n\n")

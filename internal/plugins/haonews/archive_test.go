@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-func TestSyncMarkdownArchiveWritesUTCDateFolders(t *testing.T) {
+func TestSyncMarkdownArchiveWritesUTCPlus8DateFolders(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
@@ -38,7 +38,7 @@ func TestSyncMarkdownArchiveWritesUTCDateFolders(t *testing.T) {
 		t.Fatalf("sync archive: %v", err)
 	}
 
-	expected := filepath.Join(root, "2026-03-11", "post-abc123.md")
+	expected := filepath.Join(root, "2026-03-12", "post-abc123.md")
 	data, err := os.ReadFile(expected)
 	if err != nil {
 		t.Fatalf("read archive: %v", err)
@@ -46,6 +46,9 @@ func TestSyncMarkdownArchiveWritesUTCDateFolders(t *testing.T) {
 	text := string(data)
 	if !strings.Contains(text, "immutable local Markdown mirror") {
 		t.Fatalf("archive missing mirror header: %s", text)
+	}
+	if !strings.Contains(text, "UTC+8 date folder") {
+		t.Fatalf("archive missing UTC+8 header: %s", text)
 	}
 	if !strings.Contains(text, "<p>HTML is allowed.</p>") {
 		t.Fatalf("archive missing raw body: %s", text)

@@ -3,6 +3,7 @@ package newsplugin
 import (
 	"net"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -48,6 +49,20 @@ func TestPreferredAdvertiseHostKeepsExplicitLANRequestHost(t *testing.T) {
 	}
 }
 
+func TestPreferredAdvertiseHostPublicModePrefersConfiguredPublicPeerFromLoopback(t *testing.T) {
+	t.Parallel()
+
+	status := SyncRuntimeStatus{}
+	cfg := NetworkBootstrapConfig{
+		NetworkMode: "public",
+		PublicPeers: []string{"ai.jie.news"},
+	}
+	got := PreferredAdvertiseHostForConfig(status, "127.0.0.1", cfg)
+	if got != "ai.jie.news" {
+		t.Fatalf("preferredAdvertiseHost() = %q, want ai.jie.news", got)
+	}
+}
+
 func TestDialableBitTorrentNodesUsesPreferredAdvertiseHost(t *testing.T) {
 	t.Parallel()
 
@@ -59,7 +74,7 @@ func TestDialableBitTorrentNodesUsesPreferredAdvertiseHost(t *testing.T) {
 	}
 
 	host := PreferredAdvertiseHost(status, "127.0.0.1")
-	got := dialableBitTorrentNodes(status, host)
+	got := dialableBitTorrentNodes(status, host, NetworkBootstrapConfig{})
 	if len(got) != 0 {
 		t.Fatalf("len(got) = %d, want 0 when bittorrent transport is disabled", len(got))
 	}
@@ -136,5 +151,58 @@ func TestRecordAdvertiseHostResultRoundTrip(t *testing.T) {
 	}
 	if entry.LastFailureAt.IsZero() {
 		t.Fatal("expected LastFailureAt to be recorded")
+	}
+}
+
+func TestDialableLibP2PAddrsForConfigPublicDomainRewritesPrivateAddrs(t *testing.T) {
+	t.Parallel()
+
+	status := SyncRuntimeStatus{
+		LibP2P: SyncLibP2PStatus{
+			PeerID: "12D3KooWKqit8ESTPbk9mrutVWpJwNPshMfN7tnQtrQVwLzz1L1r",
+			ListenAddrs: []string{
+				"/ip4/10.219.147.1/tcp/50584",
+				"/ip4/127.0.0.1/tcp/50584",
+			},
+			ConfiguredListen: []string{
+				"/ip4/0.0.0.0/tcp/50584",
+				"/ip4/0.0.0.0/udp/50584/quic-v1",
+			},
+		},
+	}
+	cfg := NetworkBootstrapConfig{NetworkMode: "public"}
+	got := DialableLibP2PAddrsForConfig(status, "ai.jie.news", cfg)
+	if len(got) == 0 {
+		t.Fatal("expected rewritten dial addrs")
+	}
+	for _, value := range got {
+		if strings.Contains(value, "10.219.147.1") || strings.Contains(value, "127.0.0.1") || strings.Contains(value, "0.0.0.0") {
+			t.Fatalf("dial addr leaked private/local host: %q", value)
+		}
+		if !strings.Contains(value, "/dns/ai.jie.news/") {
+			t.Fatalf("dial addr %q does not use public dns host", value)
+		}
+	}
+}
+
+func TestDialableBitTorrentNodesForConfigPublicDomainRewritesPrivateListen(t *testing.T) {
+	t.Parallel()
+
+	status := SyncRuntimeStatus{
+		BitTorrentDHT: SyncBitTorrentStatus{
+			Enabled:          true,
+			ConfiguredListen: "0.0.0.0:50585",
+			ListenAddrs:      []string{"10.219.147.1:50585"},
+		},
+	}
+	cfg := NetworkBootstrapConfig{NetworkMode: "public"}
+	got := DialableBitTorrentNodesForConfig(status, "ai.jie.news", cfg)
+	if len(got) == 0 {
+		t.Fatal("expected rewritten bittorrent nodes")
+	}
+	for _, value := range got {
+		if value != "ai.jie.news:50585" {
+			t.Fatalf("got node %q, want ai.jie.news:50585", value)
+		}
 	}
 }

@@ -123,7 +123,7 @@ func normalizeHistoryPage(cursor string, pageSize int) (int, int) {
 func BuildArchiveDays(index Index) []ArchiveDay {
 	dayMap := make(map[string]*ArchiveDay)
 	for _, bundle := range index.Bundles {
-		day := bundle.CreatedAt.UTC().Format("2006-01-02")
+		day := defaultDisplayDate(bundle.CreatedAt)
 		item := dayMap[day]
 		if item == nil {
 			item = &ArchiveDay{
@@ -201,7 +201,7 @@ func BuildArchiveDayStats(entries []ArchiveEntry) []SummaryStat {
 func BuildArchiveEntries(index Index, day string) []ArchiveEntry {
 	entries := make([]ArchiveEntry, 0)
 	for _, bundle := range index.Bundles {
-		if bundle.ArchiveMD == "" || bundle.CreatedAt.UTC().Format("2006-01-02") != day {
+		if bundle.ArchiveMD == "" || defaultDisplayDate(bundle.CreatedAt) != day {
 			continue
 		}
 		entries = append(entries, archiveEntry(bundle))
@@ -230,7 +230,7 @@ func archiveEntry(bundle Bundle) ArchiveEntry {
 	if title == "" {
 		title = strings.ToUpper(bundle.Message.Kind) + " " + bundle.InfoHash
 	}
-	day := bundle.CreatedAt.UTC().Format("2006-01-02")
+	day := defaultDisplayDate(bundle.CreatedAt)
 	return ArchiveEntry{
 		InfoHash:   bundle.InfoHash,
 		Kind:       bundle.Message.Kind,

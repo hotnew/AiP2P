@@ -85,8 +85,8 @@ func handleNetwork(app *newsplugin.App, w http.ResponseWriter, r *http.Request) 
 	}
 	requestHost := newsplugin.RequestBootstrapHost(r)
 	advertiseHost := newsplugin.PreferredAdvertiseHostForConfig(syncStatus, requestHost, netCfg)
-	dialAddrs := newsplugin.DialableLibP2PAddrs(syncStatus, advertiseHost)
-	btNodes := newsplugin.DialableBitTorrentNodes(syncStatus, advertiseHost)
+	dialAddrs := newsplugin.DialableLibP2PAddrsForConfig(syncStatus, advertiseHost, netCfg)
+	btNodes := newsplugin.DialableBitTorrentNodesForConfig(syncStatus, advertiseHost, netCfg)
 	anchors, hasLANBTMatch, lanBTOverall := app.LANBTStatus(r.Context(), netCfg)
 	lanPeerHealth, lanBTHealth, err := app.LANPeerHealth()
 	if err != nil {
@@ -483,7 +483,7 @@ func handleAPINetworkBootstrap(app *newsplugin.App, w http.ResponseWriter, r *ht
 	}
 	host := newsplugin.RequestBootstrapHost(r)
 	advertiseHost := newsplugin.PreferredAdvertiseHostForConfig(syncStatus, host, netCfg)
-	dialAddrs := newsplugin.DialableLibP2PAddrs(syncStatus, advertiseHost)
+	dialAddrs := newsplugin.DialableLibP2PAddrsForConfig(syncStatus, advertiseHost, netCfg)
 	if len(dialAddrs) == 0 {
 		_ = newsplugin.RecordAdvertiseHostResult(netCfg, advertiseHost, false)
 		http.Error(w, "no dialable libp2p addresses available on this node", http.StatusServiceUnavailable)
@@ -501,7 +501,7 @@ func handleAPINetworkBootstrap(app *newsplugin.App, w http.ResponseWriter, r *ht
 		PeerID:          syncStatus.LibP2P.PeerID,
 		ListenAddrs:     append([]string(nil), syncStatus.LibP2P.ListenAddrs...),
 		DialAddrs:       dialAddrs,
-		BitTorrentNodes: newsplugin.DialableBitTorrentNodes(syncStatus, advertiseHost),
+		BitTorrentNodes: newsplugin.DialableBitTorrentNodesForConfig(syncStatus, advertiseHost, netCfg),
 		Explain:         explain,
 		ExplainDetail:   explainDetail,
 	})

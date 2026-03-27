@@ -329,12 +329,12 @@ func newApp(storeRoot, project, version, archiveRoot, rulesPath, writerPath, net
 		return nil, err
 	}
 	funcs := template.FuncMap{
-		"formatTime": func(t time.Time) string { return t.Format("2006-01-02 15:04 MST") },
+		"formatTime": func(t time.Time) string { return defaultDisplayTime(t).Format("2006-01-02 15:04 MST") },
 		"formatOptionalTime": func(t *time.Time) string {
 			if t == nil {
 				return "none yet"
 			}
-			return t.Format("2006-01-02 15:04 MST")
+			return defaultDisplayTime(*t).Format("2006-01-02 15:04 MST")
 		},
 		"formatScore": func(value *float64) string {
 			if value == nil {

@@ -295,6 +295,85 @@ lan_bt_peer=192.168.102.75
 	}
 }
 
+func TestPluginBuildServesBootstrapExplainAPIPublicModeUsesPublicPeerDialAddrs(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	netPath := filepath.Join(root, "config", "haonews_net.inf")
+	if err := os.MkdirAll(filepath.Dir(netPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll(netPath) error = %v", err)
+	}
+	netText := `network_mode=public
+network_id=2c2d6cf7b255ba20d6ad01135654933851b02bd00c65c2a6a54b97ab56590475
+public_peer=ai.jie.news
+`
+	if err := os.WriteFile(netPath, []byte(netText), 0o644); err != nil {
+		t.Fatalf("WriteFile(netPath) error = %v", err)
+	}
+	syncDir := filepath.Join(root, "store", "sync")
+	if err := os.MkdirAll(syncDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(syncDir) error = %v", err)
+	}
+	status := newsplugin.SyncRuntimeStatus{
+		UpdatedAt: time.Now().UTC(),
+		NetworkID: "2c2d6cf7b255ba20d6ad01135654933851b02bd00c65c2a6a54b97ab56590475",
+		LibP2P: newsplugin.SyncLibP2PStatus{
+			Enabled: true,
+			PeerID:  "QmBootstrapPeer",
+			ListenAddrs: []string{
+				"/ip4/10.219.147.1/tcp/50584",
+				"/ip4/127.0.0.1/tcp/50584",
+			},
+			ConfiguredListen: []string{
+				"/ip4/0.0.0.0/tcp/50584",
+				"/ip4/0.0.0.0/udp/50584/quic-v1",
+			},
+		},
+		BitTorrentDHT: newsplugin.SyncBitTorrentStatus{
+			Enabled:          true,
+			ConfiguredListen: "0.0.0.0:50585",
+			ListenAddrs:      []string{"10.219.147.1:50585"},
+		},
+	}
+	data, err := json.Marshal(status)
+	if err != nil {
+		t.Fatalf("json.Marshal(status) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(syncDir, "status.json"), data, 0o644); err != nil {
+		t.Fatalf("WriteFile(status.json) error = %v", err)
+	}
+
+	site := buildOpsSiteAtRoot(t, root)
+	req := httptest.NewRequest(http.MethodGet, "/api/network/bootstrap", nil)
+	req.Host = "127.0.0.1:51818"
+	rec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var payload newsplugin.NetworkBootstrapResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if payload.ExplainDetail == nil || payload.ExplainDetail.PrimaryHost != "ai.jie.news" {
+		t.Fatalf("payload.ExplainDetail = %#v, want primary_host ai.jie.news", payload.ExplainDetail)
+	}
+	if len(payload.DialAddrs) == 0 {
+		t.Fatal("expected dial addrs")
+	}
+	for _, value := range payload.DialAddrs {
+		if strings.Contains(value, "10.219.147.1") || strings.Contains(value, "127.0.0.1") {
+			t.Fatalf("payload.DialAddrs leaked local/private host: %#v", payload.DialAddrs)
+		}
+		if !strings.Contains(value, "/dns/ai.jie.news/") {
+			t.Fatalf("payload.DialAddrs = %#v, want dns ai.jie.news", payload.DialAddrs)
+		}
+	}
+	if len(payload.BitTorrentNodes) == 0 || payload.BitTorrentNodes[0] != "ai.jie.news:50585" {
+		t.Fatalf("payload.BitTorrentNodes = %#v, want ai.jie.news:50585", payload.BitTorrentNodes)
+	}
+}
+
 func TestPluginBuildServesCreditPage(t *testing.T) {
 	t.Parallel()
 

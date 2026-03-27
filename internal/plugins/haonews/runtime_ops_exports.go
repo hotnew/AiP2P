@@ -102,11 +102,19 @@ func ReadAdvertiseHostCandidates(status SyncRuntimeStatus, requestHost string, c
 }
 
 func DialableLibP2PAddrs(status SyncRuntimeStatus, host string) []string {
-	return dialableLibP2PAddrs(status, host)
+	return dialableLibP2PAddrs(status, host, NetworkBootstrapConfig{})
 }
 
 func DialableBitTorrentNodes(status SyncRuntimeStatus, host string) []string {
-	return dialableBitTorrentNodes(status, host)
+	return dialableBitTorrentNodes(status, host, NetworkBootstrapConfig{})
+}
+
+func DialableLibP2PAddrsForConfig(status SyncRuntimeStatus, host string, cfg NetworkBootstrapConfig) []string {
+	return dialableLibP2PAddrs(status, host, cfg)
+}
+
+func DialableBitTorrentNodesForConfig(status SyncRuntimeStatus, host string, cfg NetworkBootstrapConfig) []string {
+	return dialableBitTorrentNodes(status, host, cfg)
 }
 
 func requestBootstrapHost(r *http.Request) string {
@@ -122,6 +130,14 @@ func requestBootstrapHost(r *http.Request) string {
 
 func preferredAdvertiseHost(status SyncRuntimeStatus, host string, cfg NetworkBootstrapConfig) string {
 	host = strings.TrimSpace(host)
+	if normalizeNetworkMode(cfg.NetworkMode) == networkModePublic {
+		if preferred := firstConfiguredPublicHost(cfg); preferred != "" {
+			ip := net.ParseIP(host)
+			if host == "" || ip == nil || isLoopbackOrUnspecifiedIP(ip) || isRFC1918(ip) || isUniqueLocalIPv6(ip) || isLinkLocalButUsable(ip) {
+				return preferred
+			}
+		}
+	}
 	if host != "" {
 		if ip := net.ParseIP(host); ip != nil {
 			if !isLoopbackOrUnspecifiedIP(ip) {
@@ -146,6 +162,16 @@ func preferredAdvertiseHost(status SyncRuntimeStatus, host string, cfg NetworkBo
 		return best
 	}
 	return host
+}
+
+func firstConfiguredPublicHost(cfg NetworkBootstrapConfig) string {
+	for _, value := range cfg.PublicPeers {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func advertiseHostCandidatesStatus(status SyncRuntimeStatus, requestHost string, cfg NetworkBootstrapConfig) ([]AdvertiseHostCandidateStatus, error) {
@@ -202,22 +228,24 @@ func advertiseHostCandidatesStatus(status SyncRuntimeStatus, requestHost string,
 	return items, nil
 }
 
-func dialableLibP2PAddrs(status SyncRuntimeStatus, host string) []string {
+func dialableLibP2PAddrs(status SyncRuntimeStatus, host string, cfg NetworkBootstrapConfig) []string {
 	peerID := strings.TrimSpace(status.LibP2P.PeerID)
 	if peerID == "" {
 		return nil
 	}
-	requestIP := net.ParseIP(strings.TrimSpace(host))
+	host = strings.TrimSpace(host)
+	requestIP := net.ParseIP(host)
+	forceRewrite := shouldForceAdvertiseHostRewrite(host, cfg)
 	values := append([]string(nil), status.LibP2P.ListenAddrs...)
 	values = append(values, status.LibP2P.ConfiguredListen...)
 	out := make([]string, 0, len(values))
 	seen := make(map[string]struct{})
 	for _, value := range values {
-		value = rewriteBootstrapAddrForHost(strings.TrimSpace(value), host)
+		value = rewriteBootstrapAddrForHost(strings.TrimSpace(value), host, forceRewrite)
 		if value == "" {
 			continue
 		}
-		if !bootstrapAddrMatchesRequestHost(value, requestIP) {
+		if !forceRewrite && !bootstrapAddrMatchesRequestHost(value, requestIP) {
 			continue
 		}
 		if !strings.Contains(value, "/p2p/") {
@@ -232,24 +260,26 @@ func dialableLibP2PAddrs(status SyncRuntimeStatus, host string) []string {
 	return out
 }
 
-func dialableBitTorrentNodes(status SyncRuntimeStatus, host string) []string {
+func dialableBitTorrentNodes(status SyncRuntimeStatus, host string, cfg NetworkBootstrapConfig) []string {
 	if !status.BitTorrentDHT.Enabled {
 		return nil
 	}
+	host = strings.TrimSpace(host)
+	forceRewrite := shouldForceAdvertiseHostRewrite(host, cfg)
 	values := make([]string, 0, 1+len(status.BitTorrentDHT.ListenAddrs))
-	if value := rewriteBitTorrentListenForHost(strings.TrimSpace(status.BitTorrentDHT.ConfiguredListen), host); value != "" {
+	if value := rewriteBitTorrentListenForHost(strings.TrimSpace(status.BitTorrentDHT.ConfiguredListen), host, forceRewrite); value != "" {
 		values = append(values, value)
 	}
 	for _, value := range status.BitTorrentDHT.ListenAddrs {
-		if value := rewriteBitTorrentListenForHost(strings.TrimSpace(value), host); value != "" {
+		if value := rewriteBitTorrentListenForHost(strings.TrimSpace(value), host, forceRewrite); value != "" {
 			values = append(values, value)
 		}
 	}
-	requestIP := net.ParseIP(strings.TrimSpace(host))
+	requestIP := net.ParseIP(host)
 	out := make([]string, 0, len(values))
 	seen := make(map[string]struct{})
 	for _, value := range values {
-		if !torrentNodeMatchesRequestHost(value, requestIP) {
+		if !forceRewrite && !torrentNodeMatchesRequestHost(value, requestIP) {
 			continue
 		}
 		if _, ok := seen[value]; ok {
@@ -703,32 +733,69 @@ func multiaddrIP(value string) net.IP {
 	return nil
 }
 
-func rewriteBootstrapAddrForHost(value, host string) string {
+func shouldForceAdvertiseHostRewrite(host string, cfg NetworkBootstrapConfig) bool {
+	host = strings.TrimSpace(host)
+	if host == "" {
+		return false
+	}
+	mode := normalizeNetworkMode(cfg.NetworkMode)
+	if mode != networkModePublic && mode != networkModeShared {
+		return false
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return true
+	}
+	if isLoopbackOrUnspecifiedIP(ip) || isRFC1918(ip) || isUniqueLocalIPv6(ip) || isLinkLocalButUsable(ip) {
+		return false
+	}
+	return true
+}
+
+func rewriteBootstrapAddrForHost(value, host string, force bool) string {
 	host = strings.TrimSpace(host)
 	if value == "" || host == "" {
 		return value
 	}
 	ip := net.ParseIP(host)
-	switch {
-	case ip != nil && ip.To4() != nil:
-		if strings.Contains(value, "/ip4/0.0.0.0/") {
-			value = strings.Replace(value, "/ip4/0.0.0.0/", "/ip4/"+host+"/", 1)
+	parts := strings.Split(strings.TrimSpace(value), "/")
+	if len(parts) < 3 {
+		return value
+	}
+	rewrite := func(i int) string {
+		switch {
+		case ip == nil:
+			parts[i] = "dns"
+			parts[i+1] = host
+		case ip.To4() != nil:
+			parts[i] = "ip4"
+			parts[i+1] = host
+		default:
+			parts[i] = "ip6"
+			parts[i+1] = host
 		}
-		if strings.Contains(value, "/ip4/127.0.0.1/") {
-			value = strings.Replace(value, "/ip4/127.0.0.1/", "/ip4/"+host+"/", 1)
-		}
-	case ip != nil:
-		if strings.Contains(value, "/ip6/::/") {
-			value = strings.Replace(value, "/ip6/::/", "/ip6/"+host+"/", 1)
-		}
-		if strings.Contains(value, "/ip6/::1/") {
-			value = strings.Replace(value, "/ip6/::1/", "/ip6/"+host+"/", 1)
+		return strings.Join(parts, "/")
+	}
+	for i := 1; i+1 < len(parts); i++ {
+		switch parts[i] {
+		case "ip4":
+			if force || parts[i+1] == "0.0.0.0" || parts[i+1] == "127.0.0.1" {
+				return rewrite(i)
+			}
+		case "ip6":
+			if force || parts[i+1] == "::" || parts[i+1] == "::1" {
+				return rewrite(i)
+			}
+		case "dns", "dns4", "dns6":
+			if force {
+				return rewrite(i)
+			}
 		}
 	}
 	return value
 }
 
-func rewriteBitTorrentListenForHost(value, host string) string {
+func rewriteBitTorrentListenForHost(value, host string, force bool) string {
 	value = strings.TrimSpace(value)
 	host = strings.TrimSpace(host)
 	if value == "" {
@@ -745,6 +812,9 @@ func rewriteBitTorrentListenForHost(value, host string) string {
 		}
 		return net.JoinHostPort(host, port)
 	default:
+		if force && host != "" {
+			return net.JoinHostPort(host, port)
+		}
 		return net.JoinHostPort(strings.Trim(listenHost, "[]"), port)
 	}
 }
