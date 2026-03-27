@@ -909,6 +909,10 @@ func loadKnownGoodLibP2PPeerCache(cfg NetworkBootstrapConfig) (*knownGoodLibP2PP
 	if cache.Entries == nil {
 		cache.Entries = make(map[string]knownGoodLibP2PPeerInfo)
 	}
+	for peerID, entry := range cache.Entries {
+		entry.Addrs = normalizeKnownGoodLibP2PPeerAddrs(peerID, entry.Addrs)
+		cache.Entries[peerID] = entry
+	}
 	if normalizeNetworkID(cfg.NetworkID) != "" && cache.NetworkID != "" && cache.NetworkID != cfg.NetworkID {
 		return &knownGoodLibP2PPeerCache{NetworkID: cfg.NetworkID, Entries: make(map[string]knownGoodLibP2PPeerInfo)}, nil
 	}
@@ -1052,8 +1056,15 @@ func normalizeKnownGoodLibP2PPeerAddrs(peerID string, values []string) []string 
 		if value == "" {
 			continue
 		}
-		if !strings.Contains(value, "/p2p/") && peerID != "" {
-			value += "/p2p/" + peerID
+		if peerID != "" {
+			if strings.Contains(value, "/p2p-circuit") {
+				suffix := "/p2p/" + peerID
+				if !strings.HasSuffix(value, suffix) {
+					value += suffix
+				}
+			} else if !strings.Contains(value, "/p2p/") {
+				value += "/p2p/" + peerID
+			}
 		}
 		if _, ok := seen[value]; ok {
 			continue

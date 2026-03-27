@@ -367,3 +367,73 @@
 - 如果要继续，可以做真正的“编辑入口”
   - 例如把常用白名单 / alias 做成表单或预设按钮
 - 或者继续扩展高频 topic 的 canonical map
+
+## 2026-03-27 21:18 CST - `.76` 局域网同步反复失效的稳定性排查
+
+结论：
+
+- 这次不是单一“网络坏了”，而是三层问题叠在一起：
+  - `.76` 上一度同时存在两套 `sync` 托管：
+    - `haonews serve` 默认 `managed` 拉起的 worker
+    - 额外手工加的 `launchd com.haonews.sync`
+  - 旧 `known_good_libp2p_peers.json` 里保留了半截 relay 地址：
+    - `/p2p-circuit`
+    - 但没有补齐目标 peer 尾巴
+  - 新二进制替换到 `.76` 后，`launchd` 还会触发：
+    - `OS_REASON_CODESIGNING`
+
+表现：
+
+- `.76` 的 feed 停在旧文章，不追 `.75` 新帖
+- `sync/status.json` 长时间不更新
+- 日志反复出现：
+  - `parse libp2p bootstrap peer ".../p2p-circuit": invalid p2p multiaddr`
+
+根因细化：
+
+- `resolveExplicitBootstrapPeers()` 已经修成会把 relay circuit 地址补成：
+  - `.../p2p-circuit/p2p/<target-peer>`
+- 但 `known_good_libp2p_peers.json` 旧缓存读取后没有再次做同样的归一化
+- 导致 `.76` 即使换了新代码，仍可能从旧缓存里读到坏地址
+- 再加上双 `sync` worker 并行，会让状态文件、日志和真实运行态互相打架
+
+已完成修复：
+
+- `internal/haonews/lanpeer.go`
+  - `fetchLANBootstrapPeer()` 统一走 `normalizeBootstrapDialAddr()`
+- `internal/haonews/libp2p.go`
+  - `normalizeKnownGoodLibP2PPeerAddrs()` 现在也会补齐 relay circuit 尾部的目标 peer
+  - `loadKnownGoodLibP2PPeerCache()` 读取旧缓存后会立刻重新规范化地址，避免旧脏缓存继续伤害新进程
+- `internal/haonews/lanpeer_test.go`
+  - 新增 relay circuit 地址归一化测试
+  - 新增 known-good 缓存归一化 round-trip 测试
+
+部署动作：
+
+- 给 `.76` 下发新版 `haonews`
+- 清掉 `.76` 的：
+  - `~/.hao-news/known_good_libp2p_peers.json`
+- 对远端二进制做 ad-hoc `codesign`
+- 删除额外手工加的：
+  - `~/Library/LaunchAgents/com.haonews.sync.plist`
+- 回到单一托管模式：
+  - 只保留 `haonews serve` 的 `managed sync`
+
+验证结果：
+
+- `.76` 当前最新 feed 已追上 `.75`：
+  - `2026-03-27-2027-pro1-news02-demo-75wp（Pro1 HTML版，v3-live-claude）`
+  - `363faec18f4b4cb37ba970b29145099d381afc6a`
+- `.76` 当前同步状态：
+  - `last_transport = libp2p`
+  - `last_message = bundle transferred via libp2p direct stream ...`
+  - `queue_refs` 在下降
+
+后续约束：
+
+- 不再给 macOS 节点额外叠第二套 `sync` 托管，避免和 `managed` 模式冲突
+- 后续排查顺序统一先看：
+  - 是否存在重复 worker
+  - 是否有旧缓存污染
+  - 是否有启动/签名问题
+  - 最后再看网络链路本身

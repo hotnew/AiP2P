@@ -241,6 +241,35 @@ func TestResolveExplicitBootstrapPeersUsesRelayPeerBootstrapEndpoint(t *testing.
 	}
 }
 
+func TestResolveExplicitBootstrapPeersAppendsTargetPeerToRelayCircuitAddr(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/network/bootstrap" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(lanBootstrapResponse{
+			NetworkID: latestOrgNetworkID,
+			PeerID:    "QmSharedPeer",
+			DialAddrs: []string{"/ip4/207.148.109.62/tcp/50584/p2p/QmRelayPeer/p2p-circuit"},
+		})
+	}))
+	defer srv.Close()
+
+	got, err := resolveExplicitBootstrapPeers(context.Background(), []string{srv.URL}, latestOrgNetworkID, "relay_peer")
+	if err != nil {
+		t.Fatalf("resolveExplicitBootstrapPeers() error = %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len(got) = %d, want 1", len(got))
+	}
+	if got[0] != "/ip4/207.148.109.62/tcp/50584/p2p/QmRelayPeer/p2p-circuit/p2p/QmSharedPeer" {
+		t.Fatalf("got[0] = %q", got[0])
+	}
+}
+
 func TestKnownGoodLibP2PPeerCacheRoundTrip(t *testing.T) {
 	t.Parallel()
 
@@ -274,6 +303,42 @@ func TestKnownGoodLibP2PPeerCacheRoundTrip(t *testing.T) {
 		t.Fatal("expected known-good peer success timestamp to persist")
 	}
 	if len(entry.Addrs) != 1 || entry.Addrs[0] != "/ip4/192.168.102.75/tcp/50584/p2p/QmKnownGood" {
+		t.Fatalf("entry.Addrs = %#v", entry.Addrs)
+	}
+}
+
+func TestKnownGoodLibP2PPeerCacheNormalizesRelayCircuitAddr(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	cfg := NetworkBootstrapConfig{
+		Path:      filepath.Join(root, "hao_news_net.inf"),
+		NetworkID: latestOrgNetworkID,
+	}
+	cache := &knownGoodLibP2PPeerCache{
+		Entries: map[string]knownGoodLibP2PPeerInfo{
+			"QmSharedPeer": {
+				LastSuccessAt: time.Date(2026, 3, 27, 12, 0, 0, 0, time.UTC),
+				Addrs: []string{
+					"/ip4/207.148.109.62/tcp/50584/p2p/QmRelayPeer/p2p-circuit",
+				},
+			},
+		},
+	}
+
+	if err := saveKnownGoodLibP2PPeerCache(cfg, cache); err != nil {
+		t.Fatalf("saveKnownGoodLibP2PPeerCache() error = %v", err)
+	}
+
+	loaded, err := loadKnownGoodLibP2PPeerCache(cfg)
+	if err != nil {
+		t.Fatalf("loadKnownGoodLibP2PPeerCache() error = %v", err)
+	}
+	entry, ok := loaded.Entries["QmSharedPeer"]
+	if !ok {
+		t.Fatal("expected known-good relay peer entry to persist")
+	}
+	if len(entry.Addrs) != 1 || entry.Addrs[0] != "/ip4/207.148.109.62/tcp/50584/p2p/QmRelayPeer/p2p-circuit/p2p/QmSharedPeer" {
 		t.Fatalf("entry.Addrs = %#v", entry.Addrs)
 	}
 }

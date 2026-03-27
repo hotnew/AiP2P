@@ -146,12 +146,9 @@ func fetchLANBootstrapPeer(ctx context.Context, targets []string, configuredValu
 		}
 		out := make([]string, 0, len(payload.DialAddrs))
 		for _, addr := range payload.DialAddrs {
-			addr = strings.TrimSpace(addr)
+			addr = normalizeBootstrapDialAddr(addr, payload.PeerID)
 			if addr == "" {
 				continue
-			}
-			if !strings.Contains(addr, "/p2p/") {
-				addr += "/p2p/" + payload.PeerID
 			}
 			out = append(out, addr)
 		}
@@ -162,6 +159,28 @@ func fetchLANBootstrapPeer(ctx context.Context, targets []string, configuredValu
 		return out, normalizeObservedPrimaryHost(payload.ExplainDetail.PrimaryHost), nil
 	}
 	return nil, "", errors.New(strings.Join(errs, "; "))
+}
+
+func normalizeBootstrapDialAddr(addr, peerID string) string {
+	addr = strings.TrimSpace(addr)
+	peerID = strings.TrimSpace(peerID)
+	if addr == "" {
+		return ""
+	}
+	if peerID == "" {
+		return addr
+	}
+	if strings.Contains(addr, "/p2p-circuit") {
+		suffix := "/p2p/" + peerID
+		if !strings.HasSuffix(addr, suffix) {
+			addr += suffix
+		}
+		return addr
+	}
+	if !strings.Contains(addr, "/p2p/") {
+		addr += "/p2p/" + peerID
+	}
+	return addr
 }
 
 func ReadLANPeerHealthStatus(cfg NetworkBootstrapConfig) ([]LANPeerHealthStatus, []LANPeerHealthStatus, error) {
