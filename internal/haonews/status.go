@@ -24,22 +24,38 @@ type SyncRuntimeStatus struct {
 }
 
 type SyncLibP2PStatus struct {
-	Enabled               bool           `json:"enabled"`
-	PeerID                string         `json:"peer_id,omitempty"`
-	ConfiguredListen      []string       `json:"configured_listen,omitempty"`
-	ListenAddrs           []string       `json:"listen_addrs,omitempty"`
-	DirectTransferEnabled bool           `json:"direct_transfer_enabled"`
-	TransferMaxSize       int64          `json:"transfer_max_size,omitempty"`
-	ConfiguredBootstrap   int            `json:"configured_bootstrap"`
-	ConfiguredRendezvous  int            `json:"configured_rendezvous"`
-	ConnectedBootstrap    int            `json:"connected_bootstrap"`
-	ReachableBootstrap    int            `json:"reachable_bootstrap"`
-	ConnectedPeers        int            `json:"connected_peers"`
-	RoutingTablePeers     int            `json:"routing_table_peers"`
-	MDNS                  SyncMDNSStatus `json:"mdns"`
-	LastBootstrapAt       *time.Time     `json:"last_bootstrap_at,omitempty"`
-	LastError             string         `json:"last_error,omitempty"`
-	Peers                 []SyncPeerRef  `json:"peers,omitempty"`
+	Enabled                bool           `json:"enabled"`
+	PeerID                 string         `json:"peer_id,omitempty"`
+	ConfiguredListen       []string       `json:"configured_listen,omitempty"`
+	ListenAddrs            []string       `json:"listen_addrs,omitempty"`
+	DirectTransferEnabled  bool           `json:"direct_transfer_enabled"`
+	TransferMaxSize        int64          `json:"transfer_max_size,omitempty"`
+	AutoNATv2Enabled       bool           `json:"autonatv2_enabled,omitempty"`
+	AutoRelayEnabled       bool           `json:"autorelay_enabled,omitempty"`
+	HolePunchingEnabled    bool           `json:"hole_punching_enabled,omitempty"`
+	ForcedReachability     string         `json:"forced_reachability,omitempty"`
+	Reachability           string         `json:"reachability,omitempty"`
+	ReachableAddrs         []string       `json:"reachable_addrs,omitempty"`
+	LastReachableAddrsAt   *time.Time     `json:"last_reachable_addrs_at,omitempty"`
+	ConfiguredPublicPeers  int            `json:"configured_public_peers,omitempty"`
+	ConfiguredRelayPeers   int            `json:"configured_relay_peers,omitempty"`
+	ResolvedRelayPeers     int            `json:"resolved_relay_peers,omitempty"`
+	RelayReservationActive bool           `json:"relay_reservation_active,omitempty"`
+	RelayReservationCount  int            `json:"relay_reservation_count,omitempty"`
+	RelayReservationPeers  []string       `json:"relay_reservation_peers,omitempty"`
+	RelayAddrs             []string       `json:"relay_addrs,omitempty"`
+	LastReachabilityAt     *time.Time     `json:"last_reachability_at,omitempty"`
+	LastRelayAt            *time.Time     `json:"last_relay_at,omitempty"`
+	ConfiguredBootstrap    int            `json:"configured_bootstrap"`
+	ConfiguredRendezvous   int            `json:"configured_rendezvous"`
+	ConnectedBootstrap     int            `json:"connected_bootstrap"`
+	ReachableBootstrap     int            `json:"reachable_bootstrap"`
+	ConnectedPeers         int            `json:"connected_peers"`
+	RoutingTablePeers      int            `json:"routing_table_peers"`
+	MDNS                   SyncMDNSStatus `json:"mdns"`
+	LastBootstrapAt        *time.Time     `json:"last_bootstrap_at,omitempty"`
+	LastError              string         `json:"last_error,omitempty"`
+	Peers                  []SyncPeerRef  `json:"peers,omitempty"`
 }
 
 type SyncMDNSStatus struct {

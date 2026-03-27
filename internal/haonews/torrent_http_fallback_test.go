@@ -55,3 +55,35 @@ func TestCandidateBundleURLsUsesLANAndPeerHints(t *testing.T) {
 		t.Fatalf("second url = %q", got[1])
 	}
 }
+
+func TestCandidateBundleURLsIncludesConfiguredPublicPeer(t *testing.T) {
+	t.Parallel()
+
+	ref := SyncRef{
+		InfoHash: "0123456789abcdef0123456789abcdef01234567",
+		Magnet:   "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567",
+	}
+	got := candidateBundleURLs(ref, []string{"ai.jie.news"})
+	if len(got) != 1 {
+		t.Fatalf("candidate urls = %d, want 1", len(got))
+	}
+	if got[0] != "http://ai.jie.news:51818/api/bundles/0123456789abcdef0123456789abcdef01234567.tar" {
+		t.Fatalf("first url = %q", got[0])
+	}
+}
+
+func TestCandidateTorrentURLsIncludesConfiguredPublicPeer(t *testing.T) {
+	t.Parallel()
+
+	ref := SyncRef{
+		InfoHash: "0123456789abcdef0123456789abcdef01234567",
+		Magnet:   "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567",
+	}
+	got := candidateTorrentURLs(ref, []string{"ai.jie.news"})
+	if len(got) != 1 {
+		t.Fatalf("candidate urls = %d, want 1", len(got))
+	}
+	if got[0] != "http://ai.jie.news:51818/api/torrents/0123456789abcdef0123456789abcdef01234567.torrent" {
+		t.Fatalf("first url = %q", got[0])
+	}
+}

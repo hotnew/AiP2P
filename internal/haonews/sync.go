@@ -414,7 +414,7 @@ func (r *syncRuntime) processQueue(ctx context.Context, direct []string, timeout
 		logf("write sync status: %v", err)
 	}
 	for _, ref := range refs {
-		result := syncRef(ctx, nil, r.store, ref, timeout, r.netCfg.LANPeers, r.trackers, r.subscriptions, r.directTransfer, r.libp2p, r.directPeerIDs(ref.InfoHash))
+		result := syncRef(ctx, nil, r.store, ref, timeout, syncPeerSources(r.netCfg), r.trackers, r.subscriptions, r.directTransfer, r.libp2p, r.directPeerIDs(ref.InfoHash))
 		if result.Status == "imported" && result.ContentDir != "" {
 			if err := r.importCreditBundle(result.ContentDir, logf); err != nil && logf != nil {
 				logf("import credit bundle: %v", err)
@@ -449,12 +449,13 @@ func (r *syncRuntime) processQueue(ctx context.Context, direct []string, timeout
 }
 
 func (r *syncRuntime) reconcileQueue(ctx context.Context, direct []string, timeout time.Duration, logf func(string, ...any)) error {
-	if changed, err := sanitizeSyncQueueFile(r.queuePath, r.netCfg.LANPeers); err != nil {
+	peerSources := syncPeerSources(r.netCfg)
+	if changed, err := sanitizeSyncQueueFile(r.queuePath, peerSources); err != nil {
 		return err
 	} else if changed > 0 && logf != nil {
 		logf("sanitized %d realtime magnet refs", changed)
 	}
-	if changed, err := sanitizeSyncQueueFile(r.historyQueuePath, r.netCfg.LANPeers); err != nil {
+	if changed, err := sanitizeSyncQueueFile(r.historyQueuePath, peerSources); err != nil {
 		return err
 	} else if changed > 0 && logf != nil {
 		logf("sanitized %d history magnet refs", changed)
@@ -462,7 +463,7 @@ func (r *syncRuntime) reconcileQueue(ctx context.Context, direct []string, timeo
 	if added, err := r.enqueueHistoryFromLANPeers(ctx, logf); err != nil {
 		return err
 	} else if added > 0 && logf != nil {
-		logf("lan history head queued %d refs", added)
+		logf("peer history head queued %d refs", added)
 	}
 	for round := 0; round < 3; round++ {
 		if err := r.processQueue(ctx, direct, timeout, logf); err != nil {
@@ -808,7 +809,7 @@ func (r *syncRuntime) enqueueHistoryFromLANPeers(ctx context.Context, logf func(
 			logf("write history bootstrap state: %v", err)
 		}
 	}
-	for _, peerValue := range r.netCfg.LANPeers {
+	for _, peerValue := range syncPeerSources(r.netCfg) {
 		cursor := ""
 		for page := 1; page <= maxPages; page++ {
 			if remainingRefs == 0 && r.inRecentHistoryBootstrap() {
@@ -817,7 +818,7 @@ func (r *syncRuntime) enqueueHistoryFromLANPeers(ctx context.Context, logf func(
 			payload, err := fetchLANHistoryManifest(ctx, peerValue, cursor, r.netCfg.NetworkID)
 			if err != nil {
 				if logf != nil {
-					logf("fetch lan history manifest from %s cursor=%q: %v", peerValue, cursor, err)
+					logf("fetch peer history manifest from %s cursor=%q: %v", peerValue, cursor, err)
 				}
 				break
 			}
@@ -1551,7 +1552,7 @@ func ParseSyncRef(raw string) (SyncRef, error) {
 	return SyncRef{}, fmt.Errorf("unsupported sync ref %q", raw)
 }
 
-func sanitizeSyncQueueFile(queuePath string, lanPeers []string) (int, error) {
+func sanitizeSyncQueueFile(queuePath string, peerSources []string) (int, error) {
 	queuePath = strings.TrimSpace(queuePath)
 	if queuePath == "" {
 		return 0, nil
@@ -1570,7 +1571,7 @@ func sanitizeSyncQueueFile(queuePath string, lanPeers []string) (int, error) {
 		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, ";") || strings.HasPrefix(line, "//") {
 			continue
 		}
-		sanitized, lineChanged, err := sanitizeQueuedSyncRef(line, lanPeers)
+		sanitized, lineChanged, err := sanitizeQueuedSyncRef(line, peerSources)
 		if err != nil {
 			return changed, fmt.Errorf("sanitize queue line %d: %w", i+1, err)
 		}
@@ -1587,7 +1588,7 @@ func sanitizeSyncQueueFile(queuePath string, lanPeers []string) (int, error) {
 	return changed, os.WriteFile(queuePath, []byte(content), 0o644)
 }
 
-func sanitizeQueuedSyncRef(raw string, lanPeers []string) (string, bool, error) {
+func sanitizeQueuedSyncRef(raw string, peerSources []string) (string, bool, error) {
 	ref, err := ParseSyncRef(raw)
 	if err != nil {
 		return "", false, err
@@ -1610,7 +1611,7 @@ func sanitizeQueuedSyncRef(raw string, lanPeers []string) (string, bool, error) 
 		if err != nil {
 			continue
 		}
-		if allowTorrentHTTPHost(host, lanPeers) {
+		if allowTorrentHTTPHost(host, peerSources) {
 			kept = append(kept, value)
 		}
 	}
@@ -1625,13 +1626,33 @@ func sanitizeQueuedSyncRef(raw string, lanPeers []string) (string, bool, error) 
 	return uri.String(), true, nil
 }
 
+func syncPeerSources(cfg NetworkBootstrapConfig) []string {
+	seen := make(map[string]struct{})
+	out := make([]string, 0, len(cfg.LANPeers)+len(cfg.PublicPeers)+len(cfg.RelayPeers))
+	values := append([]string{}, cfg.LANPeers...)
+	values = append(values, cfg.PublicPeers...)
+	values = append(values, cfg.RelayPeers...)
+	for _, value := range values {
+		host := normalizeTorrentHTTPHost(value)
+		if host == "" {
+			continue
+		}
+		if _, ok := seen[host]; ok {
+			continue
+		}
+		seen[host] = struct{}{}
+		out = append(out, value)
+	}
+	return out
+}
+
 func syncRef(
 	ctx context.Context,
 	client *torrent.Client,
 	store *Store,
 	ref SyncRef,
 	timeout time.Duration,
-	lanPeers []string,
+	peerSources []string,
 	trackers []string,
 	rules SyncSubscriptions,
 	directTransfer bool,
@@ -1693,7 +1714,7 @@ func syncRef(
 			}
 		}
 	}
-	contentDir, fallbackErr := fetchBundleFallback(runCtx, store, ref, lanPeers, rules.MaxBundleMB)
+	contentDir, fallbackErr := fetchBundleFallback(runCtx, store, ref, peerSources, rules.MaxBundleMB)
 	if fallbackErr == nil {
 		message := "bundle imported via HTTP fallback"
 		if directAttempted && len(directFailureNotes) > 0 {

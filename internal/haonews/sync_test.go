@@ -627,6 +627,91 @@ func TestEnqueueHistoryFromLANPeersPromotesRecentPageOneEntriesToRealtime(t *tes
 	}
 }
 
+func TestEnqueueHistoryFromLANPeersUsesConfiguredPublicPeers(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now().UTC()
+	announcement := SyncAnnouncement{
+		Magnet:    "magnet:?xt=urn:btih:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		InfoHash:  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		Title:     "public peer history",
+		CreatedAt: now.Format(time.RFC3339),
+		NetworkID: latestOrgNetworkID,
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/history/list" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(lanHistoryManifestResponse{
+			NetworkID: latestOrgNetworkID,
+			Entries:   []SyncAnnouncement{announcement},
+		})
+	}))
+	defer srv.Close()
+
+	store, err := OpenStore(filepath.Join(t.TempDir(), ".haonews"))
+	if err != nil {
+		t.Fatalf("OpenStore error = %v", err)
+	}
+	runtime := &syncRuntime{
+		store:            store,
+		queuePath:        filepath.Join(store.Root, "sync", "realtime.txt"),
+		historyQueuePath: filepath.Join(store.Root, "sync", "history.txt"),
+		netCfg: NetworkBootstrapConfig{
+			NetworkID:   latestOrgNetworkID,
+			PublicPeers: []string{srv.URL},
+		},
+		subscriptions: SyncSubscriptions{
+			Topics: []string{"all"},
+		},
+	}
+	if err := os.MkdirAll(filepath.Dir(runtime.queuePath), 0o755); err != nil {
+		t.Fatalf("MkdirAll error = %v", err)
+	}
+	added, err := runtime.enqueueHistoryFromLANPeers(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("enqueueHistoryFromLANPeers error = %v", err)
+	}
+	if added != 1 {
+		t.Fatalf("added = %d, want 1", added)
+	}
+	realtimeRefs, historyRefs, err := collectSyncRefs(nil, runtime.queuePath, runtime.historyQueuePath)
+	if err != nil {
+		t.Fatalf("collectSyncRefs error = %v", err)
+	}
+	if len(realtimeRefs) != 1 {
+		t.Fatalf("realtime refs = %d, want 1", len(realtimeRefs))
+	}
+	if len(historyRefs) != 0 {
+		t.Fatalf("history refs = %d, want 0", len(historyRefs))
+	}
+}
+
+func TestSyncPeerSourcesIncludesLANPublicAndRelayPeers(t *testing.T) {
+	t.Parallel()
+
+	got := syncPeerSources(NetworkBootstrapConfig{
+		LANPeers:    []string{"192.168.102.75"},
+		PublicPeers: []string{"https://ai.jie.news"},
+		RelayPeers:  []string{"relay.jie.news", "192.168.102.75"},
+	})
+
+	if len(got) != 3 {
+		t.Fatalf("len(got) = %d, want 3", len(got))
+	}
+	if got[0] != "192.168.102.75" {
+		t.Fatalf("got[0] = %q, want LAN peer first", got[0])
+	}
+	if got[1] != "https://ai.jie.news" {
+		t.Fatalf("got[1] = %q, want public peer second", got[1])
+	}
+	if got[2] != "relay.jie.news" {
+		t.Fatalf("got[2] = %q, want relay peer third", got[2])
+	}
+}
+
 func TestLoadTrackerListParsesDefaultStyleFile(t *testing.T) {
 	t.Parallel()
 

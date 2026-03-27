@@ -118,6 +118,64 @@
         <section class="panel panel-inline">
           <div class="panel-head">
             <div>
+              <p class="panel-label">公网 / 共享模式状态</p>
+              <p class="network-summary-copy">显示当前节点是否已启用 AutoNATv2、AutoRelay、hole punching，以及 relay 地址是否已经出现。</p>
+            </div>
+          </div>
+          <div class="ops-grid">
+            <article class="ops-card">
+              <span class="stat-label">网络模式</span>
+              <strong>{{if .NetworkMode}}{{.NetworkMode}}{{else}}未知{{end}}</strong>
+              <p class="micro-copy">当前实际运行模式仍以 `hao_news_net.inf` 为准。</p>
+            </article>
+            <article class="ops-card">
+              <span class="stat-label">AutoNATv2</span>
+              <strong>{{if .SyncStatus.LibP2P.AutoNATv2Enabled}}已启用{{else}}未启用{{end}}</strong>
+              <p class="micro-copy">{{if .SyncStatus.LibP2P.Reachability}}当前可达性：{{.SyncStatus.LibP2P.Reachability}}{{else}}当前还没有 reachability 事件。{{end}}</p>
+            </article>
+            <article class="ops-card">
+              <span class="stat-label">AutoRelay</span>
+              <strong>{{if .SyncStatus.LibP2P.AutoRelayEnabled}}已启用{{else}}未启用{{end}}</strong>
+              <p class="micro-copy">配置 relay：{{.SyncStatus.LibP2P.ConfiguredRelayPeers}}，已解析 relay：{{.SyncStatus.LibP2P.ResolvedRelayPeers}}。{{if .SyncStatus.LibP2P.ForcedReachability}}强制可达性：{{.SyncStatus.LibP2P.ForcedReachability}}{{else}}未设置强制 reachability。{{end}}</p>
+            </article>
+            <article class="ops-card">
+              <span class="stat-label">Hole Punching</span>
+              <strong>{{if .SyncStatus.LibP2P.HolePunchingEnabled}}已启用{{else}}未启用{{end}}</strong>
+              <p class="micro-copy">{{if .SyncStatus.LibP2P.LastReachabilityAt}}最近 reachability 事件：{{formatOptionalTime .SyncStatus.LibP2P.LastReachabilityAt}}{{else}}尚无事件时间。{{end}}</p>
+            </article>
+            <article class="ops-card">
+              <span class="stat-label">Relay Reservation</span>
+              <strong>{{if .SyncStatus.LibP2P.RelayReservationActive}}已生效{{else}}尚未生效{{end}}</strong>
+              <p class="micro-copy">挂载地址：{{.SyncStatus.LibP2P.RelayReservationCount}}。{{if .SyncStatus.LibP2P.RelayReservationPeers}}relay peer：{{join .SyncStatus.LibP2P.RelayReservationPeers "、"}}{{else}}当前还没有解析出已挂载的 relay peer。{{end}}</p>
+            </article>
+            <article class="ops-card ops-card-wide">
+              <span class="stat-label">Relay 地址</span>
+              {{if .SyncStatus.LibP2P.RelayAddrs}}
+                <div class="network-code-list">
+                  {{range .SyncStatus.LibP2P.RelayAddrs}}<code>{{.}}</code>{{end}}
+                </div>
+              {{else}}
+                <strong>尚未出现</strong>
+              {{end}}
+              <p class="micro-copy">配置 public peer：{{.SyncStatus.LibP2P.ConfiguredPublicPeers}}。{{if .SyncStatus.LibP2P.LastRelayAt}}最近 relay 更新：{{formatOptionalTime .SyncStatus.LibP2P.LastRelayAt}}{{else}}当前还没有收到 AutoRelay 地址更新事件。{{end}}</p>
+            </article>
+            <article class="ops-card ops-card-wide">
+              <span class="stat-label">实际可达地址</span>
+              {{if .SyncStatus.LibP2P.ReachableAddrs}}
+                <div class="network-code-list">
+                  {{range .SyncStatus.LibP2P.ReachableAddrs}}<code>{{.}}</code>{{end}}
+                </div>
+              {{else}}
+                <strong>尚未收到</strong>
+              {{end}}
+              <p class="micro-copy">{{if .SyncStatus.LibP2P.LastReachableAddrsAt}}最近可达地址更新：{{formatOptionalTime .SyncStatus.LibP2P.LastReachableAddrsAt}}{{else}}当前还没有收到 reachable addrs 事件。{{end}}</p>
+            </article>
+          </div>
+        </section>
+
+        <section class="panel panel-inline">
+          <div class="panel-head">
+            <div>
               <p class="panel-label">局域网锚点健康</p>
               <p class="network-summary-copy">显示 `lan_peer` / `lan_bt_peer` 的最近成功、失败冷却和当前优先级。</p>
             </div>

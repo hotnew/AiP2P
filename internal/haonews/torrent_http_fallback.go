@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-func fetchTorrentFallback(ctx context.Context, store *Store, ref SyncRef, lanPeers []string) (string, error) {
+func fetchTorrentFallback(ctx context.Context, store *Store, ref SyncRef, peerSources []string) (string, error) {
 	if ref.InfoHash == "" {
 		return "", fmt.Errorf("missing infohash for torrent fallback")
 	}
@@ -22,13 +22,13 @@ func fetchTorrentFallback(ctx context.Context, store *Store, ref SyncRef, lanPee
 		return target, nil
 	}
 	var lastErr error
-	for _, endpoint := range candidateTorrentURLs(ref, lanPeers) {
+	for _, endpoint := range candidateTorrentURLs(ref, peerSources) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 		if err != nil {
 			lastErr = err
 			continue
 		}
-		resp, err := doLANHTTPRequest(req, 5*time.Second, lanPeers)
+		resp, err := doLANHTTPRequest(req, 5*time.Second, peerSources)
 		if err != nil {
 			lastErr = err
 			continue
@@ -73,7 +73,7 @@ func fetchTorrentFallback(ctx context.Context, store *Store, ref SyncRef, lanPee
 	return "", lastErr
 }
 
-func fetchBundleFallback(ctx context.Context, store *Store, ref SyncRef, lanPeers []string, maxBundleMB int) (string, error) {
+func fetchBundleFallback(ctx context.Context, store *Store, ref SyncRef, peerSources []string, maxBundleMB int) (string, error) {
 	if store == nil {
 		return "", fmt.Errorf("store is required")
 	}
@@ -86,13 +86,13 @@ func fetchBundleFallback(ctx context.Context, store *Store, ref SyncRef, lanPeer
 	}
 	maxBytes *= 1024 * 1024
 	var lastErr error
-	for _, endpoint := range candidateBundleURLs(ref, lanPeers) {
+	for _, endpoint := range candidateBundleURLs(ref, peerSources) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 		if err != nil {
 			lastErr = err
 			continue
 		}
-		resp, err := doLANHTTPRequest(req, 12*time.Second, lanPeers)
+		resp, err := doLANHTTPRequest(req, 12*time.Second, peerSources)
 		if err != nil {
 			lastErr = err
 			continue
@@ -152,12 +152,12 @@ func fetchBundleFallback(ctx context.Context, store *Store, ref SyncRef, lanPeer
 	return "", lastErr
 }
 
-func candidateTorrentURLs(ref SyncRef, lanPeers []string) []string {
+func candidateTorrentURLs(ref SyncRef, peerSources []string) []string {
 	seen := make(map[string]struct{})
 	out := make([]string, 0)
 	add := func(host string) {
 		host = normalizeTorrentHTTPHost(host)
-		if host == "" || !allowTorrentHTTPHost(host, lanPeers) {
+		if host == "" || !allowTorrentHTTPHost(host, peerSources) {
 			return
 		}
 		value := "http://" + net.JoinHostPort(host, "51818") + "/api/torrents/" + ref.InfoHash + ".torrent"
@@ -167,7 +167,7 @@ func candidateTorrentURLs(ref SyncRef, lanPeers []string) []string {
 		seen[value] = struct{}{}
 		out = append(out, value)
 	}
-	for _, host := range lanPeers {
+	for _, host := range peerSources {
 		add(host)
 	}
 	if strings.TrimSpace(ref.Magnet) != "" {
@@ -184,12 +184,12 @@ func candidateTorrentURLs(ref SyncRef, lanPeers []string) []string {
 	return out
 }
 
-func candidateBundleURLs(ref SyncRef, lanPeers []string) []string {
+func candidateBundleURLs(ref SyncRef, peerSources []string) []string {
 	seen := make(map[string]struct{})
 	out := make([]string, 0)
 	add := func(host string) {
 		host = normalizeTorrentHTTPHost(host)
-		if host == "" || !allowTorrentHTTPHost(host, lanPeers) {
+		if host == "" || !allowTorrentHTTPHost(host, peerSources) {
 			return
 		}
 		value := "http://" + net.JoinHostPort(host, "51818") + "/api/bundles/" + ref.InfoHash + ".tar"
@@ -199,7 +199,7 @@ func candidateBundleURLs(ref SyncRef, lanPeers []string) []string {
 		seen[value] = struct{}{}
 		out = append(out, value)
 	}
-	for _, host := range lanPeers {
+	for _, host := range peerSources {
 		add(host)
 	}
 	if strings.TrimSpace(ref.Magnet) != "" {
@@ -233,13 +233,13 @@ func normalizeTorrentHTTPHost(value string) string {
 	return strings.TrimSpace(value)
 }
 
-func allowTorrentHTTPHost(host string, lanPeers []string) bool {
+func allowTorrentHTTPHost(host string, peerSources []string) bool {
 	host = normalizeTorrentHTTPHost(host)
 	if host == "" {
 		return false
 	}
-	for _, lanPeer := range lanPeers {
-		if normalizeTorrentHTTPHost(lanPeer) == host {
+	for _, peerSource := range peerSources {
+		if normalizeTorrentHTTPHost(peerSource) == host {
 			return true
 		}
 	}
@@ -251,7 +251,7 @@ func allowTorrentHTTPHost(host string, lanPeers []string) bool {
 	if ip4 == nil || !isRFC1918IPv4(ip4) {
 		return false
 	}
-	subnets := privateIPv4Subnets(lanPeers)
+	subnets := privateIPv4Subnets(peerSources)
 	if len(subnets) == 0 {
 		return true
 	}

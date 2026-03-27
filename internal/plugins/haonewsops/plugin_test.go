@@ -113,6 +113,8 @@ lan_bt_peer=192.168.102.76
 		"BT/DHT 锚点健康",
 		"主通告 libp2p",
 		"主通告 BT",
+		"Relay Reservation",
+		"实际可达地址",
 		"主通告候选地址",
 		"地址类型",
 		"网卡类型",
@@ -206,9 +208,21 @@ lan_bt_peer=192.168.102.75
 		UpdatedAt: time.Now().UTC(),
 		NetworkID: "2c2d6cf7b255ba20d6ad01135654933851b02bd00c65c2a6a54b97ab56590475",
 		LibP2P: newsplugin.SyncLibP2PStatus{
-			Enabled:        true,
-			PeerID:         "QmBootstrapPeer",
-			ListenAddrs:    []string{"/ip4/0.0.0.0/tcp/50584"},
+			Enabled:                true,
+			PeerID:                 "QmBootstrapPeer",
+			ListenAddrs:            []string{"/ip4/0.0.0.0/tcp/50584"},
+			AutoNATv2Enabled:       true,
+			AutoRelayEnabled:       true,
+			HolePunchingEnabled:    true,
+			Reachability:           "private",
+			ReachableAddrs:         []string{"/dns4/ai.jie.news/tcp/50584/p2p/QmBootstrapPeer"},
+			RelayReservationActive: true,
+			RelayReservationCount:  2,
+			RelayReservationPeers:  []string{"QmRelayA", "QmRelayB"},
+			RelayAddrs: []string{
+				"/dns4/relay.jie.news/tcp/4001/p2p/QmRelayA/p2p-circuit/p2p/QmBootstrapPeer",
+				"/dns4/relay2.jie.news/tcp/4001/p2p/QmRelayB/p2p-circuit/p2p/QmBootstrapPeer",
+			},
 			LastError:      "",
 			Peers:          nil,
 			ConnectedPeers: 1,
@@ -251,6 +265,15 @@ lan_bt_peer=192.168.102.75
 	}
 	if payload.ExplainDetail.PrimaryHost != "192.168.102.75" {
 		t.Fatalf("payload.ExplainDetail.PrimaryHost = %q", payload.ExplainDetail.PrimaryHost)
+	}
+	if !payload.ExplainDetail.RelayReservationActive || payload.ExplainDetail.RelayReservationCount != 2 {
+		t.Fatalf("payload.ExplainDetail = %#v, want relay reservation status", payload.ExplainDetail)
+	}
+	if len(payload.ExplainDetail.RelayReservationPeers) != 2 {
+		t.Fatalf("payload.ExplainDetail = %#v, want relay reservation peers", payload.ExplainDetail)
+	}
+	if len(payload.ExplainDetail.ReachableAddrs) != 1 {
+		t.Fatalf("payload.ExplainDetail = %#v, want reachable addrs", payload.ExplainDetail)
 	}
 	if payload.ExplainDetail.SuccessCount < 2 || payload.ExplainDetail.FailureCount != 1 {
 		t.Fatalf("payload.ExplainDetail = %#v", payload.ExplainDetail)

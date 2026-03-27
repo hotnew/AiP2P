@@ -108,12 +108,13 @@ func handleNetwork(app *newsplugin.App, w http.ResponseWriter, r *http.Request) 
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	primaryExplainDetail := buildPrimaryAdvertiseExplainDetail(requestHost, advertiseHost, lanPeerHealth, lanBTHealth, advertiseHostHealth)
+	primaryExplainDetail := buildPrimaryAdvertiseExplainDetail(requestHost, advertiseHost, lanPeerHealth, lanBTHealth, advertiseHostHealth, syncStatus, netCfg)
 	primaryExplain := buildPrimaryAdvertiseExplanation(primaryExplainDetail)
 	data := newsplugin.NetworkPageData{
 		Project:             app.ProjectName(),
 		Version:             app.VersionString(),
 		ListenAddr:          app.HTTPListenAddr(),
+		NetworkMode:         netCfg.NetworkMode,
 		RequestHost:         advertiseHost,
 		PrimaryLibP2P:       firstString(dialAddrs),
 		PrimaryBTNode:       firstString(btNodes),
@@ -157,18 +158,36 @@ func buildPrimaryAdvertiseExplanation(detail *newsplugin.NetworkBootstrapExplain
 	if detail.LastFailureAt != nil {
 		lines = append(lines, "最近失败："+detail.LastFailureAt.Local().Format("2006-01-02 15:04 MST"))
 	}
+	if detail.RelayReservationActive {
+		lines = append(lines, "Relay reservation 已生效，共挂载 "+strconv.Itoa(detail.RelayReservationCount)+" 条 relay 地址。")
+	} else if detail.AutoRelay {
+		lines = append(lines, "AutoRelay 已启用，但当前还没有看到已挂载的 relay reservation 地址。")
+	}
+	if len(detail.RelayReservationPeers) > 0 {
+		lines = append(lines, "当前挂载 relay peer："+strings.Join(detail.RelayReservationPeers, "、"))
+	}
 	lines = append(lines, detail.Reasons...)
 	return lines
 }
 
-func buildPrimaryAdvertiseExplainDetail(requestHost, primaryHost string, lanPeerHealth, lanBTHealth []newsplugin.LANPeerHealthStatus, advertiseHealth []newsplugin.AdvertiseHostHealthStatus) *newsplugin.NetworkBootstrapExplainDetail {
+func buildPrimaryAdvertiseExplainDetail(requestHost, primaryHost string, lanPeerHealth, lanBTHealth []newsplugin.LANPeerHealthStatus, advertiseHealth []newsplugin.AdvertiseHostHealthStatus, syncStatus newsplugin.SyncRuntimeStatus, netCfg newsplugin.NetworkBootstrapConfig) *newsplugin.NetworkBootstrapExplainDetail {
 	primaryHost = strings.TrimSpace(primaryHost)
 	if primaryHost == "" {
 		return nil
 	}
 	detail := &newsplugin.NetworkBootstrapExplainDetail{
-		RequestHost: strings.TrimSpace(requestHost),
-		PrimaryHost: primaryHost,
+		NetworkMode:            strings.TrimSpace(netCfg.NetworkMode),
+		RequestHost:            strings.TrimSpace(requestHost),
+		PrimaryHost:            primaryHost,
+		AutoNATv2:              syncStatus.LibP2P.AutoNATv2Enabled,
+		AutoRelay:              syncStatus.LibP2P.AutoRelayEnabled,
+		HolePunching:           syncStatus.LibP2P.HolePunchingEnabled,
+		Reachability:           strings.TrimSpace(syncStatus.LibP2P.Reachability),
+		ReachableAddrs:         append([]string(nil), syncStatus.LibP2P.ReachableAddrs...),
+		RelayReservationActive: syncStatus.LibP2P.RelayReservationActive,
+		RelayReservationCount:  syncStatus.LibP2P.RelayReservationCount,
+		RelayReservationPeers:  append([]string(nil), syncStatus.LibP2P.RelayReservationPeers...),
+		RelayAddrs:             append([]string(nil), syncStatus.LibP2P.RelayAddrs...),
 	}
 	if item, ok := findAdvertiseHostHealth(advertiseHealth, primaryHost); ok {
 		detail.SuccessCount = item.SuccessCount
@@ -473,7 +492,7 @@ func handleAPINetworkBootstrap(app *newsplugin.App, w http.ResponseWriter, r *ht
 	_ = newsplugin.RecordAdvertiseHostResult(netCfg, advertiseHost, true)
 	advertiseHostHealth, _ := app.AdvertiseHostHealth()
 	lanPeerHealth, lanBTHealth, _ := app.LANPeerHealth()
-	explainDetail := buildPrimaryAdvertiseExplainDetail(host, advertiseHost, lanPeerHealth, lanBTHealth, advertiseHostHealth)
+	explainDetail := buildPrimaryAdvertiseExplainDetail(host, advertiseHost, lanPeerHealth, lanBTHealth, advertiseHostHealth, syncStatus, netCfg)
 	explain := buildPrimaryAdvertiseExplanation(explainDetail)
 	newsplugin.WriteJSON(w, http.StatusOK, newsplugin.NetworkBootstrapResponse{
 		Project:         app.ProjectName(),

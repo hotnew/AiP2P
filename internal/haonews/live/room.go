@@ -668,6 +668,19 @@ func (s *session) findPeersOnce(ctx context.Context, namespace string) {
 
 func startTransport(ctx context.Context, cfg haonews.NetworkBootstrapConfig) (host.Host, *kaddht.IpfsDHT, mdns.Service, *routingdisc.RoutingDiscovery, *pubsub.PubSub, error) {
 	var options []libp2p.Option
+	resolvedLANPeers, _ := haonews.ResolveLANBootstrapPeers(ctx, cfg)
+	resolvedPublicPeers, _ := haonews.ResolveExplicitBootstrapPeers(ctx, cfg.PublicPeers, cfg.NetworkID, "public_peer")
+	resolvedRelayPeers, _ := haonews.ResolveExplicitBootstrapPeers(ctx, cfg.RelayPeers, cfg.NetworkID, "relay_peer")
+	if cfg.IsSharedMode() {
+		if relayBootstrapPeers, err := parseBootstrapPeers(resolvedRelayPeers); err == nil && len(relayBootstrapPeers) > 0 {
+			options = append(options,
+				libp2p.EnableAutoNATv2(),
+				libp2p.EnableAutoRelayWithStaticRelays(relayBootstrapPeers),
+				libp2p.EnableHolePunching(),
+				libp2p.ForceReachabilityPrivate(),
+			)
+		}
+	}
 	if len(cfg.LibP2PListen) > 0 {
 		resolved, err := haonews.ResolveLibP2PListenAddrs(cfg.LibP2PListen)
 		if err != nil {
@@ -679,9 +692,12 @@ func startTransport(ctx context.Context, cfg haonews.NetworkBootstrapConfig) (ho
 	if err != nil {
 		return nil, nil, nil, nil, nil, err
 	}
-	resolvedLANPeers, _ := haonews.ResolveLANBootstrapPeers(ctx, cfg)
 	knownGoodPeers, _ := haonews.LoadKnownGoodLibP2PBootstrapPeers(cfg)
-	bootstrapPeers, err := parseBootstrapPeers(haonews.EffectiveLibP2PBootstrapPeersWithKnownGood(resolvedLANPeers, knownGoodPeers, cfg.LibP2PBootstrap))
+	bootstrapPeers, err := parseBootstrapPeers(haonews.EffectiveLibP2PBootstrapPeersWithKnownGood(
+		append(append([]string{}, resolvedLANPeers...), append(resolvedPublicPeers, resolvedRelayPeers...)...),
+		knownGoodPeers,
+		cfg.LibP2PBootstrap,
+	))
 	if err != nil {
 		_ = h.Close()
 		return nil, nil, nil, nil, nil, err

@@ -212,6 +212,10 @@ func (c NetworkBootstrapConfig) AllowsLANDiscovery() bool {
 	return mode == "" || mode == networkModeLAN || mode == networkModeShared
 }
 
+func (c NetworkBootstrapConfig) IsSharedMode() bool {
+	return normalizeNetworkMode(c.NetworkMode) == networkModeShared
+}
+
 func effectiveLibP2PTransferMaxSize(value int64) int64 {
 	if value <= 0 {
 		return defaultLibP2PTransferMaxSize

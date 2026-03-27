@@ -1,6 +1,10 @@
 package haonews
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"testing"
 	"time"
@@ -207,6 +211,64 @@ func TestEffectiveLibP2PBootstrapPeersWithKnownGoodPrefersKnownGoodBeforePublic(
 	}
 	if got[1] != "/ip4/192.168.102.80/tcp/50584/p2p/cached-peer" {
 		t.Fatalf("got[1] = %q, want known-good peer before public peers", got[1])
+	}
+}
+
+func TestResolveExplicitBootstrapPeersUsesPublicPeerBootstrapEndpoint(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/network/bootstrap" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(lanBootstrapResponse{
+			NetworkID: latestOrgNetworkID,
+			PeerID:    "QmPublicPeer",
+			DialAddrs: []string{"/ip4/203.0.113.20/tcp/50584"},
+		})
+	}))
+	defer srv.Close()
+
+	got, err := resolveExplicitBootstrapPeers(context.Background(), []string{srv.URL}, latestOrgNetworkID, "public_peer")
+	if err != nil {
+		t.Fatalf("resolveExplicitBootstrapPeers() error = %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len(got) = %d, want 1", len(got))
+	}
+	if got[0] != "/ip4/203.0.113.20/tcp/50584/p2p/QmPublicPeer" {
+		t.Fatalf("got[0] = %q", got[0])
+	}
+}
+
+func TestResolveExplicitBootstrapPeersUsesRelayPeerBootstrapEndpoint(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/network/bootstrap" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(lanBootstrapResponse{
+			NetworkID: latestOrgNetworkID,
+			PeerID:    "QmRelayPeer",
+			DialAddrs: []string{"/dns4/relay.jie.news/tcp/50584"},
+		})
+	}))
+	defer srv.Close()
+
+	got, err := resolveExplicitBootstrapPeers(context.Background(), []string{srv.URL}, latestOrgNetworkID, "relay_peer")
+	if err != nil {
+		t.Fatalf("resolveExplicitBootstrapPeers() error = %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len(got) = %d, want 1", len(got))
+	}
+	if got[0] != "/dns4/relay.jie.news/tcp/50584/p2p/QmRelayPeer" {
+		t.Fatalf("got[0] = %q", got[0])
 	}
 }
 

@@ -106,7 +106,38 @@ func resolveLANBootstrapPeers(ctx context.Context, cfg NetworkBootstrapConfig) (
 	return out, nil
 }
 
+func resolveExplicitBootstrapPeers(ctx context.Context, values []string, expectedNetworkID, kind string) ([]string, error) {
+	out := make([]string, 0, len(values))
+	seen := make(map[string]struct{})
+	var errs []string
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		peers, _, err := fetchLANBootstrapPeer(ctx, nil, value, expectedNetworkID)
+		if err != nil {
+			errs = append(errs, fmt.Sprintf("%s %q: %v", kind, value, err))
+			continue
+		}
+		for _, peerValue := range peers {
+			if _, ok := seen[peerValue]; ok {
+				continue
+			}
+			seen[peerValue] = struct{}{}
+			out = append(out, peerValue)
+		}
+	}
+	if len(errs) > 0 {
+		return out, errors.New(strings.Join(errs, "; "))
+	}
+	return out, nil
+}
+
 func fetchLANBootstrapPeer(ctx context.Context, targets []string, configuredValue, expectedNetworkID string) ([]string, string, error) {
+	if len(targets) == 0 {
+		targets = []string{configuredValue}
+	}
 	var errs []string
 	for _, target := range targets {
 		payload, err := fetchLANBootstrapPayload(ctx, target, configuredValue, expectedNetworkID, true)
@@ -391,6 +422,9 @@ func lanPeerHealthState(entry lanPeerHealthEntry, now time.Time) string {
 }
 
 func fetchLANTorrentRouters(ctx context.Context, targets []string, configuredValue, expectedNetworkID string) ([]string, string, error) {
+	if len(targets) == 0 {
+		targets = []string{configuredValue}
+	}
 	var errs []string
 	for _, target := range targets {
 		payload, err := fetchLANBootstrapPayload(ctx, target, configuredValue, expectedNetworkID, false)

@@ -12,9 +12,11 @@ import (
 	"time"
 
 	libp2p "github.com/libp2p/go-libp2p"
-	crypto "github.com/libp2p/go-libp2p/core/crypto"
 	kaddht "github.com/libp2p/go-libp2p-kad-dht"
+	crypto "github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/event"
 	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	mdns "github.com/libp2p/go-libp2p/p2p/discovery/mdns"
 	"github.com/libp2p/go-libp2p/p2p/protocol/ping"
@@ -36,6 +38,20 @@ type libp2pRuntime struct {
 	rendezvous         []string
 	bootstrapWarning   string
 	lastBootstrappedAt *time.Time
+	statusMu           sync.RWMutex
+	autoNATv2Enabled   bool
+	autoRelayEnabled   bool
+	holePunchEnabled   bool
+	forcedReachability string
+	reachability       string
+	reachableAddrs     []string
+	configuredPublic   int
+	configuredRelay    int
+	resolvedRelay      int
+	relayAddrs         []string
+	lastReachableAt    *time.Time
+	lastReachabilityAt *time.Time
+	lastRelayAt        *time.Time
 }
 
 const (
@@ -62,9 +78,14 @@ type KnownGoodLibP2PPeerStatus struct {
 
 func startLibP2PRuntime(ctx context.Context, cfg NetworkBootstrapConfig, store *Store) (*libp2pRuntime, error) {
 	knownGoodPeers, knownGoodErr := LoadKnownGoodLibP2PBootstrapPeers(cfg)
-	if len(cfg.LibP2PBootstrap) == 0 && len(cfg.LibP2PRendezvous) == 0 && len(cfg.LANPeers) == 0 && len(knownGoodPeers) == 0 {
+	if len(cfg.LibP2PBootstrap) == 0 && len(cfg.LibP2PRendezvous) == 0 && len(cfg.LANPeers) == 0 && len(cfg.PublicPeers) == 0 && len(cfg.RelayPeers) == 0 && len(knownGoodPeers) == 0 {
 		return nil, nil
 	}
+
+	resolvedLANPeers, lanErr := resolveLANBootstrapPeers(ctx, cfg)
+	resolvedPublicPeers, publicErr := resolveExplicitBootstrapPeers(ctx, cfg.PublicPeers, cfg.NetworkID, "public_peer")
+	resolvedRelayPeers, relayErr := resolveExplicitBootstrapPeers(ctx, cfg.RelayPeers, cfg.NetworkID, "relay_peer")
+	relayBootstrapPeers, relayParseErr := parseBootstrapPeers(resolvedRelayPeers)
 
 	hostOptions := []libp2p.Option{libp2p.Ping(true)}
 	hostKey, err := loadOrCreateLibP2PHostKey(cfg)
@@ -80,13 +101,25 @@ func startLibP2PRuntime(ctx context.Context, cfg NetworkBootstrapConfig, store *
 		}
 		hostOptions = append(hostOptions, libp2p.ListenAddrStrings(resolvedListen...))
 	}
+	if cfg.IsSharedMode() && len(relayBootstrapPeers) > 0 {
+		hostOptions = append(hostOptions,
+			libp2p.EnableAutoNATv2(),
+			libp2p.EnableAutoRelayWithStaticRelays(relayBootstrapPeers),
+			libp2p.EnableHolePunching(),
+			libp2p.ForceReachabilityPrivate(),
+		)
+	}
 	h, err := libp2p.New(hostOptions...)
 	if err != nil {
 		return nil, fmt.Errorf("create libp2p host: %w", err)
 	}
 
-	resolvedLANPeers, lanErr := resolveLANBootstrapPeers(ctx, cfg)
-	bootstrapValues := EffectiveLibP2PBootstrapPeersWithKnownGood(resolvedLANPeers, knownGoodPeers, cfg.LibP2PBootstrap)
+	resolvedBootstrapPeers := EffectiveLibP2PBootstrapPeersWithKnownGood(
+		append(append([]string{}, resolvedLANPeers...), append(resolvedPublicPeers, resolvedRelayPeers...)...),
+		knownGoodPeers,
+		cfg.LibP2PBootstrap,
+	)
+	bootstrapValues := resolvedBootstrapPeers
 	peers, err := parseBootstrapPeers(bootstrapValues)
 	if err != nil {
 		_ = h.Close()
@@ -117,7 +150,7 @@ func startLibP2PRuntime(ctx context.Context, cfg NetworkBootstrapConfig, store *
 	}
 	now := time.Now().UTC()
 	transferMaxSize := effectiveLibP2PTransferMaxSize(cfg.LibP2PTransferMaxSize)
-	return &libp2pRuntime{
+	rt := &libp2pRuntime{
 		host:             h,
 		dht:              dht,
 		ping:             ping.NewPingService(h),
@@ -136,13 +169,42 @@ func startLibP2PRuntime(ctx context.Context, cfg NetworkBootstrapConfig, store *
 			if lanErr != nil {
 				warns = append(warns, lanErr.Error())
 			}
+			if publicErr != nil {
+				warns = append(warns, publicErr.Error())
+			}
+			if relayErr != nil {
+				warns = append(warns, relayErr.Error())
+			}
+			if relayParseErr != nil {
+				warns = append(warns, "parse relay peers: "+relayParseErr.Error())
+			}
 			if knownGoodErr != nil {
 				warns = append(warns, "load known-good peers: "+knownGoodErr.Error())
 			}
 			return strings.Join(warns, "; ")
 		}(),
 		lastBootstrappedAt: &now,
-	}, nil
+		autoNATv2Enabled:   cfg.IsSharedMode() && len(relayBootstrapPeers) > 0,
+		autoRelayEnabled:   cfg.IsSharedMode() && len(relayBootstrapPeers) > 0,
+		holePunchEnabled:   cfg.IsSharedMode() && len(relayBootstrapPeers) > 0,
+		configuredPublic:   len(cfg.PublicPeers),
+		configuredRelay:    len(cfg.RelayPeers),
+		resolvedRelay:      len(relayBootstrapPeers),
+		forcedReachability: func() string {
+			if cfg.IsSharedMode() && len(relayBootstrapPeers) > 0 {
+				return network.ReachabilityPrivate.String()
+			}
+			return ""
+		}(),
+		reachability: func() string {
+			if cfg.IsSharedMode() && len(relayBootstrapPeers) > 0 {
+				return network.ReachabilityPrivate.String()
+			}
+			return ""
+		}(),
+	}
+	rt.startEventWatchers(ctx)
+	return rt, nil
 }
 
 func (r *libp2pRuntime) Close() error {
@@ -175,6 +237,12 @@ func (r *libp2pRuntime) Status(ctx context.Context) SyncLibP2PStatus {
 		ConfiguredListen:      append([]string(nil), r.configuredListen...),
 		DirectTransferEnabled: r.transfer != nil,
 		TransferMaxSize:       r.transferMaxSize,
+		AutoNATv2Enabled:      r.autoNATv2Enabled,
+		AutoRelayEnabled:      r.autoRelayEnabled,
+		HolePunchingEnabled:   r.holePunchEnabled,
+		ConfiguredPublicPeers: r.configuredPublic,
+		ConfiguredRelayPeers:  r.configuredRelay,
+		ResolvedRelayPeers:    r.resolvedRelay,
 		ConfiguredBootstrap:   len(r.bootstraps),
 		ConfiguredRendezvous:  len(r.rendezvous),
 		MDNS: SyncMDNSStatus{
@@ -183,6 +251,18 @@ func (r *libp2pRuntime) Status(ctx context.Context) SyncLibP2PStatus {
 		},
 		LastBootstrapAt: r.lastBootstrappedAt,
 	}
+	r.statusMu.RLock()
+	status.ForcedReachability = r.forcedReachability
+	status.Reachability = r.reachability
+	status.ReachableAddrs = append([]string(nil), r.reachableAddrs...)
+	status.RelayAddrs = append([]string(nil), r.relayAddrs...)
+	status.LastReachableAddrsAt = r.lastReachableAt
+	status.LastReachabilityAt = r.lastReachabilityAt
+	status.LastRelayAt = r.lastRelayAt
+	r.statusMu.RUnlock()
+	status.RelayReservationPeers = relayReservationPeersFromAddrs(status.RelayAddrs)
+	status.RelayReservationCount = len(status.RelayAddrs)
+	status.RelayReservationActive = status.RelayReservationCount > 0
 	if r.bootstrapWarning != "" {
 		status.LastError = r.bootstrapWarning
 	}
@@ -252,6 +332,131 @@ func (r *libp2pRuntime) Status(ctx context.Context) SyncLibP2PStatus {
 	return status
 }
 
+func (r *libp2pRuntime) startEventWatchers(ctx context.Context) {
+	if r == nil || r.host == nil {
+		return
+	}
+	reachSub, err := r.host.EventBus().Subscribe(new(event.EvtLocalReachabilityChanged))
+	if err == nil {
+		go func() {
+			defer reachSub.Close()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case evt, ok := <-reachSub.Out():
+					if !ok {
+						return
+					}
+					change, ok := evt.(event.EvtLocalReachabilityChanged)
+					if !ok {
+						continue
+					}
+					now := time.Now().UTC()
+					r.statusMu.Lock()
+					r.reachability = change.Reachability.String()
+					r.lastReachabilityAt = &now
+					r.statusMu.Unlock()
+				}
+			}
+		}()
+	}
+	reachableSub, err := r.host.EventBus().Subscribe(new(event.EvtHostReachableAddrsChanged))
+	if err == nil {
+		go func() {
+			defer reachableSub.Close()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case evt, ok := <-reachableSub.Out():
+					if !ok {
+						return
+					}
+					change, ok := evt.(event.EvtHostReachableAddrsChanged)
+					if !ok {
+						continue
+					}
+					addrs := make([]string, 0, len(change.Reachable))
+					for _, addr := range change.Reachable {
+						addrs = append(addrs, addr.String())
+					}
+					now := time.Now().UTC()
+					r.statusMu.Lock()
+					r.reachableAddrs = addrs
+					r.lastReachableAt = &now
+					r.statusMu.Unlock()
+				}
+			}
+		}()
+	}
+	relaySub, err := r.host.EventBus().Subscribe(new(event.EvtAutoRelayAddrsUpdated))
+	if err == nil {
+		go func() {
+			defer relaySub.Close()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case evt, ok := <-relaySub.Out():
+					if !ok {
+						return
+					}
+					change, ok := evt.(event.EvtAutoRelayAddrsUpdated)
+					if !ok {
+						continue
+					}
+					addrs := make([]string, 0, len(change.RelayAddrs))
+					for _, addr := range change.RelayAddrs {
+						addrs = append(addrs, addr.String())
+					}
+					now := time.Now().UTC()
+					r.statusMu.Lock()
+					r.relayAddrs = addrs
+					r.lastRelayAt = &now
+					r.statusMu.Unlock()
+				}
+			}
+		}()
+	}
+}
+
+func relayReservationPeersFromAddrs(addrs []string) []string {
+	if len(addrs) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(addrs))
+	seen := make(map[string]struct{}, len(addrs))
+	for _, addr := range addrs {
+		addr = strings.TrimSpace(addr)
+		if addr == "" {
+			continue
+		}
+		prefix, _, ok := strings.Cut(addr, "/p2p-circuit")
+		if !ok {
+			continue
+		}
+		idx := strings.LastIndex(prefix, "/p2p/")
+		if idx < 0 {
+			continue
+		}
+		peerID := strings.TrimSpace(prefix[idx+len("/p2p/"):])
+		if peerID == "" {
+			continue
+		}
+		if _, err := peer.Decode(peerID); err != nil {
+			continue
+		}
+		if _, ok := seen[peerID]; ok {
+			continue
+		}
+		seen[peerID] = struct{}{}
+		out = append(out, peerID)
+	}
+	sort.Strings(out)
+	return out
+}
+
 func parseBootstrapPeers(values []string) ([]peer.AddrInfo, error) {
 	out := make([]peer.AddrInfo, 0, len(values))
 	seen := make(map[string]struct{})
@@ -299,6 +504,10 @@ func EffectiveLibP2PBootstrapPeersWithKnownGood(lanPeers, knownGoodPeers, public
 
 func ResolveLANBootstrapPeers(ctx context.Context, cfg NetworkBootstrapConfig) ([]string, error) {
 	return resolveLANBootstrapPeers(ctx, cfg)
+}
+
+func ResolveExplicitBootstrapPeers(ctx context.Context, values []string, expectedNetworkID, kind string) ([]string, error) {
+	return resolveExplicitBootstrapPeers(ctx, values, expectedNetworkID, kind)
 }
 
 func LoadKnownGoodLibP2PBootstrapPeers(cfg NetworkBootstrapConfig) ([]string, error) {

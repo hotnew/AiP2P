@@ -204,6 +204,7 @@ type NetworkPageData struct {
 	Project             string
 	Version             string
 	ListenAddr          string
+	NetworkMode         string
 	RequestHost         string
 	PrimaryLibP2P       string
 	PrimaryBTNode       string
@@ -287,15 +288,25 @@ type NetworkBootstrapResponse struct {
 }
 
 type NetworkBootstrapExplainDetail struct {
-	RequestHost   string                               `json:"request_host,omitempty"`
-	PrimaryHost   string                               `json:"primary_host,omitempty"`
-	SuccessCount  int                                  `json:"success_count,omitempty"`
-	FailureCount  int                                  `json:"failure_count,omitempty"`
-	LastSuccessAt *time.Time                           `json:"last_success_at,omitempty"`
-	LastFailureAt *time.Time                           `json:"last_failure_at,omitempty"`
-	LANLibP2P     *NetworkBootstrapAnchorExplainDetail `json:"lan_libp2p,omitempty"`
-	LANBT         *NetworkBootstrapAnchorExplainDetail `json:"lan_bt,omitempty"`
-	Reasons       []string                             `json:"reasons,omitempty"`
+	NetworkMode            string                               `json:"network_mode,omitempty"`
+	RequestHost            string                               `json:"request_host,omitempty"`
+	PrimaryHost            string                               `json:"primary_host,omitempty"`
+	AutoNATv2              bool                                 `json:"autonatv2,omitempty"`
+	AutoRelay              bool                                 `json:"autorelay,omitempty"`
+	HolePunching           bool                                 `json:"hole_punching,omitempty"`
+	Reachability           string                               `json:"reachability,omitempty"`
+	ReachableAddrs         []string                             `json:"reachable_addrs,omitempty"`
+	RelayReservationActive bool                                 `json:"relay_reservation_active,omitempty"`
+	RelayReservationCount  int                                  `json:"relay_reservation_count,omitempty"`
+	RelayReservationPeers  []string                             `json:"relay_reservation_peers,omitempty"`
+	RelayAddrs             []string                             `json:"relay_addrs,omitempty"`
+	SuccessCount           int                                  `json:"success_count,omitempty"`
+	FailureCount           int                                  `json:"failure_count,omitempty"`
+	LastSuccessAt          *time.Time                           `json:"last_success_at,omitempty"`
+	LastFailureAt          *time.Time                           `json:"last_failure_at,omitempty"`
+	LANLibP2P              *NetworkBootstrapAnchorExplainDetail `json:"lan_libp2p,omitempty"`
+	LANBT                  *NetworkBootstrapAnchorExplainDetail `json:"lan_bt,omitempty"`
+	Reasons                []string                             `json:"reasons,omitempty"`
 }
 
 type NetworkBootstrapAnchorExplainDetail struct {
