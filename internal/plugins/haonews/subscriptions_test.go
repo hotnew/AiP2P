@@ -1,6 +1,7 @@
 package newsplugin
 
 import (
+	"os"
 	"testing"
 	"time"
 )
@@ -55,6 +56,104 @@ func TestApplySubscriptionRulesFiltersByTopicAndCarriesReplies(t *testing.T) {
 	}
 	if len(filtered.Bundles) != 2 {
 		t.Fatalf("bundles len = %d, want 2", len(filtered.Bundles))
+	}
+}
+
+func TestLoadSubscriptionRulesNormalizesDiscoverySelectors(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	path := root + "/subscriptions.json"
+	data := `{
+  "topics": ["all"],
+  "discovery_feeds": ["news", "NEWS", "hao.news/live", "all"],
+  "discovery_topics": ["world", "WORLD", "期货"]
+}`
+	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	rules, err := LoadSubscriptionRules(path)
+	if err != nil {
+		t.Fatalf("LoadSubscriptionRules() error = %v", err)
+	}
+	if len(rules.DiscoveryFeeds) != 3 {
+		t.Fatalf("discovery feeds len = %d, want 3", len(rules.DiscoveryFeeds))
+	}
+	if len(rules.DiscoveryTopics) != 2 {
+		t.Fatalf("discovery topics len = %d, want 2", len(rules.DiscoveryTopics))
+	}
+	if rules.DiscoveryFeeds[0] != "news" || rules.DiscoveryFeeds[1] != "live" || rules.DiscoveryFeeds[2] != "global" {
+		t.Fatalf("unexpected normalized discovery feeds: %v", rules.DiscoveryFeeds)
+	}
+	if rules.DiscoveryTopics[0] != "world" || rules.DiscoveryTopics[1] != "futures" {
+		t.Fatalf("unexpected normalized discovery topics: %v", rules.DiscoveryTopics)
+	}
+}
+
+func TestLoadSubscriptionRulesNormalizesTopicAliases(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	path := root + "/subscriptions.json"
+	data := `{
+  "topics": ["世界", "国际", "world"],
+  "history_topics": ["新闻", "news"],
+  "discovery_topics": ["期货", "futures"]
+}`
+	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	rules, err := LoadSubscriptionRules(path)
+	if err != nil {
+		t.Fatalf("LoadSubscriptionRules() error = %v", err)
+	}
+	if len(rules.Topics) != 1 || rules.Topics[0] != "world" {
+		t.Fatalf("topics = %v, want [world]", rules.Topics)
+	}
+	if len(rules.HistoryTopics) != 1 || rules.HistoryTopics[0] != "news" {
+		t.Fatalf("history topics = %v, want [news]", rules.HistoryTopics)
+	}
+	if len(rules.DiscoveryTopics) != 1 || rules.DiscoveryTopics[0] != "futures" {
+		t.Fatalf("discovery topics = %v, want [futures]", rules.DiscoveryTopics)
+	}
+}
+
+func TestLoadSubscriptionRulesAppliesConfiguredTopicAliasesAndWhitelist(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	path := root + "/subscriptions.json"
+	data := `{
+  "topics": ["macro", "未收录"],
+  "history_topics": ["brief"],
+  "discovery_topics": ["期货", "unknown"],
+  "topic_whitelist": ["world", "news", "futures"],
+  "topic_aliases": {
+    "macro": "world",
+    "brief": "news"
+  }
+}`
+	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	rules, err := LoadSubscriptionRules(path)
+	if err != nil {
+		t.Fatalf("LoadSubscriptionRules() error = %v", err)
+	}
+	if len(rules.Topics) != 1 || rules.Topics[0] != "world" {
+		t.Fatalf("topics = %v, want [world]", rules.Topics)
+	}
+	if len(rules.HistoryTopics) != 1 || rules.HistoryTopics[0] != "news" {
+		t.Fatalf("history topics = %v, want [news]", rules.HistoryTopics)
+	}
+	if len(rules.DiscoveryTopics) != 1 || rules.DiscoveryTopics[0] != "futures" {
+		t.Fatalf("discovery topics = %v, want [futures]", rules.DiscoveryTopics)
+	}
+	if len(rules.TopicWhitelist) != 3 || rules.TopicWhitelist[0] != "futures" || rules.TopicWhitelist[1] != "news" || rules.TopicWhitelist[2] != "world" {
+		t.Fatalf("topic whitelist = %v, want [futures news world]", rules.TopicWhitelist)
+	}
+	if rules.TopicAliases["macro"] != "world" || rules.TopicAliases["brief"] != "news" {
+		t.Fatalf("topic aliases = %v, want macro->world and brief->news", rules.TopicAliases)
 	}
 }
 

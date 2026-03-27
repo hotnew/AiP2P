@@ -174,18 +174,22 @@ type PaginationState struct {
 }
 
 type SubscriptionRules struct {
-	Channels        []string `json:"channels,omitempty"`
-	Topics          []string `json:"topics,omitempty"`
-	Tags            []string `json:"tags,omitempty"`
-	Authors         []string `json:"authors,omitempty"`
-	MaxAgeDays      int      `json:"max_age_days,omitempty"`
-	MaxBundleMB     int      `json:"max_bundle_mb,omitempty"`
-	MaxItemsPerDay  int64    `json:"max_items_per_day,omitempty"`
-	HistoryDays     int      `json:"history_days,omitempty"`
-	HistoryMaxItems int      `json:"history_max_items,omitempty"`
-	HistoryChannels []string `json:"history_channels,omitempty"`
-	HistoryTopics   []string `json:"history_topics,omitempty"`
-	HistoryAuthors  []string `json:"history_authors,omitempty"`
+	Channels        []string          `json:"channels,omitempty"`
+	Topics          []string          `json:"topics,omitempty"`
+	Tags            []string          `json:"tags,omitempty"`
+	Authors         []string          `json:"authors,omitempty"`
+	DiscoveryFeeds  []string          `json:"discovery_feeds,omitempty"`
+	DiscoveryTopics []string          `json:"discovery_topics,omitempty"`
+	TopicWhitelist  []string          `json:"topic_whitelist,omitempty"`
+	TopicAliases    map[string]string `json:"topic_aliases,omitempty"`
+	MaxAgeDays      int               `json:"max_age_days,omitempty"`
+	MaxBundleMB     int               `json:"max_bundle_mb,omitempty"`
+	MaxItemsPerDay  int64             `json:"max_items_per_day,omitempty"`
+	HistoryDays     int               `json:"history_days,omitempty"`
+	HistoryMaxItems int               `json:"history_max_items,omitempty"`
+	HistoryChannels []string          `json:"history_channels,omitempty"`
+	HistoryTopics   []string          `json:"history_topics,omitempty"`
+	HistoryAuthors  []string          `json:"history_authors,omitempty"`
 }
 
 type ArchiveDay struct {

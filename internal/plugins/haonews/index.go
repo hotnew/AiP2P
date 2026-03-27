@@ -316,11 +316,12 @@ func latestReactionAuthor(reactions []Reaction) string {
 func (idx Index) FilterPosts(opts FeedOptions) []Post {
 	filtered := make([]Post, 0, len(idx.Posts))
 	now := opts.referenceTime()
+	topic := canonicalTopic(opts.Topic)
 	for _, post := range idx.Posts {
 		if opts.Channel != "" && !strings.EqualFold(post.ChannelGroup, opts.Channel) {
 			continue
 		}
-		if opts.Topic != "" && !containsFold(post.Topics, opts.Topic) {
+		if topic != "" && !containsFold(post.Topics, topic) {
 			continue
 		}
 		if opts.Source != "" && !strings.EqualFold(post.SourceName, opts.Source) {
@@ -687,6 +688,9 @@ func stringValue(value any) string {
 func stringSlice(value any) []string {
 	items, ok := value.([]any)
 	if !ok {
+		if typed, ok := value.([]string); ok {
+			return uniqueCanonicalTopics(typed)
+		}
 		return nil
 	}
 	out := make([]string, 0, len(items))
@@ -696,7 +700,7 @@ func stringSlice(value any) []string {
 			out = append(out, text)
 		}
 	}
-	return out
+	return uniqueCanonicalTopics(out)
 }
 
 func reactionLabel(reactionType string, value *float64, vote int) string {

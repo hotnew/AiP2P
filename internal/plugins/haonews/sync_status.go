@@ -78,6 +78,10 @@ type SyncPubSubStatus struct {
 	Enabled             bool       `json:"enabled"`
 	JoinedTopics        []string   `json:"joined_topics"`
 	DiscoveryNamespaces []string   `json:"discovery_namespaces"`
+	DiscoveryFeeds      []string   `json:"discovery_feeds"`
+	DiscoveryTopics     []string   `json:"discovery_topics"`
+	TopicWhitelist      []string   `json:"topic_whitelist"`
+	TopicAliasPairs     []string   `json:"topic_alias_pairs"`
 	Published           int        `json:"published"`
 	Received            int        `json:"received"`
 	Enqueued            int        `json:"enqueued"`

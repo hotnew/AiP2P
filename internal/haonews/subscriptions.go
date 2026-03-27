@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"sort"
 	"strings"
 	"time"
 )
@@ -14,19 +15,30 @@ const defaultMaxItemsPerDay int64 = 999999999999
 const defaultHistoryDays = 7
 const defaultHistoryMaxItems = 500
 
+const (
+	discoveryFeedGlobal  = "global"
+	discoveryFeedNews    = "news"
+	discoveryFeedLive    = "live"
+	discoveryFeedArchive = "archive"
+)
+
 type SyncSubscriptions struct {
-	Channels        []string `json:"channels"`
-	Topics          []string `json:"topics"`
-	Tags            []string `json:"tags"`
-	Authors         []string `json:"authors,omitempty"`
-	MaxAgeDays      int      `json:"max_age_days"`
-	MaxBundleMB     int      `json:"max_bundle_mb"`
-	MaxItemsPerDay  int64    `json:"max_items_per_day"`
-	HistoryDays     int      `json:"history_days,omitempty"`
-	HistoryMaxItems int      `json:"history_max_items,omitempty"`
-	HistoryChannels []string `json:"history_channels,omitempty"`
-	HistoryTopics   []string `json:"history_topics,omitempty"`
-	HistoryAuthors  []string `json:"history_authors,omitempty"`
+	Channels        []string          `json:"channels"`
+	Topics          []string          `json:"topics"`
+	Tags            []string          `json:"tags"`
+	Authors         []string          `json:"authors,omitempty"`
+	DiscoveryFeeds  []string          `json:"discovery_feeds,omitempty"`
+	DiscoveryTopics []string          `json:"discovery_topics,omitempty"`
+	TopicWhitelist  []string          `json:"topic_whitelist,omitempty"`
+	TopicAliases    map[string]string `json:"topic_aliases,omitempty"`
+	MaxAgeDays      int               `json:"max_age_days"`
+	MaxBundleMB     int               `json:"max_bundle_mb"`
+	MaxItemsPerDay  int64             `json:"max_items_per_day"`
+	HistoryDays     int               `json:"history_days,omitempty"`
+	HistoryMaxItems int               `json:"history_max_items,omitempty"`
+	HistoryChannels []string          `json:"history_channels,omitempty"`
+	HistoryTopics   []string          `json:"history_topics,omitempty"`
+	HistoryAuthors  []string          `json:"history_authors,omitempty"`
 }
 
 func LoadSyncSubscriptions(path string) (SyncSubscriptions, error) {
@@ -53,12 +65,17 @@ func (r *SyncSubscriptions) Normalize() {
 	if r == nil {
 		return
 	}
+	r.TopicAliases = normalizedTopicAliases(r.TopicAliases)
+	whitelist := topicWhitelistSet(r.TopicWhitelist, r.TopicAliases)
+	r.TopicWhitelist = whitelistToSlice(whitelist)
 	r.Channels = uniqueFold(r.Channels)
-	r.Topics = uniqueFold(r.Topics)
+	r.Topics = uniqueCanonicalTopicsWithAliases(r.Topics, r.TopicAliases, whitelist)
 	r.Tags = uniqueFold(r.Tags)
 	r.Authors = uniqueFold(r.Authors)
+	r.DiscoveryFeeds = uniqueCanonicalDiscoveryFeeds(r.DiscoveryFeeds)
+	r.DiscoveryTopics = uniqueCanonicalTopicsWithAliases(r.DiscoveryTopics, r.TopicAliases, whitelist)
 	r.HistoryChannels = uniqueFold(r.HistoryChannels)
-	r.HistoryTopics = uniqueFold(r.HistoryTopics)
+	r.HistoryTopics = uniqueCanonicalTopicsWithAliases(r.HistoryTopics, r.TopicAliases, whitelist)
 	r.HistoryAuthors = uniqueFold(r.HistoryAuthors)
 	if r.MaxAgeDays <= 0 {
 		r.MaxAgeDays = defaultMaxAgeDays
@@ -69,6 +86,19 @@ func (r *SyncSubscriptions) Normalize() {
 	if r.MaxItemsPerDay <= 0 {
 		r.MaxItemsPerDay = defaultMaxItemsPerDay
 	}
+}
+
+func (r SyncSubscriptions) discoveryFeeds() []string {
+	r.Normalize()
+	if len(r.DiscoveryFeeds) != 0 {
+		return append([]string(nil), r.DiscoveryFeeds...)
+	}
+	return []string{discoveryFeedGlobal, discoveryFeedNews}
+}
+
+func (r SyncSubscriptions) discoveryTopics() []string {
+	r.Normalize()
+	return append([]string(nil), r.DiscoveryTopics...)
 }
 
 func (r SyncSubscriptions) Empty() bool {
@@ -98,7 +128,10 @@ func (r SyncSubscriptions) hasHistorySelectors() bool {
 }
 
 func matchesHistoryAnnouncement(announcement SyncAnnouncement, rules SyncSubscriptions) bool {
+	announcement = normalizeAnnouncement(announcement)
 	rules.Normalize()
+	whitelist := topicWhitelistSet(rules.TopicWhitelist, rules.TopicAliases)
+	announcement.Topics = uniqueCanonicalTopicsWithAliases(announcement.Topics, rules.TopicAliases, whitelist)
 	if !withinMaxAge(announcement.CreatedAt, rules.MaxAgeDays) {
 		return false
 	}
@@ -141,6 +174,163 @@ func uniqueFold(items []string) []string {
 		out = append(out, item)
 	}
 	return out
+}
+
+func uniqueCanonicalDiscoveryFeeds(items []string) []string {
+	seen := make(map[string]struct{}, len(items))
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		item = canonicalDiscoveryFeed(item)
+		if item == "" {
+			continue
+		}
+		if _, ok := seen[item]; ok {
+			continue
+		}
+		seen[item] = struct{}{}
+		out = append(out, item)
+	}
+	return out
+}
+
+func uniqueCanonicalTopics(items []string) []string {
+	return uniqueCanonicalTopicsWithAliases(items, nil, nil)
+}
+
+func uniqueCanonicalTopicsWithAliases(items []string, aliases map[string]string, whitelist map[string]struct{}) []string {
+	seen := make(map[string]struct{}, len(items))
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		item = canonicalTopicWithAliases(item, aliases)
+		if item == "" {
+			continue
+		}
+		if !topicAllowedByWhitelist(item, whitelist) {
+			continue
+		}
+		key := strings.ToLower(item)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, item)
+	}
+	return out
+}
+
+func canonicalDiscoveryFeed(feed string) string {
+	feed = strings.TrimSpace(strings.ToLower(feed))
+	feed = strings.TrimPrefix(feed, "hao.news/")
+	switch feed {
+	case "", "all":
+		return discoveryFeedGlobal
+	case discoveryFeedGlobal, discoveryFeedNews, discoveryFeedLive, discoveryFeedArchive:
+		return feed
+	default:
+		return feed
+	}
+}
+
+func canonicalTopic(topic string) string {
+	return canonicalTopicWithAliases(topic, nil)
+}
+
+func canonicalTopicWithAliases(topic string, aliases map[string]string) string {
+	original := strings.TrimSpace(topic)
+	if original == "" {
+		return ""
+	}
+	switch strings.ToLower(original) {
+	case reservedTopicAll:
+		return reservedTopicAll
+	case "world", "世界", "国际":
+		return "world"
+	case "news", "新闻":
+		return "news"
+	case "futures", "期货":
+		return "futures"
+	default:
+		if aliases != nil {
+			if canonical, ok := aliases[strings.ToLower(original)]; ok {
+				return canonical
+			}
+		}
+		return original
+	}
+}
+
+func normalizedTopicAliases(raw map[string]string) map[string]string {
+	if len(raw) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(raw))
+	for alias, canonical := range raw {
+		alias = strings.ToLower(strings.TrimSpace(alias))
+		canonical = canonicalTopic(canonical)
+		if alias == "" || canonical == "" {
+			continue
+		}
+		out[alias] = canonical
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func topicWhitelistSet(items []string, aliases map[string]string) map[string]struct{} {
+	if len(items) == 0 {
+		return nil
+	}
+	set := make(map[string]struct{}, len(items))
+	for _, item := range items {
+		item = canonicalTopicWithAliases(item, aliases)
+		if item == "" || item == reservedTopicAll {
+			continue
+		}
+		set[strings.ToLower(item)] = struct{}{}
+	}
+	if len(set) == 0 {
+		return nil
+	}
+	return set
+}
+
+func whitelistToSlice(set map[string]struct{}) []string {
+	if len(set) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(set))
+	for item := range set {
+		out = append(out, item)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func topicAliasPairs(aliases map[string]string) []string {
+	if len(aliases) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(aliases))
+	for alias, canonical := range aliases {
+		alias = strings.TrimSpace(alias)
+		canonical = strings.TrimSpace(canonical)
+		if alias == "" || canonical == "" {
+			continue
+		}
+		out = append(out, alias+" -> "+canonical)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func topicAllowedByWhitelist(topic string, whitelist map[string]struct{}) bool {
+	if len(whitelist) == 0 || strings.EqualFold(topic, reservedTopicAll) {
+		return true
+	}
+	_, ok := whitelist[strings.ToLower(strings.TrimSpace(topic))]
+	return ok
 }
 
 func containsFold(items []string, target string) bool {

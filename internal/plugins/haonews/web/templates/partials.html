@@ -152,13 +152,23 @@
 {{define "subscriptionSummary"}}
   <section class="panel panel-inline subscription-panel">
     <p class="panel-label">本地订阅镜像</p>
-    {{if and (eq (len .Topics) 0) (eq (len .Tags) 0)}}
+    {{if and (eq (len .Topics) 0) (eq (len .Tags) 0) (eq (len .DiscoveryFeeds) 0) (eq (len .DiscoveryTopics) 0) (eq (len .TopicWhitelist) 0) (eq (len .TopicAliases) 0)}}
       <p class="micro-copy">当前未加载本地订阅规则。此节点会镜像全部已索引的好牛Ai内容。</p>
     {{else}}
       <div class="active-filters">
+        {{range .DiscoveryFeeds}}<span class="filter-chip">发现 feed：{{.}}</span>{{end}}
+        {{range .DiscoveryTopics}}<span class="filter-chip">发现 topic：{{.}}</span>{{end}}
+        {{range .TopicWhitelist}}<span class="filter-chip">白名单：{{.}}</span>{{end}}
         {{range .Topics}}<span class="filter-chip">话题：{{.}}</span>{{end}}
         {{range .Tags}}<span class="filter-chip">标签：{{.}}</span>{{end}}
       </div>
+      {{if .TopicAliases}}
+        <p class="micro-copy">topic 别名映射：</p>
+        <div class="network-code-list">
+          {{range topicAliasPairs .TopicAliases}}<code>{{.}}</code>{{end}}
+        </div>
+      {{end}}
+      <p class="micro-copy">可在 `subscriptions.json` 里调整 `topic_whitelist` 和 `topic_aliases`。</p>
     {{end}}
   </section>
 {{end}}

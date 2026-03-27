@@ -84,11 +84,15 @@ func startPubSubRuntime(
 		topics:              make(map[string]*pubsub.Topic),
 		subscriptions:       make(map[string]*pubsub.Subscription),
 		joinedTopics:        joinedTopics,
-		discoveryNamespaces: discoveryNamespaces(hostRuntime.networkID, hostRuntime.rendezvous),
+		discoveryNamespaces: discoveryNamespaces(hostRuntime.networkID, hostRuntime.rendezvous, rules),
 		status: SyncPubSubStatus{
 			Enabled:             true,
 			JoinedTopics:        append([]string(nil), joinedTopics...),
-			DiscoveryNamespaces: discoveryNamespaces(hostRuntime.networkID, hostRuntime.rendezvous),
+			DiscoveryNamespaces: discoveryNamespaces(hostRuntime.networkID, hostRuntime.rendezvous, rules),
+			DiscoveryFeeds:      append([]string(nil), rules.discoveryFeeds()...),
+			DiscoveryTopics:     append([]string(nil), rules.discoveryTopics()...),
+			TopicWhitelist:      append([]string(nil), rules.TopicWhitelist...),
+			TopicAliasPairs:     topicAliasPairs(rules.TopicAliases),
 		},
 	}
 
@@ -139,6 +143,10 @@ func (r *pubsubRuntime) Status() SyncPubSubStatus {
 	status := r.status
 	status.JoinedTopics = append([]string(nil), r.joinedTopics...)
 	status.DiscoveryNamespaces = append([]string(nil), r.discoveryNamespaces...)
+	status.DiscoveryFeeds = append([]string(nil), r.status.DiscoveryFeeds...)
+	status.DiscoveryTopics = append([]string(nil), r.status.DiscoveryTopics...)
+	status.TopicWhitelist = append([]string(nil), r.status.TopicWhitelist...)
+	status.TopicAliasPairs = append([]string(nil), r.status.TopicAliasPairs...)
 	return status
 }
 
@@ -430,13 +438,35 @@ func subscribedAnnouncementTopics(networkID string, rules SyncSubscriptions) []s
 			topics = append(topics, namespacedTopic(networkID, "tag", tag))
 		}
 	}
+	for _, feed := range rules.discoveryFeeds() {
+		if strings.EqualFold(strings.TrimSpace(feed), "global") {
+			topics = append(topics, namespacedGlobalTopic(networkID))
+			continue
+		}
+		if channel := feedToChannel(feed); channel != "" {
+			topics = append(topics, namespacedTopic(networkID, "channel", channel))
+		}
+	}
+	for _, topic := range rules.discoveryTopics() {
+		if strings.EqualFold(strings.TrimSpace(topic), reservedTopicAll) {
+			topics = append(topics, namespacedGlobalTopic(networkID))
+			continue
+		}
+		topics = append(topics, namespacedTopic(networkID, "topic", topic))
+	}
 	return uniqueStrings(topics)
 }
 
-func discoveryNamespaces(networkID string, namespaces []string) []string {
+func discoveryNamespaces(networkID string, namespaces []string, rules SyncSubscriptions) []string {
 	values := []string{namespacedDiscoveryNamespace(networkID, syncPubSubDiscoveryDefault)}
 	for _, namespace := range namespaces {
 		values = append(values, namespacedDiscoveryNamespace(networkID, namespace))
+	}
+	for _, feed := range rules.discoveryFeeds() {
+		values = append(values, namespacedDiscoveryNamespace(networkID, "feed/"+strings.ToLower(strings.TrimSpace(feed))))
+	}
+	for _, topic := range rules.discoveryTopics() {
+		values = append(values, namespacedDiscoveryNamespace(networkID, "topic/"+strings.ToLower(strings.TrimSpace(topic))))
 	}
 	return uniqueStrings(values)
 }
@@ -482,6 +512,17 @@ func namespacedDiscoveryNamespace(networkID, value string) string {
 	return "haonews/discovery/" + networkID + "/" + url.PathEscape(value)
 }
 
+func feedToChannel(feed string) string {
+	feed = strings.TrimSpace(strings.ToLower(feed))
+	if feed == "" {
+		return ""
+	}
+	if strings.Contains(feed, "/") {
+		return feed
+	}
+	return "hao.news/" + feed
+}
+
 func creditProofTopic(networkID string) string {
 	networkID = normalizeNetworkID(networkID)
 	if networkID == "" {
@@ -524,7 +565,7 @@ func normalizeAnnouncement(announcement SyncAnnouncement) SyncAnnouncement {
 	announcement.Project = strings.TrimSpace(announcement.Project)
 	announcement.NetworkID = normalizeNetworkID(announcement.NetworkID)
 	announcement.LibP2PPeerID = strings.TrimSpace(announcement.LibP2PPeerID)
-	announcement.Topics = uniqueFold(announcement.Topics)
+	announcement.Topics = uniqueCanonicalTopics(announcement.Topics)
 	announcement.Tags = uniqueFold(announcement.Tags)
 	return announcement
 }
@@ -620,7 +661,7 @@ func stringSlice(value any) []string {
 	items, ok := value.([]any)
 	if !ok {
 		if typed, ok := value.([]string); ok {
-			return uniqueFold(typed)
+			return uniqueCanonicalTopics(typed)
 		}
 		return nil
 	}
@@ -632,11 +673,14 @@ func stringSlice(value any) []string {
 		}
 		out = append(out, text)
 	}
-	return uniqueFold(out)
+	return uniqueCanonicalTopics(out)
 }
 
 func matchesAnnouncement(announcement SyncAnnouncement, rules SyncSubscriptions) bool {
+	announcement = normalizeAnnouncement(announcement)
 	rules.Normalize()
+	whitelist := topicWhitelistSet(rules.TopicWhitelist, rules.TopicAliases)
+	announcement.Topics = uniqueCanonicalTopicsWithAliases(announcement.Topics, rules.TopicAliases, whitelist)
 	if !withinMaxAge(announcement.CreatedAt, rules.MaxAgeDays) {
 		return false
 	}

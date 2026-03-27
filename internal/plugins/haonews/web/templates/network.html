@@ -368,6 +368,38 @@
                 </div>
               </div>
             {{end}}
+            {{if .SyncStatus.PubSub.DiscoveryFeeds}}
+              <div class="network-block">
+                <span class="stat-label">显式 discovery feeds</span>
+                <div class="network-code-list">
+                  {{range .SyncStatus.PubSub.DiscoveryFeeds}}<code>{{.}}</code>{{end}}
+                </div>
+              </div>
+            {{end}}
+            {{if .SyncStatus.PubSub.DiscoveryTopics}}
+              <div class="network-block">
+                <span class="stat-label">显式 discovery topics</span>
+                <div class="network-code-list">
+                  {{range .SyncStatus.PubSub.DiscoveryTopics}}<code>{{.}}</code>{{end}}
+                </div>
+              </div>
+            {{end}}
+            {{if .SyncStatus.PubSub.TopicWhitelist}}
+              <div class="network-block">
+                <span class="stat-label">topic 白名单</span>
+                <div class="network-code-list">
+                  {{range .SyncStatus.PubSub.TopicWhitelist}}<code>{{.}}</code>{{end}}
+                </div>
+              </div>
+            {{end}}
+            {{if .SyncStatus.PubSub.TopicAliasPairs}}
+              <div class="network-block">
+                <span class="stat-label">topic alias map</span>
+                <div class="network-code-list">
+                  {{range .SyncStatus.PubSub.TopicAliasPairs}}<code>{{.}}</code>{{end}}
+                </div>
+              </div>
+            {{end}}
             {{if .SyncStatus.PubSub.LastInfoHash}}
               <div class="network-block">
                 <span class="stat-label">最近 infohash</span>

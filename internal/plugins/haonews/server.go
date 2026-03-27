@@ -343,13 +343,14 @@ func newApp(storeRoot, project, version, archiveRoot, rulesPath, writerPath, net
 			}
 			return filepath.Base(value)
 		},
-		"join":           strings.Join,
-		"lower":          strings.ToLower,
-		"renderMarkdown": renderMarkdown,
-		"renderPostBody": renderPostBody,
-		"reactionLabel":  reactionLabel,
-		"sourcePath":     SourcePath,
-		"topicPath":      TopicPath,
+		"join":            strings.Join,
+		"lower":           strings.ToLower,
+		"renderMarkdown":  renderMarkdown,
+		"renderPostBody":  renderPostBody,
+		"reactionLabel":   reactionLabel,
+		"topicAliasPairs": topicAliasPairs,
+		"sourcePath":      SourcePath,
+		"topicPath":       TopicPath,
 		"hasNav": func(items []NavItem, name string) bool {
 			for _, item := range items {
 				if item.Name == name {

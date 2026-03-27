@@ -139,8 +139,12 @@ func BuildActiveFilters(opts FeedOptions, basePath string, omit ...string) []Act
 		})
 	}
 	if opts.Topic != "" && !contains(omit, "topic") {
+		topic := canonicalTopic(opts.Topic)
+		if topic == "" {
+			topic = opts.Topic
+		}
 		filters = append(filters, ActiveFilter{
-			Label: "Topic: " + opts.Topic,
+			Label: "Topic: " + topic,
 			URL:   pageURL(basePath, opts, "topic", "", omit...),
 		})
 	}
@@ -335,6 +339,7 @@ func HasSource(index Index, name string) bool {
 }
 
 func HasTopic(index Index, name string) bool {
+	name = canonicalTopic(name)
 	for _, stat := range index.TopicStats {
 		if strings.EqualFold(stat.Name, name) {
 			return true
@@ -367,7 +372,7 @@ func SourcePath(name string) string {
 }
 
 func TopicPath(name string) string {
-	name = strings.TrimSpace(name)
+	name = canonicalTopic(name)
 	if name == "" {
 		return ""
 	}
@@ -377,7 +382,7 @@ func TopicPath(name string) string {
 func APIOptions(opts FeedOptions) map[string]string {
 	result := map[string]string{
 		"channel": opts.Channel,
-		"topic":   opts.Topic,
+		"topic":   canonicalTopic(opts.Topic),
 		"source":  opts.Source,
 		"sort":    opts.Sort,
 		"q":       opts.Query,
@@ -501,7 +506,7 @@ func withOption(opts FeedOptions, key, value string) FeedOptions {
 	case "channel":
 		next.Channel = value
 	case "topic":
-		next.Topic = value
+		next.Topic = canonicalTopic(value)
 	case "source":
 		next.Source = value
 	case "sort":
@@ -537,7 +542,7 @@ func encodeOptions(opts FeedOptions, omit ...string) string {
 		query.Set(key, value)
 	}
 	set("channel", opts.Channel)
-	set("topic", opts.Topic)
+	set("topic", canonicalTopic(opts.Topic))
 	set("source", opts.Source)
 	if opts.Sort != "" && opts.Sort != "new" {
 		set("sort", opts.Sort)
@@ -560,7 +565,7 @@ func activeFeedValue(opts FeedOptions, key string) string {
 	case "channel":
 		return opts.Channel
 	case "topic":
-		return opts.Topic
+		return canonicalTopic(opts.Topic)
 	case "source":
 		return opts.Source
 	case "window":

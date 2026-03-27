@@ -184,6 +184,59 @@ func TestFilterPostsSupportsWindow(t *testing.T) {
 	}
 }
 
+func TestFilterPostsCanonicalizesTopicAliases(t *testing.T) {
+	t.Parallel()
+
+	index := Index{
+		Posts: []Post{
+			{
+				Bundle: Bundle{InfoHash: "world"},
+				Topics: []string{"world"},
+			},
+		},
+	}
+
+	got := index.FilterPosts(FeedOptions{Topic: "国际"})
+	if len(got) != 1 || got[0].InfoHash != "world" {
+		t.Fatalf("filtered posts = %+v, want world alias match", got)
+	}
+}
+
+func TestBuildIndexCanonicalizesTopicAliases(t *testing.T) {
+	t.Parallel()
+
+	bundles := []Bundle{
+		{
+			InfoHash: "post-alias",
+			Message: Message{
+				Kind:    "post",
+				Channel: "hao.news/news",
+				Extensions: map[string]any{
+					"project": "hao.news",
+					"topics":  []any{"世界", "国际", "world", "期货", "新闻"},
+				},
+			},
+		},
+	}
+
+	index := buildIndex(bundles, "hao.news")
+	if len(index.Posts) != 1 {
+		t.Fatalf("posts len = %d, want 1", len(index.Posts))
+	}
+	if len(index.Posts[0].Topics) != 3 {
+		t.Fatalf("post topics = %v, want 3 canonical topics", index.Posts[0].Topics)
+	}
+	if index.Posts[0].Topics[0] != "world" || index.Posts[0].Topics[1] != "futures" || index.Posts[0].Topics[2] != "news" {
+		t.Fatalf("post topics = %v, want [world futures news]", index.Posts[0].Topics)
+	}
+	if !HasTopic(index, "国际") {
+		t.Fatal("expected HasTopic to match canonical alias")
+	}
+	if TopicPath("世界") != "/topics/world" {
+		t.Fatalf("topic path = %q, want /topics/world", TopicPath("世界"))
+	}
+}
+
 func TestRelatedPosts(t *testing.T) {
 	t.Parallel()
 

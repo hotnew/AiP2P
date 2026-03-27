@@ -362,6 +362,48 @@ haonews serve
 export PATH="$HOME/go/bin:$PATH"
 ```
 
+### 可选：配置 `subscriptions.json` 里的 topic 白名单和别名
+
+如果你希望把 topic 收口到少量 canonical 名称，可以在：
+
+- `~/.hao-news/subscriptions.json`
+
+里显式配置：
+
+- `topic_whitelist`
+  - 允许哪些 topic 继续进入订阅、history 和 discovery
+- `topic_aliases`
+  - 把常见别名统一映射到 canonical topic
+
+最小示例：
+
+```json
+{
+  "topics": ["all"],
+  "discovery_feeds": ["global", "news"],
+  "discovery_topics": ["world", "futures"],
+  "topic_whitelist": ["world", "news", "futures"],
+  "topic_aliases": {
+    "世界": "world",
+    "国际": "world",
+    "新闻": "news",
+    "期货": "futures",
+    "macro": "world"
+  }
+}
+```
+
+当前内置默认收口：
+
+- `world / 世界 / 国际 -> world`
+- `news / 新闻 -> news`
+- `futures / 期货 -> futures`
+
+页面上也可以直接查看当前生效值：
+
+- 首页“本地订阅镜像”
+- `/network` 页里的 `libp2p PubSub`
+
 ## 安装、更新、回退
 
 ### 跟踪最新开发状态

@@ -80,6 +80,10 @@ type SyncPubSubStatus struct {
 	Enabled             bool       `json:"enabled"`
 	JoinedTopics        []string   `json:"joined_topics,omitempty"`
 	DiscoveryNamespaces []string   `json:"discovery_namespaces,omitempty"`
+	DiscoveryFeeds      []string   `json:"discovery_feeds,omitempty"`
+	DiscoveryTopics     []string   `json:"discovery_topics,omitempty"`
+	TopicWhitelist      []string   `json:"topic_whitelist,omitempty"`
+	TopicAliasPairs     []string   `json:"topic_alias_pairs,omitempty"`
 	Published           int        `json:"published"`
 	Received            int        `json:"received"`
 	Enqueued            int        `json:"enqueued"`
@@ -96,19 +100,19 @@ type SyncPubSubStatus struct {
 }
 
 type SyncActivityStatus struct {
-	QueueRefs          int        `json:"queue_refs"`
-	RealtimeQueueRefs  int        `json:"realtime_queue_refs,omitempty"`
-	HistoryQueueRefs   int        `json:"history_queue_refs,omitempty"`
-	Imported           int        `json:"imported"`
-	DirectImported     int        `json:"direct_imported"`
-	Skipped            int        `json:"skipped"`
-	Failed             int        `json:"failed"`
-	LastRef            string     `json:"last_ref,omitempty"`
-	LastInfoHash       string     `json:"last_infohash,omitempty"`
-	LastStatus         string     `json:"last_status,omitempty"`
-	LastTransport      string     `json:"last_transport,omitempty"`
-	LastMessage        string     `json:"last_message,omitempty"`
-	LastEventAt        *time.Time `json:"last_event_at,omitempty"`
+	QueueRefs         int        `json:"queue_refs"`
+	RealtimeQueueRefs int        `json:"realtime_queue_refs,omitempty"`
+	HistoryQueueRefs  int        `json:"history_queue_refs,omitempty"`
+	Imported          int        `json:"imported"`
+	DirectImported    int        `json:"direct_imported"`
+	Skipped           int        `json:"skipped"`
+	Failed            int        `json:"failed"`
+	LastRef           string     `json:"last_ref,omitempty"`
+	LastInfoHash      string     `json:"last_infohash,omitempty"`
+	LastStatus        string     `json:"last_status,omitempty"`
+	LastTransport     string     `json:"last_transport,omitempty"`
+	LastMessage       string     `json:"last_message,omitempty"`
+	LastEventAt       *time.Time `json:"last_event_at,omitempty"`
 }
 
 type SyncHistoryBootstrapStatus struct {

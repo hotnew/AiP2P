@@ -190,7 +190,7 @@ func buildLiveNodeStatus(index Index, storeState, storeTone string, torrentCount
 	pubsubDetail := "Pubsub announcement relay is not active."
 	if syncStatus.PubSub.Enabled {
 		pubsubValue = fmt.Sprintf("%d topics · %d rx · %d enqueued", len(syncStatus.PubSub.JoinedTopics), syncStatus.PubSub.Received, syncStatus.PubSub.Enqueued)
-		pubsubDetail = fmt.Sprintf("%d local announcements published across %d discovery namespaces.", syncStatus.PubSub.Published, len(syncStatus.PubSub.DiscoveryNamespaces))
+		pubsubDetail = fmt.Sprintf("%d local announcements published across %d discovery namespaces, %d discovery feeds, %d discovery topics.", syncStatus.PubSub.Published, len(syncStatus.PubSub.DiscoveryNamespaces), len(syncStatus.PubSub.DiscoveryFeeds), len(syncStatus.PubSub.DiscoveryTopics))
 		if syncStatus.PubSub.LastError != "" {
 			pubsubDetail = summarizeNetworkError(syncStatus.PubSub.LastError, "Pubsub relay is active but some peer announcements are noisy.")
 		}
