@@ -2,6 +2,7 @@ package newsplugin
 
 import (
 	"net"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -166,6 +167,30 @@ func TestRecordAdvertiseHostResultRoundTrip(t *testing.T) {
 	}
 	if entry.LastFailureAt.IsZero() {
 		t.Fatal("expected LastFailureAt to be recorded")
+	}
+}
+
+func TestLoadAdvertiseHostHealthCacheIgnoresTrailingGarbage(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	cfg := NetworkBootstrapConfig{Path: filepath.Join(root, "haonews_net.inf")}
+	cachePath := advertiseHostHealthCachePath(cfg)
+	data := []byte("{\n  \"entries\": {\n    \"192.168.102.75\": {\n      \"success_count\": 1\n    }\n  }\n}\n}\n")
+	if err := os.WriteFile(cachePath, data, 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	cache, err := loadAdvertiseHostHealthCache(cfg)
+	if err != nil {
+		t.Fatalf("loadAdvertiseHostHealthCache() error = %v", err)
+	}
+	entry, ok := cache.Entries["192.168.102.75"]
+	if !ok {
+		t.Fatal("expected entry for 192.168.102.75")
+	}
+	if entry.SuccessCount != 1 {
+		t.Fatalf("entry.SuccessCount = %d, want 1", entry.SuccessCount)
 	}
 }
 

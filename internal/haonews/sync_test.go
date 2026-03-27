@@ -58,6 +58,62 @@ func TestParseSyncRefInfoHash(t *testing.T) {
 	}
 }
 
+func TestSanitizeQueuedSyncRefUpgradesLegacyMagnetToNewRef(t *testing.T) {
+	t.Parallel()
+
+	raw := "magnet:?xt=urn:btih:93a71a010a59022c8670e06e2c92fa279f98d974&dn=test&x.hn.peer=12D3KooWPeerHint"
+	got, changed, err := sanitizeQueuedSyncRef(raw, nil)
+	if err != nil {
+		t.Fatalf("sanitizeQueuedSyncRef error = %v", err)
+	}
+	if !changed {
+		t.Fatalf("expected queue ref to be rewritten")
+	}
+	if got != "haonews-sync://bundle/93a71a010a59022c8670e06e2c92fa279f98d974?dn=test&peer=12D3KooWPeerHint" {
+		t.Fatalf("sanitized ref = %q", got)
+	}
+}
+
+func TestMigrateHistoryManifestQueueRefsMovesToHistoryQueue(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	realtimePath := filepath.Join(root, "realtime.txt")
+	historyPath := filepath.Join(root, "history.txt")
+	realtime := strings.Join([]string{
+		"haonews-sync://bundle/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa?dn=20260327T080000Z-hao.news-history-manifest&peer=12D3KooWHist",
+		"haonews-sync://bundle/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb?dn=test-post&peer=12D3KooWPost",
+		"",
+	}, "\n")
+	if err := os.WriteFile(realtimePath, []byte(realtime), 0o644); err != nil {
+		t.Fatalf("write realtime queue: %v", err)
+	}
+	if err := os.WriteFile(historyPath, nil, 0o644); err != nil {
+		t.Fatalf("write history queue: %v", err)
+	}
+	moved, err := migrateHistoryManifestQueueRefs(realtimePath, historyPath)
+	if err != nil {
+		t.Fatalf("migrateHistoryManifestQueueRefs error = %v", err)
+	}
+	if moved != 1 {
+		t.Fatalf("moved = %d, want 1", moved)
+	}
+	realtimeData, err := os.ReadFile(realtimePath)
+	if err != nil {
+		t.Fatalf("read realtime queue: %v", err)
+	}
+	if strings.Contains(string(realtimeData), "history-manifest") {
+		t.Fatalf("realtime queue still contains history manifest: %q", string(realtimeData))
+	}
+	historyData, err := os.ReadFile(historyPath)
+	if err != nil {
+		t.Fatalf("read history queue: %v", err)
+	}
+	if !strings.Contains(string(historyData), "history-manifest") {
+		t.Fatalf("history queue missing migrated history manifest: %q", string(historyData))
+	}
+}
+
 func TestCollectSyncRefsQueueAndDirect(t *testing.T) {
 	t.Parallel()
 

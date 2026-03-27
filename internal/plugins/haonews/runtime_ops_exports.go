@@ -1,6 +1,7 @@
 package newsplugin
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -533,7 +534,8 @@ func loadAdvertiseHostHealthCache(cfg NetworkBootstrapConfig) (*advertiseHostHea
 		return nil, err
 	}
 	var cache advertiseHostHealthCache
-	if err := json.Unmarshal(data, &cache); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	if err := decoder.Decode(&cache); err != nil {
 		return nil, err
 	}
 	if cache.Entries == nil {

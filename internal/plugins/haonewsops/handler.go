@@ -478,6 +478,8 @@ func handleAPINetworkBootstrap(app *newsplugin.App, w http.ResponseWriter, r *ht
 		Project:       app.ProjectName(),
 		Version:       app.VersionString(),
 		NetworkID:     syncStatus.NetworkID,
+		NetworkMode:   strings.TrimSpace(netCfg.NetworkMode),
+		PrimaryHost:   strings.TrimSpace(advertiseHost),
 		PeerID:        syncStatus.LibP2P.PeerID,
 		ListenAddrs:   append([]string(nil), syncStatus.LibP2P.ListenAddrs...),
 		DialAddrs:     dialAddrs,

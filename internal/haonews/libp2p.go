@@ -22,6 +22,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	mdns "github.com/libp2p/go-libp2p/p2p/discovery/mdns"
+	relayclient "github.com/libp2p/go-libp2p/p2p/protocol/circuitv2/client"
 	"github.com/libp2p/go-libp2p/p2p/protocol/ping"
 	ma "github.com/multiformats/go-multiaddr"
 )
@@ -39,6 +40,7 @@ type libp2pRuntime struct {
 	configuredListen   []string
 	mdnsServiceName    string
 	bootstraps         []peer.AddrInfo
+	relayBootstraps    []peer.AddrInfo
 	rendezvous         []string
 	bootstrapWarning   string
 	lastBootstrappedAt *time.Time
@@ -173,6 +175,7 @@ func startLibP2PRuntime(ctx context.Context, cfg NetworkBootstrapConfig, store *
 		configuredListen: configuredListen,
 		mdnsServiceName:  serviceName,
 		bootstraps:       peers,
+		relayBootstraps:  relayBootstrapPeers,
 		rendezvous:       append([]string(nil), cfg.LibP2PRendezvous...),
 		bootstrapWarning: func() string {
 			var warns []string
@@ -214,6 +217,7 @@ func startLibP2PRuntime(ctx context.Context, cfg NetworkBootstrapConfig, store *
 		}(),
 	}
 	rt.startEventWatchers(ctx)
+	rt.startRelayReservationLoop(ctx)
 	return rt, nil
 }
 
@@ -321,6 +325,15 @@ func rewriteAdvertiseAddrs(addrs []ma.Multiaddr, host string) []ma.Multiaddr {
 	out := make([]ma.Multiaddr, 0, len(addrs))
 	seen := make(map[string]struct{}, len(addrs))
 	for _, addr := range addrs {
+		if strings.Contains(addr.String(), "/p2p-circuit") {
+			value := addr.String()
+			if _, exists := seen[value]; exists {
+				continue
+			}
+			seen[value] = struct{}{}
+			out = append(out, addr)
+			continue
+		}
 		rewritten, ok := rewriteAdvertiseAddr(addr, host)
 		if !ok {
 			continue
@@ -383,6 +396,47 @@ func (r *libp2pRuntime) Close() error {
 		return r.host.Close()
 	}
 	return nil
+}
+
+func (r *libp2pRuntime) ensurePeerConnected(ctx context.Context, peerID peer.ID) error {
+	if r == nil || r.host == nil {
+		return fmt.Errorf("libp2p host is not running")
+	}
+	if peerID == "" {
+		return fmt.Errorf("peer id is empty")
+	}
+	if r.host.Network().Connectedness(peerID) == network.Connected {
+		return nil
+	}
+	var lastErr error
+	info := peer.AddrInfo{ID: peerID}
+	if len(r.host.Peerstore().Addrs(peerID)) > 0 {
+		connectCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		lastErr = r.host.Connect(connectCtx, info)
+		cancel()
+		if lastErr == nil {
+			return nil
+		}
+	}
+	if r.dht != nil {
+		findCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
+		found, err := r.dht.FindPeer(findCtx, peerID)
+		cancel()
+		if err != nil {
+			lastErr = err
+		} else {
+			connectCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			lastErr = r.host.Connect(connectCtx, found)
+			cancel()
+			if lastErr == nil {
+				return nil
+			}
+		}
+	}
+	if lastErr == nil {
+		lastErr = fmt.Errorf("no known libp2p addresses for %s", peerID)
+	}
+	return lastErr
 }
 
 func (r *libp2pRuntime) Status(ctx context.Context) SyncLibP2PStatus {
@@ -578,6 +632,68 @@ func (r *libp2pRuntime) startEventWatchers(ctx context.Context) {
 			}
 		}()
 	}
+}
+
+func (r *libp2pRuntime) startRelayReservationLoop(ctx context.Context) {
+	if r == nil || r.host == nil || !r.autoRelayEnabled || len(r.relayBootstraps) == 0 {
+		return
+	}
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for {
+			r.refreshRelayReservations(ctx)
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+			}
+		}
+	}()
+}
+
+func (r *libp2pRuntime) refreshRelayReservations(ctx context.Context) {
+	if r == nil || r.host == nil || len(r.relayBootstraps) == 0 {
+		return
+	}
+	for _, info := range r.relayBootstraps {
+		connectCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
+		_ = r.host.Connect(connectCtx, info)
+		cancel()
+		reserveCtx, cancel := context.WithTimeout(ctx, 12*time.Second)
+		_, err := relayclient.Reserve(reserveCtx, r.host, info)
+		cancel()
+		if err != nil {
+			continue
+		}
+		addrs := snapshotRelayAddrs(r.host)
+		now := time.Now().UTC()
+		r.statusMu.Lock()
+		r.relayAddrs = addrs
+		r.lastRelayAt = &now
+		r.statusMu.Unlock()
+	}
+}
+
+func snapshotRelayAddrs(h host.Host) []string {
+	if h == nil {
+		return nil
+	}
+	out := make([]string, 0)
+	seen := map[string]struct{}{}
+	for _, addr := range h.Addrs() {
+		value := addr.String()
+		if !strings.Contains(value, "/p2p-circuit") {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func relayReservationPeersFromAddrs(addrs []string) []string {

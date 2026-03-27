@@ -11,6 +11,7 @@ import (
 
 	libp2p "github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/host"
+	ma "github.com/multiformats/go-multiaddr"
 )
 
 func TestStartLibP2PRuntimeSharedModeConnectsResolvedRelayBootstrap(t *testing.T) {
@@ -83,4 +84,27 @@ func relayDialAddrs(h host.Host) []string {
 		out = append(out, addr.String()+"/p2p/"+h.ID().String())
 	}
 	return out
+}
+
+func TestRewriteAdvertiseAddrsPreservesRelayCircuitAddr(t *testing.T) {
+	t.Parallel()
+
+	direct, err := ma.NewMultiaddr("/ip4/127.0.0.1/tcp/50584")
+	if err != nil {
+		t.Fatalf("direct addr: %v", err)
+	}
+	relay, err := ma.NewMultiaddr("/dns/ai.jie.news/tcp/50584/p2p/12D3KooWKqit8ESTPbk9mrutVWpJwNPshMfN7tnQtrQVwLzz1L1r/p2p-circuit")
+	if err != nil {
+		t.Fatalf("relay addr: %v", err)
+	}
+	got := rewriteAdvertiseAddrs([]ma.Multiaddr{direct, relay}, "192.168.102.75")
+	if len(got) != 2 {
+		t.Fatalf("rewritten addrs len = %d, want 2", len(got))
+	}
+	if got[0].String() != "/ip4/192.168.102.75/tcp/50584" {
+		t.Fatalf("direct addr = %q", got[0].String())
+	}
+	if got[1].String() != relay.String() {
+		t.Fatalf("relay addr rewritten unexpectedly: %q", got[1].String())
+	}
 }

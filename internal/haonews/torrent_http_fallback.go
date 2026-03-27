@@ -106,9 +106,6 @@ func candidateBundleURLs(ref SyncRef, peerSources []string) []string {
 		seen[value] = struct{}{}
 		out = append(out, value)
 	}
-	for _, host := range peerSources {
-		add(host)
-	}
 	if strings.TrimSpace(ref.Magnet) != "" {
 		if uri, err := url.Parse(ref.Magnet); err == nil {
 			for _, raw := range uri.Query()["x.pe"] {
@@ -119,6 +116,9 @@ func candidateBundleURLs(ref SyncRef, peerSources []string) []string {
 				add(host)
 			}
 		}
+	}
+	for _, host := range peerSources {
+		add(host)
 	}
 	return out
 }
@@ -206,7 +206,7 @@ func allowTorrentHTTPHost(host string, peerSources []string) bool {
 	}
 	subnets := privateIPv4Subnets(peerSources)
 	if len(subnets) == 0 {
-		return true
+		return false
 	}
 	return matchesAnyPrivateSubnet(ip4, subnets)
 }

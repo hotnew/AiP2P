@@ -514,7 +514,15 @@ func syncRefFromAnnouncement(announcement SyncAnnouncement) (SyncRef, error) {
 		ref.DirectPeerHint = strings.TrimSpace(announcement.LibP2PPeerID)
 		return ref, nil
 	}
-	return ParseSyncRef(announcement.InfoHash)
+	ref, err := ParseSyncRef(announcement.InfoHash)
+	if err != nil {
+		return SyncRef{}, err
+	}
+	ref.Magnet = withSourcePeerHint(ref.Magnet, announcement.SourceHost)
+	ref.Magnet = withLibP2PPeerHint(ref.Magnet, announcement.LibP2PPeerID)
+	ref.Raw = ref.Magnet
+	ref.DirectPeerHint = strings.TrimSpace(announcement.LibP2PPeerID)
+	return ref, nil
 }
 
 func hasLocalTorrent(store *Store, infoHash string) bool {

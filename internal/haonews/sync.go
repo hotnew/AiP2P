@@ -435,6 +435,11 @@ func (r *syncRuntime) processQueue(ctx context.Context, direct []string, timeout
 
 func (r *syncRuntime) reconcileQueue(ctx context.Context, direct []string, timeout time.Duration, logf func(string, ...any)) error {
 	peerSources := syncPeerSources(r.netCfg)
+	if changed, err := migrateHistoryManifestQueueRefs(r.queuePath, r.historyQueuePath); err != nil {
+		return err
+	} else if changed > 0 && logf != nil {
+		logf("moved %d history manifest refs from realtime to history queue", changed)
+	}
 	if changed, err := sanitizeSyncQueueFile(r.queuePath, peerSources); err != nil {
 		return err
 	} else if changed > 0 && logf != nil {
@@ -541,7 +546,11 @@ func (r *syncRuntime) handleAnnouncement(announcement SyncAnnouncement) (bool, e
 		return false, nil
 	}
 	r.rememberDirectPeer(ref.InfoHash, announcement.LibP2PPeerID)
-	return enqueueSyncRef(r.queuePath, ref)
+	targetQueue := r.queuePath
+	if strings.EqualFold(strings.TrimSpace(announcement.Kind), historyManifestKind) {
+		targetQueue = r.historyQueuePath
+	}
+	return enqueueSyncRef(targetQueue, ref)
 }
 
 func (r *syncRuntime) handleCreditProof(proof OnlineProof) (bool, error) {
@@ -1539,6 +1548,49 @@ func sanitizeSyncQueueFile(queuePath string, peerSources []string) (int, error) 
 	return changed, os.WriteFile(queuePath, []byte(content), 0o644)
 }
 
+func migrateHistoryManifestQueueRefs(realtimeQueuePath, historyQueuePath string) (int, error) {
+	realtimeQueuePath = strings.TrimSpace(realtimeQueuePath)
+	historyQueuePath = strings.TrimSpace(historyQueuePath)
+	if realtimeQueuePath == "" || historyQueuePath == "" {
+		return 0, nil
+	}
+	data, err := os.ReadFile(realtimeQueuePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return 0, nil
+		}
+		return 0, err
+	}
+	lines := strings.Split(string(data), "\n")
+	kept := make([]string, 0, len(lines))
+	moved := 0
+	for _, rawLine := range lines {
+		line := strings.TrimSpace(rawLine)
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, ";") || strings.HasPrefix(line, "//") {
+			kept = append(kept, rawLine)
+			continue
+		}
+		if !strings.Contains(strings.ToLower(line), "history-manifest") {
+			kept = append(kept, rawLine)
+			continue
+		}
+		ref, err := ParseSyncRef(line)
+		if err != nil {
+			kept = append(kept, rawLine)
+			continue
+		}
+		if _, err := enqueueSyncRef(historyQueuePath, ref); err != nil {
+			return moved, err
+		}
+		moved++
+	}
+	if moved == 0 {
+		return 0, nil
+	}
+	content := strings.Join(kept, "\n")
+	return moved, os.WriteFile(realtimeQueuePath, []byte(content), 0o644)
+}
+
 func sanitizeQueuedSyncRef(raw string, peerSources []string) (string, bool, error) {
 	ref, err := ParseSyncRef(raw)
 	if err != nil {
@@ -1554,7 +1606,10 @@ func sanitizeQueuedSyncRef(raw string, peerSources []string) (string, bool, erro
 	query := uri.Query()
 	values := query["x.pe"]
 	if len(values) == 0 {
-		return raw, false, nil
+		if strings.TrimSpace(raw) == strings.TrimSpace(ref.Magnet) {
+			return raw, false, nil
+		}
+		return ref.Magnet, true, nil
 	}
 	kept := make([]string, 0, len(values))
 	for _, value := range values {
@@ -1567,14 +1622,21 @@ func sanitizeQueuedSyncRef(raw string, peerSources []string) (string, bool, erro
 		}
 	}
 	if len(kept) == len(values) {
-		return raw, false, nil
+		if strings.TrimSpace(raw) == strings.TrimSpace(ref.Magnet) {
+			return raw, false, nil
+		}
+		return ref.Magnet, true, nil
 	}
 	delete(query, "x.pe")
 	for _, value := range kept {
 		query.Add("x.pe", value)
 	}
 	uri.RawQuery = query.Encode()
-	return uri.String(), true, nil
+	sanitized := uri.String()
+	if strings.TrimSpace(raw) == strings.TrimSpace(sanitized) {
+		return raw, false, nil
+	}
+	return sanitized, true, nil
 }
 
 func syncPeerSources(cfg NetworkBootstrapConfig) []string {
@@ -1640,6 +1702,10 @@ func syncRef(
 	if directTransfer && ref.InfoHash != "" && libp2pRuntime != nil && libp2pRuntime.host != nil && len(directPeerIDs) > 0 {
 		directAttempted = true
 		for _, peerID := range directPeerIDs {
+			if connectErr := libp2pRuntime.ensurePeerConnected(runCtx, peerID); connectErr != nil {
+				directFailureNotes = append(directFailureNotes, peerID.String()+": "+connectErr.Error())
+				continue
+			}
 			contentDir, fetchErr := FetchBundleViaLibP2P(runCtx, libp2pRuntime.host, peerID, ref.InfoHash, store, libp2pRuntime.transferMaxSize)
 			if fetchErr != nil {
 				directFailureNotes = append(directFailureNotes, peerID.String()+": "+fetchErr.Error())

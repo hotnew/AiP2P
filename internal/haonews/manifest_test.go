@@ -166,6 +166,28 @@ func TestSyncRefFromAnnouncementPersistsDirectPeerHint(t *testing.T) {
 	}
 }
 
+func TestSyncRefFromAnnouncementInfoHashPersistsHints(t *testing.T) {
+	t.Parallel()
+
+	ref, err := syncRefFromAnnouncement(SyncAnnouncement{
+		InfoHash:     "93a71a010a59022c8670e06e2c92fa279f98d974",
+		SourceHost:   "192.168.102.75",
+		LibP2PPeerID: "12D3KooWManifestPeer",
+	})
+	if err != nil {
+		t.Fatalf("syncRefFromAnnouncement error = %v", err)
+	}
+	if ref.DirectPeerHint != "12D3KooWManifestPeer" {
+		t.Fatalf("direct peer hint = %q", ref.DirectPeerHint)
+	}
+	if !strings.Contains(ref.Magnet, "peer=12D3KooWManifestPeer") {
+		t.Fatalf("ref missing peer hint: %q", ref.Magnet)
+	}
+	if !strings.Contains(ref.Magnet, "x.pe=192.168.102.75%3A51818") {
+		t.Fatalf("ref missing source host hint: %q", ref.Magnet)
+	}
+}
+
 func TestEnqueueHistoryManifestRefsReportsOriginPeer(t *testing.T) {
 	t.Parallel()
 

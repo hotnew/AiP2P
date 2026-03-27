@@ -265,6 +265,8 @@ type NetworkBootstrapResponse struct {
 	Project       string                         `json:"project"`
 	Version       string                         `json:"version"`
 	NetworkID     string                         `json:"network_id"`
+	NetworkMode   string                         `json:"network_mode,omitempty"`
+	PrimaryHost   string                         `json:"primary_host,omitempty"`
 	PeerID        string                         `json:"peer_id"`
 	ListenAddrs   []string                       `json:"listen_addrs"`
 	DialAddrs     []string                       `json:"dial_addrs"`
