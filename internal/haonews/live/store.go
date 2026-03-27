@@ -38,6 +38,7 @@ type ArchiveRecord struct {
 	RoomID      string `json:"room_id"`
 	Channel     string `json:"channel"`
 	InfoHash    string `json:"infohash"`
+	Ref         string `json:"ref,omitempty"`
 	Magnet      string `json:"magnet,omitempty"`
 	TorrentFile string `json:"torrent_file,omitempty"`
 	ContentDir  string `json:"content_dir,omitempty"`
@@ -325,8 +326,7 @@ func (s *LocalStore) SaveArchiveResult(roomID string, result ArchiveResult) erro
 		RoomID:      strings.TrimSpace(roomID),
 		Channel:     strings.TrimSpace(result.Channel),
 		InfoHash:    strings.TrimSpace(result.Published.InfoHash),
-		Magnet:      strings.TrimSpace(result.Published.Magnet),
-		TorrentFile: strings.TrimSpace(result.Published.TorrentFile),
+		Ref:         firstNonEmpty(strings.TrimSpace(result.Published.Ref), strings.TrimSpace(result.Published.Magnet)),
 		ContentDir:  strings.TrimSpace(result.Published.ContentDir),
 		ViewerURL:   strings.TrimSpace(result.ViewerURL),
 		Events:      result.Events,
@@ -360,6 +360,9 @@ func (s *LocalStore) LoadArchiveResult(roomID string) (*ArchiveRecord, error) {
 	}
 	if strings.TrimSpace(record.ViewerURL) == "" && strings.TrimSpace(record.InfoHash) != "" {
 		record.ViewerURL = "/posts/" + strings.TrimSpace(record.InfoHash)
+	}
+	if strings.TrimSpace(record.Ref) == "" {
+		record.Ref = firstNonEmpty(strings.TrimSpace(record.Magnet), strings.TrimSpace(record.InfoHash))
 	}
 	return &record, nil
 }

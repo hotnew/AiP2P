@@ -22,8 +22,7 @@ func archiveNoticeMetadata(info RoomInfo, result ArchiveResult) map[string]any {
 		"description":          strings.TrimSpace(info.Description),
 		"archive.channel":      strings.TrimSpace(result.Channel),
 		"archive.infohash":     strings.TrimSpace(result.Published.InfoHash),
-		"archive.magnet":       strings.TrimSpace(result.Published.Magnet),
-		"archive.torrent_file": strings.TrimSpace(result.Published.TorrentFile),
+		"archive.ref":          strings.TrimSpace(result.Published.Ref),
 		"archive.content_dir":  strings.TrimSpace(result.Published.ContentDir),
 		"archive.viewer_url":   strings.TrimSpace(result.ViewerURL),
 		"archive.events":       result.Events,
@@ -44,8 +43,8 @@ func archiveResultFromNotice(event LiveMessage) (ArchiveResult, bool) {
 		ViewerURL:  metadataStringValue(event.Payload.Metadata, "archive.viewer_url"),
 		Published: haonews.PublishResult{
 			InfoHash:    infoHash,
+			Ref:         firstNonEmpty(metadataStringValue(event.Payload.Metadata, "archive.ref"), metadataStringValue(event.Payload.Metadata, "archive.magnet")),
 			Magnet:      metadataStringValue(event.Payload.Metadata, "archive.magnet"),
-			TorrentFile: metadataStringValue(event.Payload.Metadata, "archive.torrent_file"),
 			ContentDir:  metadataStringValue(event.Payload.Metadata, "archive.content_dir"),
 		},
 	}
@@ -56,6 +55,10 @@ func archiveResultFromNotice(event LiveMessage) (ArchiveResult, bool) {
 }
 
 func archiveSyncRefFromNotice(event LiveMessage) string {
+	ref := metadataStringValue(event.Payload.Metadata, "archive.ref")
+	if ref != "" {
+		return ref
+	}
 	magnet := metadataStringValue(event.Payload.Metadata, "archive.magnet")
 	if magnet != "" {
 		return magnet

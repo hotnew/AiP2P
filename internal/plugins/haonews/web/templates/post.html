@@ -49,14 +49,6 @@
               <dd>{{.Post.VoteScore}}</dd>
             </div>
             <div>
-              <dt>真实性分</dt>
-              <dd>{{formatScore .Post.TruthScoreAverage}}</dd>
-            </div>
-            <div>
-              <dt>来源分</dt>
-              <dd>{{formatScore .Post.SourceScoreAverage}}</dd>
-            </div>
-            <div>
               <dt>原始作者</dt>
               <dd>{{if .Post.Message.Origin}}{{.Post.Message.Origin.Author}}{{else}}未签名 / 旧格式{{end}}</dd>
             </div>
@@ -89,18 +81,9 @@
               <dd>{{displayArchivePath .Post.ArchiveMD}}</dd>
             </div>
           </dl>
-          <div class="topics-wrap">
-            {{range .Post.Topics}}<a class="topic-pill" href="{{topicPath .}}">{{.}}</a>{{end}}
-          </div>
           <div class="story-links story-links-inline">
             {{if .Post.SourceURL}}
               <a href="{{.Post.SourceURL}}" target="_blank" rel="noreferrer">打开来源文章</a>
-            {{end}}
-            {{if .Post.HasSourcePage}}
-              <a href="{{sourcePath .Post.SourceName}}">来源页</a>
-            {{end}}
-            {{if .Post.Topics}}
-              <a href="{{topicPath (index .Post.Topics 0)}}">话题页</a>
             {{end}}
             <a href="/archive/messages/{{.Post.InfoHash}}">归档副本</a>
             <a href="/api/posts/{{.Post.InfoHash}}">JSON</a>

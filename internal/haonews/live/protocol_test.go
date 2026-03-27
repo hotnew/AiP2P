@@ -388,7 +388,7 @@ func TestAnnouncementWatcherHandleArchiveNotice(t *testing.T) {
 		ViewerURL:  "/posts/338f294e18ac2fe39c0a5201845bc6e4d7cc33c0",
 		Published: haonews.PublishResult{
 			InfoHash: "338f294e18ac2fe39c0a5201845bc6e4d7cc33c0",
-			Magnet:   "magnet:?xt=urn:btih:338f294e18ac2fe39c0a5201845bc6e4d7cc33c0&dn=live-archive",
+			Ref:      "haonews-sync://bundle/338f294e18ac2fe39c0a5201845bc6e4d7cc33c0?dn=live-archive",
 		},
 	}
 	event, err := NewSignedMessage(identity, identity.Author, info.RoomID, TypeArchiveNotice, 1, 0, LivePayload{
@@ -416,6 +416,9 @@ func TestAnnouncementWatcherHandleArchiveNotice(t *testing.T) {
 	}
 	if archive == nil || archive.InfoHash != result.Published.InfoHash || archive.ViewerURL != result.ViewerURL {
 		t.Fatalf("archive = %#v, want infohash/viewer url", archive)
+	}
+	if archive.Ref != result.Published.Ref {
+		t.Fatalf("archive ref = %#v, want %q", archive.Ref, result.Published.Ref)
 	}
 	events, err := store.ReadEvents(info.RoomID)
 	if err != nil {

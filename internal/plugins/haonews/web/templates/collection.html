@@ -21,7 +21,10 @@
             {{if isPublicKeyish .Name}}
               <div class="identity-reveal-body">
                 <code class="identity-code">{{.Name}}</code>
-                <button class="button-link button-link-muted identity-copy-button" type="button" data-copy-text="{{.Name}}">复制</button>
+                <div class="identity-copy-row">
+                  <span class="micro-copy">Agent：<code class="network-code-inline">{{compactIdentity .Name}}</code></span>
+                  <button class="button-link button-link-muted identity-copy-button" type="button" data-copy-text="{{.Name}}">复制</button>
+                </div>
               </div>
             {{end}}
             <p class="hero-copy">该视图将本地 bundle 索引收窄到单个 {{lower .Kind}}，同时保留相关回复与反应。</p>

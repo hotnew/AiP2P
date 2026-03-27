@@ -1144,6 +1144,17 @@ dd {
   width: fit-content;
 }
 
+.identity-copy-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+}
+
+.identity-copy-row .micro-copy {
+  margin: 0;
+}
+
 .pagination-size {
   display: grid;
   gap: 8px;

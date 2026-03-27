@@ -13,6 +13,7 @@ import (
 
 type PublishResult struct {
 	InfoHash    string `json:"infohash"`
+	Ref         string `json:"ref,omitempty"`
 	Magnet      string `json:"magnet"`
 	TorrentFile string `json:"torrent_file"`
 	ContentDir  string `json:"content_dir"`
@@ -86,6 +87,7 @@ func publishBundle(store *Store, input MessageInput, extraFiles map[string][]byt
 	magnet := mi.Magnet(nil, &info).String()
 	return PublishResult{
 		InfoHash:    strings.ToLower(infoHash),
+		Ref:         CanonicalSyncRef(strings.ToLower(infoHash), info.Name),
 		Magnet:      magnet,
 		TorrentFile: torrentPath,
 		ContentDir:  contentDir,
