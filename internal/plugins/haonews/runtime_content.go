@@ -475,6 +475,7 @@ func APIPost(post Post, withBody bool) map[string]any {
 		"source_site_name":      post.SourceSiteName,
 		"source_url":            post.SourceURL,
 		"origin_public_key":     post.OriginPublicKey,
+		"parent_public_key":     post.ParentPublicKey,
 		"topics":                post.Topics,
 		"post_type":             post.PostType,
 		"summary":               post.Summary,

@@ -1273,6 +1273,54 @@ func TestPluginBuildPendingApprovalConfiguredRouteOverridesDefaultReviewer(t *te
 	}
 }
 
+func TestPluginBuildPendingApprovalConfiguredParentRoute(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	result := publishHDChildTestPost(t, root, "Signed from hd child")
+	parent, err := corehaonews.RecoverHDIdentity(
+		"agent://news/pc76-root-20260319",
+		"agent://pc76",
+		"anchor chicken able drum crush cable negative strong hybrid sister refuse venture spoil rebuild orchard brain jacket gauge summer coconut sibling scissors legend wife",
+		timestamp(2026, 3, 19, 12, 57, 26),
+	)
+	if err != nil {
+		t.Fatalf("RecoverHDIdentity() error = %v", err)
+	}
+	writeDelegatedReviewerIdentity(t, root, "reviewer-usa", []string{"moderation:approve:any"})
+
+	site := buildContentSiteAtRoot(t, root)
+	rulesPath := filepath.Join(root, "config", "subscriptions.json")
+	data := `{
+  "whitelist_mode": "approval",
+  "approval_feed": "pending-approval",
+  "topics": ["news"],
+  "approval_routes": {
+    "parent/` + parent.PublicKey + `": "reviewer-usa"
+  }
+}`
+	if err := os.WriteFile(rulesPath, []byte(data), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/pending-approval", nil)
+	rec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		result.InfoHash,
+		"建议：reviewer-usa",
+		"route:parent/" + parent.PublicKey,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("expected pending page to contain %q, got %q", want, body)
+		}
+	}
+}
+
 func TestPluginBuildPendingApprovalAutoRouteBalancesReviewers(t *testing.T) {
 	t.Parallel()
 
@@ -1337,6 +1385,51 @@ func TestPluginBuildPendingApprovalAutoRouteBalancesReviewers(t *testing.T) {
 	}
 	if diff > 1 {
 		t.Fatalf("assignment counts too imbalanced: %v", assignments)
+	}
+}
+
+func TestPluginBuildPendingApprovalAutoApproveByParentKey(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	result := publishHDChildTestPost(t, root, "Signed from hd child")
+	parent, err := corehaonews.RecoverHDIdentity(
+		"agent://news/pc76-root-20260319",
+		"agent://pc76",
+		"anchor chicken able drum crush cable negative strong hybrid sister refuse venture spoil rebuild orchard brain jacket gauge summer coconut sibling scissors legend wife",
+		timestamp(2026, 3, 19, 12, 57, 26),
+	)
+	if err != nil {
+		t.Fatalf("RecoverHDIdentity() error = %v", err)
+	}
+
+	site := buildContentSiteAtRoot(t, root)
+	rulesPath := filepath.Join(root, "config", "subscriptions.json")
+	data := `{
+  "whitelist_mode": "approval",
+  "approval_feed": "pending-approval",
+  "topics": ["news"],
+  "approval_auto_approve": ["parent/` + parent.PublicKey + `"]
+}`
+	if err := os.WriteFile(rulesPath, []byte(data), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/posts/"+result.InfoHash, nil)
+	rec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		`"pending_approval": false`,
+		`"moderation_identity": "auto-approve"`,
+		`"parent_public_key": "` + parent.PublicKey + `"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("expected API payload to contain %q, got %q", want, body)
+		}
 	}
 }
 

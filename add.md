@@ -1615,3 +1615,78 @@ reviewer 状态增加 QueueURL
   - `TestPluginBuildPendingApprovalShowsBatchModerationForm`
   - `TestPluginBuildBatchModerationApprovePromotesSelectedPosts`
   - `TestPluginBuildBatchModerationRoutePreservesReviewerQueue`
+
+2026-03-28 21:32 CST
+
+HD 父子公钥过滤 Phase 1-5 一次落地
+
+目标：
+
+- 不再只按 `author / topic / channel` 做可见性过滤
+- 从现在开始把父公钥 / 子公钥接进：
+  - `subscriptions.json`
+  - 发布链
+  - 索引/API
+  - `approval_routes`
+  - `approval_auto_approve`
+  - reviewer 建议链
+
+已完成：
+
+- `subscriptions.json` 新增：
+  - `allowed_origin_public_keys`
+  - `blocked_origin_public_keys`
+  - `allowed_parent_public_keys`
+  - `blocked_parent_public_keys`
+- 规则归一化已接通：
+  - 小写 hex
+  - 去重
+  - 非法 key 丢弃
+- 过滤优先级已固定：
+  - `blocked_origin`
+  - `blocked_parent`
+  - `allowed_origin`
+  - `allowed_parent`
+  - 再退回 `authors / channels / topics / tags`
+- `publish` 新签名内容统一写入：
+  - `origin_public_key`
+  - `parent_public_key`
+- root 发帖统一写成：
+  - `parent_public_key == origin_public_key`
+- child 发帖统一写成：
+  - `origin_public_key = child`
+  - `parent_public_key = parent`
+- 消息校验已收紧：
+  - 新签名内容缺少 `origin_public_key / parent_public_key` 直接视为非法结构
+- 索引/API 已接通：
+  - `Post.OriginPublicKey`
+  - `Post.ParentPublicKey`
+  - `/api/posts/*` 返回 `parent_public_key`
+- history manifest 导出已改成优先带消息里的父/子公钥
+- `approval_routes` / `approval_auto_approve` 新增 selector：
+  - `origin/<child-public-key>`
+  - `parent/<parent-public-key>`
+- reviewer 建议 / configured route / auto approve 都已支持按父公钥命中
+- 首页“本地订阅镜像”和 `/network` 已能直接看到父/子公钥白名单黑名单
+- `README.md` 已补：
+  - 新字段
+  - 优先级
+  - selector 用法
+  - root / child 发布规则
+
+验证：
+
+- `go test ./internal/haonews`
+- `go test ./internal/plugins/haonews ./internal/plugins/haonewscontent`
+- `go test ./...`
+
+回归测试补充：
+
+- `TestValidateMessageRejectsMissingOriginPublicKeyMetadata`
+- `TestMatchesAnnouncementFiltersByPublicKeys`
+- `TestSyncSubscriptionsNormalizePublicKeys`
+- `TestLoadSubscriptionRulesNormalizesPublicKeyRules`
+- `TestLoadSubscriptionRulesNormalizesApprovalKeySelectors`
+- `TestApplySubscriptionRulesFiltersByParentAndOriginPublicKey`
+- `TestPluginBuildPendingApprovalConfiguredParentRoute`
+- `TestPluginBuildPendingApprovalAutoApproveByParentKey`

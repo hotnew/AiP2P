@@ -184,7 +184,7 @@ func buildIndex(bundles []Bundle, project string) Index {
 				SourceSiteName:  nestedString(bundle.Message.Extensions, "source", "name"),
 				SourceURL:       nestedString(bundle.Message.Extensions, "source", "url"),
 				OriginPublicKey: originPublicKey(bundle.Message),
-				ParentPublicKey: nestedString(bundle.Message.Extensions, "hd.parent_pubkey"),
+				ParentPublicKey: parentPublicKey(bundle.Message),
 				HasSourcePage:   hasSourcePage(bundle.Message),
 				Topics:          stringSlice(bundle.Message.Extensions["topics"]),
 				ChannelGroup:    channelGroup(bundle.Message.Channel),
@@ -667,10 +667,20 @@ func sourceGroupName(msg Message) string {
 }
 
 func originPublicKey(msg Message) string {
+	if value := nestedString(msg.Extensions, "origin_public_key"); value != "" {
+		return strings.TrimSpace(value)
+	}
 	if msg.Origin == nil {
 		return ""
 	}
 	return strings.TrimSpace(msg.Origin.PublicKey)
+}
+
+func parentPublicKey(msg Message) string {
+	if value := nestedString(msg.Extensions, "parent_public_key"); value != "" {
+		return strings.TrimSpace(value)
+	}
+	return strings.TrimSpace(nestedString(msg.Extensions, "hd.parent_pubkey"))
 }
 
 func hasSourcePage(msg Message) bool {

@@ -1750,18 +1750,25 @@ func configuredModerationReviewer(post newsplugin.Post, rules newsplugin.Subscri
 	for _, item := range candidates {
 		candidateByLabel[item.label] = item
 	}
+	selectors := make([]string, 0, len(post.Topics)+3)
+	if parent := strings.ToLower(strings.TrimSpace(post.ParentPublicKey)); parent != "" {
+		selectors = append(selectors, "parent/"+parent)
+	}
+	if origin := strings.ToLower(strings.TrimSpace(post.OriginPublicKey)); origin != "" {
+		selectors = append(selectors, "origin/"+origin)
+	}
 	for _, topic := range post.Topics {
 		topic = strings.ToLower(strings.TrimSpace(topic))
-		if topic == "" {
-			continue
-		}
-		if reviewer, ok := candidateByLabel[rules.ApprovalRoutes["topic/"+topic]]; ok {
-			return reviewer, "route:topic/" + topic, true
+		if topic != "" {
+			selectors = append(selectors, "topic/"+topic)
 		}
 	}
 	if feed := strings.ToLower(strings.TrimSpace(post.ChannelGroup)); feed != "" {
-		if reviewer, ok := candidateByLabel[rules.ApprovalRoutes["feed/"+feed]]; ok {
-			return reviewer, "route:feed/" + feed, true
+		selectors = append(selectors, "feed/"+feed)
+	}
+	for _, selector := range selectors {
+		if reviewer, ok := candidateByLabel[rules.ApprovalRoutes[selector]]; ok {
+			return reviewer, "route:" + selector, true
 		}
 	}
 	return localIdentityCandidate{}, "", false
@@ -1797,6 +1804,9 @@ func moderationSuggestionReason(post newsplugin.Post, identity haonews.AgentIden
 	}
 	if _, ok := store.ActiveDelegationFor(identity.AgentID, identity.PublicKey, "moderation:approve:any", now); ok {
 		return "any"
+	}
+	if parent := strings.TrimSpace(post.ParentPublicKey); parent != "" {
+		return "parent:" + parent
 	}
 	return ""
 }

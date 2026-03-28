@@ -96,6 +96,28 @@ func TestMatchesAnnouncement(t *testing.T) {
 	}
 }
 
+func TestMatchesAnnouncementFiltersByPublicKeys(t *testing.T) {
+	t.Parallel()
+
+	announcement := SyncAnnouncement{
+		OriginPublicKey: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		ParentPublicKey: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+		Topics:          []string{"technology"},
+	}
+	if !matchesAnnouncement(announcement, SyncSubscriptions{AllowedOriginKeys: []string{"AAaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}) {
+		t.Fatal("expected origin public key allow match")
+	}
+	if !matchesAnnouncement(announcement, SyncSubscriptions{AllowedParentKeys: []string{"BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"}}) {
+		t.Fatal("expected parent public key allow match")
+	}
+	if matchesAnnouncement(announcement, SyncSubscriptions{BlockedOriginKeys: []string{"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}, Topics: []string{"technology"}}) {
+		t.Fatal("expected blocked origin key to win")
+	}
+	if matchesAnnouncement(announcement, SyncSubscriptions{BlockedParentKeys: []string{"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}, Topics: []string{"technology"}}) {
+		t.Fatal("expected blocked parent key to win")
+	}
+}
+
 func TestMatchesHistoryAnnouncementUsesHistorySelectors(t *testing.T) {
 	t.Parallel()
 
@@ -159,6 +181,30 @@ func TestSyncSubscriptionsNormalizeCanonicalizesTopicAliases(t *testing.T) {
 	}
 	if rules.TopicAliases["macro"] != "world" || rules.TopicAliases["brief"] != "news" {
 		t.Fatalf("topic aliases = %v, want macro->world and brief->news", rules.TopicAliases)
+	}
+}
+
+func TestSyncSubscriptionsNormalizePublicKeys(t *testing.T) {
+	t.Parallel()
+
+	rules := SyncSubscriptions{
+		AllowedOriginKeys: []string{
+			"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+			"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			"bad",
+		},
+		BlockedParentKeys: []string{
+			"BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+			"",
+		},
+	}
+	rules.Normalize()
+
+	if len(rules.AllowedOriginKeys) != 1 || rules.AllowedOriginKeys[0] != "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" {
+		t.Fatalf("allowed origin keys = %v", rules.AllowedOriginKeys)
+	}
+	if len(rules.BlockedParentKeys) != 1 || rules.BlockedParentKeys[0] != "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" {
+		t.Fatalf("blocked parent keys = %v", rules.BlockedParentKeys)
 	}
 }
 

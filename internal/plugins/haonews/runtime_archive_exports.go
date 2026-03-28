@@ -67,8 +67,14 @@ func (a *App) HistoryListPayload(cursor string, pageSize int) (HistoryManifestAP
 		ref := haonews.CanonicalSyncRef(strings.ToLower(strings.TrimSpace(bundle.InfoHash)), strings.TrimSpace(bundle.Message.Title))
 		ref = haonews.WithSourcePeerHintForSyncRef(ref, sourceHost)
 		ref = haonews.WithLibP2PPeerHintForSyncRef(ref, localPeerID)
-		originAuthor, originAgentID, originKeyType, originPublicKey, originSigned := originSummary(bundle.Message.Origin)
-		delegated, parentAgentID, parentKeyType, parentPublicKey := delegationSummary(bundle.Delegation)
+		originAuthor, originAgentID, originKeyType, originPubKey, originSigned := originSummary(bundle.Message.Origin)
+		delegated, parentAgentID, parentKeyType, parentPubKey := delegationSummary(bundle.Delegation)
+		if key := originPublicKey(bundle.Message); key != "" {
+			originPubKey = key
+		}
+		if key := parentPublicKey(bundle.Message); key != "" {
+			parentPubKey = key
+		}
 		entries = append(entries, HistoryManifestEntry{
 			Protocol:          "haonews-sync/0.1",
 			InfoHash:          strings.ToLower(strings.TrimSpace(bundle.InfoHash)),
@@ -89,12 +95,12 @@ func (a *App) HistoryListPayload(cursor string, pageSize int) (HistoryManifestAP
 			OriginAuthor:      originAuthor,
 			OriginAgentID:     originAgentID,
 			OriginKeyType:     originKeyType,
-			OriginPublicKey:   originPublicKey,
+			OriginPublicKey:   originPubKey,
 			OriginSigned:      originSigned,
 			Delegated:         delegated,
 			ParentAgentID:     parentAgentID,
 			ParentKeyType:     parentKeyType,
-			ParentPublicKey:   parentPublicKey,
+			ParentPublicKey:   parentPubKey,
 			SharedByLocalNode: bundle.SharedByLocalNode,
 		})
 	}

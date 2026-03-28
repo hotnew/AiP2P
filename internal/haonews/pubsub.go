@@ -29,22 +29,24 @@ const (
 )
 
 type SyncAnnouncement struct {
-	Protocol     string   `json:"protocol"`
-	InfoHash     string   `json:"infohash"`
-	Ref          string   `json:"ref,omitempty"`
-	Magnet       string   `json:"magnet,omitempty"`
-	SizeBytes    int64    `json:"size_bytes,omitempty"`
-	Kind         string   `json:"kind,omitempty"`
-	Channel      string   `json:"channel,omitempty"`
-	Title        string   `json:"title,omitempty"`
-	Author       string   `json:"author,omitempty"`
-	CreatedAt    string   `json:"created_at,omitempty"`
-	Project      string   `json:"project,omitempty"`
-	NetworkID    string   `json:"network_id,omitempty"`
-	Topics       []string `json:"topics,omitempty"`
-	Tags         []string `json:"tags,omitempty"`
-	LibP2PPeerID string   `json:"libp2p_peer_id,omitempty"`
-	SourceHost   string   `json:"source_host,omitempty"`
+	Protocol        string   `json:"protocol"`
+	InfoHash        string   `json:"infohash"`
+	Ref             string   `json:"ref,omitempty"`
+	Magnet          string   `json:"magnet,omitempty"`
+	SizeBytes       int64    `json:"size_bytes,omitempty"`
+	Kind            string   `json:"kind,omitempty"`
+	Channel         string   `json:"channel,omitempty"`
+	Title           string   `json:"title,omitempty"`
+	Author          string   `json:"author,omitempty"`
+	CreatedAt       string   `json:"created_at,omitempty"`
+	Project         string   `json:"project,omitempty"`
+	NetworkID       string   `json:"network_id,omitempty"`
+	Topics          []string `json:"topics,omitempty"`
+	Tags            []string `json:"tags,omitempty"`
+	OriginPublicKey string   `json:"origin_public_key,omitempty"`
+	ParentPublicKey string   `json:"parent_public_key,omitempty"`
+	LibP2PPeerID    string   `json:"libp2p_peer_id,omitempty"`
+	SourceHost      string   `json:"source_host,omitempty"`
 }
 
 type pubsubRuntime struct {
@@ -93,6 +95,10 @@ func startPubSubRuntime(
 			DiscoveryTopics:     append([]string(nil), rules.discoveryTopics()...),
 			TopicWhitelist:      append([]string(nil), rules.TopicWhitelist...),
 			TopicAliasPairs:     topicAliasPairs(rules.TopicAliases),
+			AllowedOriginKeys:   append([]string(nil), rules.AllowedOriginKeys...),
+			BlockedOriginKeys:   append([]string(nil), rules.BlockedOriginKeys...),
+			AllowedParentKeys:   append([]string(nil), rules.AllowedParentKeys...),
+			BlockedParentKeys:   append([]string(nil), rules.BlockedParentKeys...),
 		},
 	}
 
@@ -147,6 +153,10 @@ func (r *pubsubRuntime) Status() SyncPubSubStatus {
 	status.DiscoveryTopics = append([]string(nil), r.status.DiscoveryTopics...)
 	status.TopicWhitelist = append([]string(nil), r.status.TopicWhitelist...)
 	status.TopicAliasPairs = append([]string(nil), r.status.TopicAliasPairs...)
+	status.AllowedOriginKeys = append([]string(nil), r.status.AllowedOriginKeys...)
+	status.BlockedOriginKeys = append([]string(nil), r.status.BlockedOriginKeys...)
+	status.AllowedParentKeys = append([]string(nil), r.status.AllowedParentKeys...)
+	status.BlockedParentKeys = append([]string(nil), r.status.BlockedParentKeys...)
 	return status
 }
 
@@ -564,6 +574,8 @@ func normalizeAnnouncement(announcement SyncAnnouncement) SyncAnnouncement {
 	announcement.Author = strings.TrimSpace(announcement.Author)
 	announcement.Project = strings.TrimSpace(announcement.Project)
 	announcement.NetworkID = normalizeNetworkID(announcement.NetworkID)
+	announcement.OriginPublicKey = normalizePublicKey(announcement.OriginPublicKey)
+	announcement.ParentPublicKey = normalizePublicKey(announcement.ParentPublicKey)
 	announcement.LibP2PPeerID = strings.TrimSpace(announcement.LibP2PPeerID)
 	announcement.Topics = uniqueCanonicalTopics(announcement.Topics)
 	announcement.Tags = uniqueFold(announcement.Tags)
@@ -604,19 +616,21 @@ func buildAnnouncement(msg Message, mi *metainfo.MetaInfo, info metainfo.Info) S
 		displayName = strings.TrimSpace(msg.Title)
 	}
 	return normalizeAnnouncement(SyncAnnouncement{
-		InfoHash:  infoHash,
-		Ref:       CanonicalSyncRef(infoHash, displayName),
-		Magnet:    CanonicalMagnet(infoHash, displayName),
-		SizeBytes: info.TotalLength(),
-		Kind:      msg.Kind,
-		Channel:   msg.Channel,
-		Title:     msg.Title,
-		Author:    msg.Author,
-		CreatedAt: msg.CreatedAt,
-		Project:   nestedString(msg.Extensions, "project"),
-		NetworkID: nestedString(msg.Extensions, "network_id"),
-		Topics:    stringSlice(msg.Extensions["topics"]),
-		Tags:      append([]string(nil), msg.Tags...),
+		InfoHash:        infoHash,
+		Ref:             CanonicalSyncRef(infoHash, displayName),
+		Magnet:          CanonicalMagnet(infoHash, displayName),
+		SizeBytes:       info.TotalLength(),
+		Kind:            msg.Kind,
+		Channel:         msg.Channel,
+		Title:           msg.Title,
+		Author:          msg.Author,
+		CreatedAt:       msg.CreatedAt,
+		Project:         nestedString(msg.Extensions, "project"),
+		NetworkID:       nestedString(msg.Extensions, "network_id"),
+		Topics:          stringSlice(msg.Extensions["topics"]),
+		Tags:            append([]string(nil), msg.Tags...),
+		OriginPublicKey: announcementOriginPublicKey(msg),
+		ParentPublicKey: announcementParentPublicKey(msg),
 	})
 }
 
@@ -679,6 +693,11 @@ func stringSlice(value any) []string {
 func matchesAnnouncement(announcement SyncAnnouncement, rules SyncSubscriptions) bool {
 	announcement = normalizeAnnouncement(announcement)
 	rules.Normalize()
+	if blocked, allowed := matchPublicKeyFilters(announcement.OriginPublicKey, announcement.ParentPublicKey, rules); blocked {
+		return false
+	} else if allowed {
+		return true
+	}
 	whitelist := topicWhitelistSet(rules.TopicWhitelist, rules.TopicAliases)
 	announcement.Topics = uniqueCanonicalTopicsWithAliases(announcement.Topics, rules.TopicAliases, whitelist)
 	if !withinMaxAge(announcement.CreatedAt, rules.MaxAgeDays) {
@@ -710,4 +729,21 @@ func matchesAnnouncement(announcement SyncAnnouncement, rules SyncSubscriptions)
 		}
 	}
 	return false
+}
+
+func announcementOriginPublicKey(msg Message) string {
+	if value := nestedString(msg.Extensions, "origin_public_key"); value != "" {
+		return value
+	}
+	if msg.Origin != nil {
+		return strings.TrimSpace(msg.Origin.PublicKey)
+	}
+	return ""
+}
+
+func announcementParentPublicKey(msg Message) string {
+	if value := nestedString(msg.Extensions, "parent_public_key"); value != "" {
+		return value
+	}
+	return nestedString(msg.Extensions, "hd.parent_pubkey")
 }

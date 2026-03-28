@@ -31,6 +31,10 @@ type SyncSubscriptions struct {
 	Topics              []string          `json:"topics"`
 	Tags                []string          `json:"tags"`
 	Authors             []string          `json:"authors,omitempty"`
+	AllowedOriginKeys   []string          `json:"allowed_origin_public_keys,omitempty"`
+	BlockedOriginKeys   []string          `json:"blocked_origin_public_keys,omitempty"`
+	AllowedParentKeys   []string          `json:"allowed_parent_public_keys,omitempty"`
+	BlockedParentKeys   []string          `json:"blocked_parent_public_keys,omitempty"`
 	WhitelistMode       string            `json:"whitelist_mode,omitempty"`
 	ApprovalFeed        string            `json:"approval_feed,omitempty"`
 	AutoRoutePending    bool              `json:"auto_route_pending,omitempty"`
@@ -85,6 +89,10 @@ func (r *SyncSubscriptions) Normalize() {
 	r.Topics = uniqueCanonicalTopicsWithAliases(r.Topics, r.TopicAliases, whitelist)
 	r.Tags = uniqueFold(r.Tags)
 	r.Authors = uniqueFold(r.Authors)
+	r.AllowedOriginKeys = uniqueNormalizedPublicKeys(r.AllowedOriginKeys)
+	r.BlockedOriginKeys = uniqueNormalizedPublicKeys(r.BlockedOriginKeys)
+	r.AllowedParentKeys = uniqueNormalizedPublicKeys(r.AllowedParentKeys)
+	r.BlockedParentKeys = uniqueNormalizedPublicKeys(r.BlockedParentKeys)
 	r.DiscoveryFeeds = uniqueCanonicalDiscoveryFeeds(r.DiscoveryFeeds)
 	r.DiscoveryTopics = uniqueCanonicalTopicsWithAliases(r.DiscoveryTopics, r.TopicAliases, whitelist)
 	r.HistoryChannels = uniqueFold(r.HistoryChannels)
@@ -141,6 +149,8 @@ func (r SyncSubscriptions) discoveryTopics() []string {
 func (r SyncSubscriptions) Empty() bool {
 	r.Normalize()
 	return len(r.Channels) == 0 && len(r.Topics) == 0 && len(r.Tags) == 0 && len(r.Authors) == 0 &&
+		len(r.AllowedOriginKeys) == 0 && len(r.BlockedOriginKeys) == 0 &&
+		len(r.AllowedParentKeys) == 0 && len(r.BlockedParentKeys) == 0 &&
 		len(r.HistoryChannels) == 0 && len(r.HistoryTopics) == 0 && len(r.HistoryAuthors) == 0 &&
 		r.MaxAgeDays >= defaultMaxAgeDays && r.MaxBundleMB >= defaultMaxBundleMB && r.MaxItemsPerDay >= defaultMaxItemsPerDay
 }
@@ -167,6 +177,11 @@ func (r SyncSubscriptions) hasHistorySelectors() bool {
 func matchesHistoryAnnouncement(announcement SyncAnnouncement, rules SyncSubscriptions) bool {
 	announcement = normalizeAnnouncement(announcement)
 	rules.Normalize()
+	if blocked, allowed := matchPublicKeyFilters(announcement.OriginPublicKey, announcement.ParentPublicKey, rules); blocked {
+		return false
+	} else if allowed {
+		return true
+	}
 	whitelist := topicWhitelistSet(rules.TopicWhitelist, rules.TopicAliases)
 	announcement.Topics = uniqueCanonicalTopicsWithAliases(announcement.Topics, rules.TopicAliases, whitelist)
 	if !withinMaxAge(announcement.CreatedAt, rules.MaxAgeDays) {
@@ -211,6 +226,54 @@ func uniqueFold(items []string) []string {
 		out = append(out, item)
 	}
 	return out
+}
+
+func normalizePublicKey(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if len(value) != 64 {
+		return ""
+	}
+	for _, r := range value {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') {
+			return ""
+		}
+	}
+	return value
+}
+
+func uniqueNormalizedPublicKeys(items []string) []string {
+	seen := make(map[string]struct{}, len(items))
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		item = normalizePublicKey(item)
+		if item == "" {
+			continue
+		}
+		if _, ok := seen[item]; ok {
+			continue
+		}
+		seen[item] = struct{}{}
+		out = append(out, item)
+	}
+	return out
+}
+
+func matchPublicKeyFilters(originKey, parentKey string, rules SyncSubscriptions) (blocked bool, allowed bool) {
+	originKey = normalizePublicKey(originKey)
+	parentKey = normalizePublicKey(parentKey)
+	if containsFold(rules.BlockedOriginKeys, originKey) {
+		return true, false
+	}
+	if containsFold(rules.BlockedParentKeys, parentKey) {
+		return true, false
+	}
+	if containsFold(rules.AllowedOriginKeys, originKey) {
+		return false, true
+	}
+	if containsFold(rules.AllowedParentKeys, parentKey) {
+		return false, true
+	}
+	return false, false
 }
 
 func uniqueCanonicalDiscoveryFeeds(items []string) []string {
@@ -369,6 +432,16 @@ func normalizedApprovalRoutes(raw map[string]string, aliases map[string]string, 
 				continue
 			}
 			out["feed/"+feed] = reviewer
+		case strings.HasPrefix(key, "origin/"), strings.HasPrefix(key, "parent/"):
+			prefix := "origin/"
+			if strings.HasPrefix(key, "parent/") {
+				prefix = "parent/"
+			}
+			publicKey := normalizePublicKey(strings.TrimPrefix(key, prefix))
+			if publicKey == "" {
+				continue
+			}
+			out[prefix+publicKey] = reviewer
 		default:
 			topic := key
 			if strings.HasPrefix(key, "topic/") {
@@ -420,6 +493,16 @@ func canonicalApprovalSelector(selector string, aliases map[string]string, white
 			return ""
 		}
 		return "feed/" + feed
+	case strings.HasPrefix(key, "origin/"), strings.HasPrefix(key, "parent/"):
+		prefix := "origin/"
+		if strings.HasPrefix(key, "parent/") {
+			prefix = "parent/"
+		}
+		publicKey := normalizePublicKey(strings.TrimPrefix(key, prefix))
+		if publicKey == "" {
+			return ""
+		}
+		return prefix + publicKey
 	default:
 		topic := key
 		if strings.HasPrefix(key, "topic/") {

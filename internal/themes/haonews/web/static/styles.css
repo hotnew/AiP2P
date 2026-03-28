@@ -863,6 +863,13 @@ body.sidebar-collapsed .page-shell {
   align-content: start;
 }
 
+.story-social-rail-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+
 .story-social {
   display: flex;
   flex-wrap: wrap;

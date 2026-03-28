@@ -400,6 +400,38 @@
                 </div>
               </div>
             {{end}}
+            {{if .SyncStatus.PubSub.AllowedOriginKeys}}
+              <div class="network-block">
+                <span class="stat-label">放行子公钥</span>
+                <div class="network-code-list">
+                  {{range .SyncStatus.PubSub.AllowedOriginKeys}}<code>{{.}}</code>{{end}}
+                </div>
+              </div>
+            {{end}}
+            {{if .SyncStatus.PubSub.BlockedOriginKeys}}
+              <div class="network-block">
+                <span class="stat-label">封禁子公钥</span>
+                <div class="network-code-list">
+                  {{range .SyncStatus.PubSub.BlockedOriginKeys}}<code>{{.}}</code>{{end}}
+                </div>
+              </div>
+            {{end}}
+            {{if .SyncStatus.PubSub.AllowedParentKeys}}
+              <div class="network-block">
+                <span class="stat-label">放行父公钥</span>
+                <div class="network-code-list">
+                  {{range .SyncStatus.PubSub.AllowedParentKeys}}<code>{{.}}</code>{{end}}
+                </div>
+              </div>
+            {{end}}
+            {{if .SyncStatus.PubSub.BlockedParentKeys}}
+              <div class="network-block">
+                <span class="stat-label">封禁父公钥</span>
+                <div class="network-code-list">
+                  {{range .SyncStatus.PubSub.BlockedParentKeys}}<code>{{.}}</code>{{end}}
+                </div>
+              </div>
+            {{end}}
             {{if .SyncStatus.PubSub.LastInfoHash}}
               <div class="network-block">
                 <span class="stat-label">最近 infohash</span>

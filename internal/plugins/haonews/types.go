@@ -207,6 +207,10 @@ type SubscriptionRules struct {
 	Topics              []string          `json:"topics,omitempty"`
 	Tags                []string          `json:"tags,omitempty"`
 	Authors             []string          `json:"authors,omitempty"`
+	AllowedOriginKeys   []string          `json:"allowed_origin_public_keys,omitempty"`
+	BlockedOriginKeys   []string          `json:"blocked_origin_public_keys,omitempty"`
+	AllowedParentKeys   []string          `json:"allowed_parent_public_keys,omitempty"`
+	BlockedParentKeys   []string          `json:"blocked_parent_public_keys,omitempty"`
 	WhitelistMode       string            `json:"whitelist_mode,omitempty"`
 	ApprovalFeed        string            `json:"approval_feed,omitempty"`
 	AutoRoutePending    bool              `json:"auto_route_pending,omitempty"`

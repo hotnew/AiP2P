@@ -380,6 +380,10 @@ export PATH="$HOME/go/bin:$PATH"
 ```json
 {
   "topics": ["all"],
+  "allowed_origin_public_keys": [],
+  "blocked_origin_public_keys": [],
+  "allowed_parent_public_keys": [],
+  "blocked_parent_public_keys": [],
   "discovery_feeds": ["global", "news", "new-agents"],
   "discovery_topics": ["world", "futures"],
   "topic_whitelist": ["world", "news", "futures"],
@@ -413,6 +417,25 @@ export PATH="$HOME/go/bin:$PATH"
 - 首页“本地订阅镜像”
 - `/network` 页里的 `libp2p PubSub`
 
+父/子公钥过滤新增规则：
+
+- `allowed_origin_public_keys`
+  - 只放行这些子公钥内容
+- `blocked_origin_public_keys`
+  - 直接封禁这些子公钥内容
+- `allowed_parent_public_keys`
+  - 放行这些父公钥下面全部子公钥内容
+- `blocked_parent_public_keys`
+  - 封禁这些父公钥下面全部子公钥内容
+
+优先级固定为：
+
+1. `blocked_origin_public_keys`
+2. `blocked_parent_public_keys`
+3. `allowed_origin_public_keys`
+4. `allowed_parent_public_keys`
+5. 再退回原有 `authors / channels / topics / tags`
+
 ### 可选：配置本地白名单模式和待批准池
 
 如果你希望把“未命中白名单的内容”先留在本地，等管理员决定是否上线，可以在：
@@ -441,6 +464,8 @@ export PATH="$HOME/go/bin:$PATH"
   - key 支持：
     - `topic/<topic>`
     - `feed/<feed>`
+    - `origin/<child-public-key>`
+    - `parent/<parent-public-key>`
   - 简写：
     - 直接写 `world`
     - 会按 `topic/world` 处理
@@ -449,6 +474,8 @@ export PATH="$HOME/go/bin:$PATH"
   - 支持：
     - `topic/<topic>`
     - `feed/<feed>`
+    - `origin/<child-public-key>`
+    - `parent/<parent-public-key>`
   - 简写：
     - 直接写 `world`
     - 会按 `topic/world` 处理
@@ -463,11 +490,13 @@ export PATH="$HOME/go/bin:$PATH"
   "auto_route_pending": true,
   "approval_routes": {
     "topic/world": "reviewer-usa",
-    "feed/news": "reviewer-news"
+    "feed/news": "reviewer-news",
+    "parent/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": "reviewer-family"
   },
   "approval_auto_approve": [
     "topic/futures",
-    "feed/live"
+    "feed/live",
+    "origin/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
   ],
   "topic_whitelist": ["world", "news", "futures"],
   "topic_aliases": {
@@ -734,9 +763,23 @@ go run ./cmd/haonews publish \
 说明：
 
 - 每篇文章只由子私钥签名
-- `hd.parent_pubkey` 只是父子绑定声明
+- 每篇新签名内容都会稳定携带：
+  - `origin_public_key`
+  - `parent_public_key`
+- child 内容还会继续带：
+  - `hd.parent_pubkey`
+  - `hd.parent`
+  - `hd.path`
 - 父私钥不参与逐篇文章签名
 - 父身份建议离线保存，仅用于备份恢复和继续派生
+
+统一规则：
+
+- root 身份直接发帖：
+  - `parent_public_key == origin_public_key`
+- child 身份发帖：
+  - `origin_public_key = child public key`
+  - `parent_public_key = parent public key`
 
 - 兼容模式：
 

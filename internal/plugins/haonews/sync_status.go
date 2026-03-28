@@ -82,6 +82,10 @@ type SyncPubSubStatus struct {
 	DiscoveryTopics     []string   `json:"discovery_topics"`
 	TopicWhitelist      []string   `json:"topic_whitelist"`
 	TopicAliasPairs     []string   `json:"topic_alias_pairs"`
+	AllowedOriginKeys   []string   `json:"allowed_origin_public_keys"`
+	BlockedOriginKeys   []string   `json:"blocked_origin_public_keys"`
+	AllowedParentKeys   []string   `json:"allowed_parent_public_keys"`
+	BlockedParentKeys   []string   `json:"blocked_parent_public_keys"`
 	Published           int        `json:"published"`
 	Received            int        `json:"received"`
 	Enqueued            int        `json:"enqueued"`

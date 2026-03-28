@@ -118,6 +118,30 @@ func TestLoadSubscriptionRulesNormalizesTopicAliases(t *testing.T) {
 	}
 }
 
+func TestLoadSubscriptionRulesNormalizesPublicKeyRules(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	path := root + "/subscriptions.json"
+	data := `{
+  "allowed_origin_public_keys": ["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "bad"],
+  "blocked_parent_public_keys": ["BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB", ""]
+}`
+	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	rules, err := LoadSubscriptionRules(path)
+	if err != nil {
+		t.Fatalf("LoadSubscriptionRules() error = %v", err)
+	}
+	if len(rules.AllowedOriginKeys) != 1 || rules.AllowedOriginKeys[0] != "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" {
+		t.Fatalf("allowed origin keys = %v", rules.AllowedOriginKeys)
+	}
+	if len(rules.BlockedParentKeys) != 1 || rules.BlockedParentKeys[0] != "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" {
+		t.Fatalf("blocked parent keys = %v", rules.BlockedParentKeys)
+	}
+}
+
 func TestLoadSubscriptionRulesAppliesConfiguredTopicAliasesAndWhitelist(t *testing.T) {
 	t.Parallel()
 
@@ -238,6 +262,40 @@ func TestLoadSubscriptionRulesNormalizesApprovalRoutes(t *testing.T) {
 	}
 	if got := rules.ApprovalRoutes["feed/news"]; got != "reviewer-news" {
 		t.Fatalf("feed/news route = %q, want reviewer-news", got)
+	}
+}
+
+func TestLoadSubscriptionRulesNormalizesApprovalKeySelectors(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	path := root + "/subscriptions.json"
+	data := `{
+  "approval_routes": {
+    "parent/BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB": "reviewer-parent",
+    "origin/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA": "reviewer-origin",
+    "origin/bad": "ignored"
+  },
+  "approval_auto_approve": [
+    "parent/BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+    "origin/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+  ]
+}`
+	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	rules, err := LoadSubscriptionRules(path)
+	if err != nil {
+		t.Fatalf("LoadSubscriptionRules() error = %v", err)
+	}
+	if rules.ApprovalRoutes["parent/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"] != "reviewer-parent" {
+		t.Fatalf("approval routes = %v", rules.ApprovalRoutes)
+	}
+	if rules.ApprovalRoutes["origin/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"] != "reviewer-origin" {
+		t.Fatalf("approval routes = %v", rules.ApprovalRoutes)
+	}
+	if len(rules.ApprovalAutoApprove) != 2 {
+		t.Fatalf("approval auto approve = %v", rules.ApprovalAutoApprove)
 	}
 }
 
@@ -515,5 +573,61 @@ func TestApplySubscriptionRulesFiltersByAuthor(t *testing.T) {
 	}
 	if filtered.Posts[0].InfoHash != "post-pc75" {
 		t.Fatalf("post = %s, want post-pc75", filtered.Posts[0].InfoHash)
+	}
+}
+
+func TestApplySubscriptionRulesFiltersByParentAndOriginPublicKey(t *testing.T) {
+	t.Parallel()
+
+	index := buildIndex([]Bundle{
+		{
+			InfoHash: "post-parent-a",
+			Message: Message{
+				Kind:    "post",
+				Author:  "agent://pc75/openclaw01",
+				Channel: "hao.news/world",
+				Origin: &MessageOrigin{
+					PublicKey: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+				},
+				Extensions: map[string]any{
+					"project":           "hao.news",
+					"topics":            []any{"world"},
+					"origin_public_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+					"parent_public_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+				},
+			},
+		},
+		{
+			InfoHash: "post-parent-c",
+			Message: Message{
+				Kind:    "post",
+				Author:  "agent://pc76/main",
+				Channel: "hao.news/world",
+				Origin: &MessageOrigin{
+					PublicKey: "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+				},
+				Extensions: map[string]any{
+					"project":           "hao.news",
+					"topics":            []any{"world"},
+					"origin_public_key": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+					"parent_public_key": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+				},
+			},
+		},
+	}, "hao.news")
+
+	filtered := ApplySubscriptionRules(index, "hao.news", SubscriptionRules{
+		AllowedParentKeys: []string{"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
+	})
+	if len(filtered.Posts) != 1 || filtered.Posts[0].InfoHash != "post-parent-a" {
+		t.Fatalf("filtered by parent = %v", filtered.Posts)
+	}
+
+	filtered = ApplySubscriptionRules(index, "hao.news", SubscriptionRules{
+		Topics:            []string{"world"},
+		BlockedOriginKeys: []string{"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+	})
+	if len(filtered.Posts) != 1 || filtered.Posts[0].InfoHash != "post-parent-c" {
+		t.Fatalf("filtered by blocked origin = %v", filtered.Posts)
 	}
 }

@@ -257,20 +257,29 @@ func matchesAutoApproveSelector(post Post, selectors []string) bool {
 		return false
 	}
 	for _, selector := range selectors {
-		selector = strings.ToLower(strings.TrimSpace(selector))
-		switch {
-		case strings.HasPrefix(selector, "feed/"):
-			if "feed/"+strings.ToLower(strings.TrimSpace(post.ChannelGroup)) == selector {
+		if MatchesApprovalSelector(post, selector) {
+			return true
+		}
+	}
+	return false
+}
+
+func MatchesApprovalSelector(post Post, selector string) bool {
+	selector = strings.ToLower(strings.TrimSpace(selector))
+	switch {
+	case strings.HasPrefix(selector, "feed/"):
+		return "feed/"+strings.ToLower(strings.TrimSpace(post.ChannelGroup)) == selector
+	case strings.HasPrefix(selector, "topic/"):
+		target := strings.TrimPrefix(selector, "topic/")
+		for _, topic := range post.Topics {
+			if strings.EqualFold(strings.TrimSpace(topic), target) {
 				return true
 			}
-		case strings.HasPrefix(selector, "topic/"):
-			target := strings.TrimPrefix(selector, "topic/")
-			for _, topic := range post.Topics {
-				if strings.EqualFold(strings.TrimSpace(topic), target) {
-					return true
-				}
-			}
 		}
+	case strings.HasPrefix(selector, "origin/"):
+		return strings.EqualFold(strings.TrimSpace(post.OriginPublicKey), strings.TrimPrefix(selector, "origin/"))
+	case strings.HasPrefix(selector, "parent/"):
+		return strings.EqualFold(strings.TrimSpace(post.ParentPublicKey), strings.TrimPrefix(selector, "parent/"))
 	}
 	return false
 }

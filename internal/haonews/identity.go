@@ -307,6 +307,9 @@ func ValidateMessageOrigin(msg Message) error {
 	if !ed25519.Verify(ed25519.PublicKey(publicKey), payload, signature) {
 		return errors.New("origin signature verification failed")
 	}
+	if err := validateSignedKeyMetadata(msg, origin.PublicKey); err != nil {
+		return err
+	}
 	if err := validateHDOriginMetadata(msg); err != nil {
 		return err
 	}
@@ -380,7 +383,9 @@ func resolveSigningIdentity(identity AgentIdentity, author string, extensions ma
 		if identity.Author != "" && identity.Author != author {
 			return AgentIdentity{}, nil, errors.New("author does not match identity-file author")
 		}
-		return identity, cloneMap(extensions), nil
+		result := cloneMap(extensions)
+		applySignedKeyMetadata(result, identity.PublicKey, identity.PublicKey)
+		return identity, result, nil
 	}
 	if strings.TrimSpace(identity.Mnemonic) != "" {
 		return deriveSigningIdentity(identity, author, extensions)
@@ -396,6 +401,11 @@ func resolveSigningIdentity(identity AgentIdentity, author string, extensions ma
 		}
 		result["hd.path"] = identity.DerivationPath
 	}
+	parentPublicKey := identity.ParentPublicKey
+	if strings.TrimSpace(parentPublicKey) == "" {
+		parentPublicKey = identity.PublicKey
+	}
+	applySignedKeyMetadata(result, identity.PublicKey, parentPublicKey)
 	return identity, result, nil
 }
 
@@ -429,6 +439,7 @@ func deriveSigningIdentity(identity AgentIdentity, author string, extensions map
 		result["hd.parent_pubkey"] = identity.PublicKey
 		result["hd.path"] = path
 	}
+	applySignedKeyMetadata(result, publicKey, identity.PublicKey)
 	return AgentIdentity{
 		AgentID:         identity.AgentID,
 		Author:          author,
@@ -442,6 +453,42 @@ func deriveSigningIdentity(identity AgentIdentity, author string, extensions map
 		Parent:          identity.Author,
 		ParentPublicKey: identity.PublicKey,
 	}, result, nil
+}
+
+func applySignedKeyMetadata(extensions map[string]any, originPublicKey, parentPublicKey string) {
+	if extensions == nil {
+		return
+	}
+	if originPublicKey = strings.ToLower(strings.TrimSpace(originPublicKey)); originPublicKey != "" {
+		extensions["origin_public_key"] = originPublicKey
+	}
+	if parentPublicKey = strings.ToLower(strings.TrimSpace(parentPublicKey)); parentPublicKey != "" {
+		extensions["parent_public_key"] = parentPublicKey
+	}
+}
+
+func validateSignedKeyMetadata(msg Message, originPublicKey string) error {
+	metadataOrigin, ok := stringFromMap(msg.Extensions, "origin_public_key")
+	if !ok {
+		return errors.New("signed messages must include origin_public_key")
+	}
+	metadataParent, ok := stringFromMap(msg.Extensions, "parent_public_key")
+	if !ok {
+		return errors.New("signed messages must include parent_public_key")
+	}
+	metadataOrigin = strings.ToLower(strings.TrimSpace(metadataOrigin))
+	metadataParent = strings.ToLower(strings.TrimSpace(metadataParent))
+	originPublicKey = strings.ToLower(strings.TrimSpace(originPublicKey))
+	if metadataOrigin != originPublicKey {
+		return errors.New("origin_public_key must match origin.public_key")
+	}
+	if _, err := decodeHexKey(metadataOrigin, ed25519.PublicKeySize, "origin_public_key"); err != nil {
+		return err
+	}
+	if _, err := decodeHexKey(metadataParent, ed25519.PublicKeySize, "parent_public_key"); err != nil {
+		return err
+	}
+	return nil
 }
 
 func validateHDOriginMetadata(msg Message) error {

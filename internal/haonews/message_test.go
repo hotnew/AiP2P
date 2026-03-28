@@ -78,6 +78,12 @@ func TestBuildAndLoadSignedMessage(t *testing.T) {
 	if msg.Origin.AgentID != "agent://news/world-01" {
 		t.Fatalf("origin.agent_id = %q", msg.Origin.AgentID)
 	}
+	if msg.Extensions["origin_public_key"] != identity.PublicKey {
+		t.Fatalf("origin_public_key = %#v", msg.Extensions["origin_public_key"])
+	}
+	if msg.Extensions["parent_public_key"] != identity.PublicKey {
+		t.Fatalf("parent_public_key = %#v", msg.Extensions["parent_public_key"])
+	}
 	if err := WriteMessage(dir, msg, body); err != nil {
 		t.Fatalf("WriteMessage error = %v", err)
 	}
@@ -154,6 +160,12 @@ func TestBuildAndLoadHDChildSignedMessage(t *testing.T) {
 	if msg.Extensions["hd.parent_pubkey"] != identity.PublicKey {
 		t.Fatalf("hd.parent_pubkey = %#v", msg.Extensions["hd.parent_pubkey"])
 	}
+	if msg.Extensions["origin_public_key"] == identity.PublicKey {
+		t.Fatal("expected child origin_public_key to differ from root key")
+	}
+	if msg.Extensions["parent_public_key"] != identity.PublicKey {
+		t.Fatalf("parent_public_key = %#v", msg.Extensions["parent_public_key"])
+	}
 	if _, ok := msg.Extensions["hd.path"].(string); !ok {
 		t.Fatalf("hd.path = %#v", msg.Extensions["hd.path"])
 	}
@@ -209,6 +221,12 @@ func TestBuildAndLoadDerivedChildSigningIdentityMessage(t *testing.T) {
 	if msg.Origin.PublicKey != childIdentity.PublicKey {
 		t.Fatalf("origin.public_key = %q, want %q", msg.Origin.PublicKey, childIdentity.PublicKey)
 	}
+	if msg.Extensions["origin_public_key"] != childIdentity.PublicKey {
+		t.Fatalf("origin_public_key = %#v", msg.Extensions["origin_public_key"])
+	}
+	if msg.Extensions["parent_public_key"] != rootIdentity.PublicKey {
+		t.Fatalf("parent_public_key = %#v", msg.Extensions["parent_public_key"])
+	}
 	if msg.Extensions["hd.parent"] != "agent://alice" {
 		t.Fatalf("hd.parent = %#v", msg.Extensions["hd.parent"])
 	}
@@ -254,6 +272,34 @@ func TestValidateMessageRejectsTamperedHDParentPubKey(t *testing.T) {
 	msg.Extensions["hd.parent_pubkey"] = strings.Repeat("0", 64)
 	if err := ValidateMessage(msg, body); err == nil {
 		t.Fatal("expected validation error after tampering hd.parent_pubkey")
+	}
+}
+
+func TestValidateMessageRejectsMissingOriginPublicKeyMetadata(t *testing.T) {
+	t.Parallel()
+
+	identity, err := NewAgentIdentity("agent://news/world-01", "agent://demo/alice", time.Date(2026, 3, 16, 12, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("NewAgentIdentity error = %v", err)
+	}
+	msg, body, err := BuildMessage(MessageInput{
+		Kind:     "post",
+		Author:   "agent://demo/alice",
+		Channel:  "hao.news/world",
+		Title:    "signed hello",
+		Body:     "signed body",
+		Identity: &identity,
+		Extensions: map[string]any{
+			"project": "hao.news",
+		},
+		CreatedAt: time.Date(2026, 3, 16, 12, 1, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatalf("BuildMessage error = %v", err)
+	}
+	delete(msg.Extensions, "origin_public_key")
+	if err := ValidateMessage(msg, body); err == nil {
+		t.Fatal("expected validation error after removing origin_public_key")
 	}
 }
 

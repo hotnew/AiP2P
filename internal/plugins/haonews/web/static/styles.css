@@ -796,6 +796,13 @@ body.sidebar-collapsed .page-shell {
   align-content: start;
 }
 
+.story-social-rail-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+
 .story-social-pill {
   display: inline-flex;
   align-items: center;
