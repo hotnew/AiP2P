@@ -45,14 +45,60 @@ func (a *App) buildIndex() (Index, error) {
 
 func (a *App) indexSignature() (string, error) {
 	a.indexMu.Lock()
-	if a.indexCache.ready && strings.TrimSpace(a.indexCache.signature) != "" {
-		signature := a.indexCache.signature
+	if a.indexCache.ready && strings.TrimSpace(a.indexCache.contentSignature) != "" {
+		signature := a.indexCache.contentSignature
 		a.indexMu.Unlock()
 		return signature, nil
 	}
 	a.indexMu.Unlock()
+	if _, err := a.index(); err != nil {
+		return "", err
+	}
+	a.indexMu.Lock()
+	defer a.indexMu.Unlock()
+	if !a.indexCache.ready || strings.TrimSpace(a.indexCache.contentSignature) == "" {
+		return "", fmt.Errorf("index signature unavailable")
+	}
+	return a.indexCache.contentSignature, nil
+}
 
-	return a.currentIndexSignature()
+func contentSignatureForIndex(index Index) string {
+	digester := fnv.New64a()
+	for _, post := range index.Posts {
+		_, _ = fmt.Fprintf(
+			digester,
+			"post|%s|%s|%s|%s|%d|%d|%d|%d|%d|%d|%.3f|%s|%t|%s|%s|%s|%s|%s|%s\n",
+			strings.ToLower(strings.TrimSpace(post.InfoHash)),
+			post.CreatedAt.UTC().Format(time.RFC3339Nano),
+			strings.TrimSpace(post.Message.Title),
+			strings.TrimSpace(post.ChannelGroup),
+			post.ReplyCount,
+			post.CommentCount,
+			post.ReactionCount,
+			post.Upvotes,
+			post.Downvotes,
+			post.VoteScore,
+			post.HotScore,
+			strings.TrimSpace(post.VisibilityState),
+			post.PendingApproval,
+			strings.TrimSpace(post.ApprovedFeed),
+			strings.Join(post.ApprovedTopics, ","),
+			strings.TrimSpace(post.AssignedReviewer),
+			strings.TrimSpace(post.SuggestedReviewer),
+			strings.TrimSpace(post.SourceName),
+			strings.Join(post.Topics, ","),
+		)
+	}
+	for _, stat := range index.ChannelStats {
+		_, _ = fmt.Fprintf(digester, "channel|%s|%d\n", strings.ToLower(strings.TrimSpace(stat.Name)), stat.Count)
+	}
+	for _, stat := range index.TopicStats {
+		_, _ = fmt.Fprintf(digester, "topic|%s|%d\n", canonicalTopic(stat.Name), stat.Count)
+	}
+	for _, stat := range index.SourceStats {
+		_, _ = fmt.Fprintf(digester, "source|%s|%d\n", strings.ToLower(strings.TrimSpace(stat.Name)), stat.Count)
+	}
+	return fmt.Sprintf("%x", digester.Sum64())
 }
 
 func (a *App) currentIndexSignature() (string, error) {

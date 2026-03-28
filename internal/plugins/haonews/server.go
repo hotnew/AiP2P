@@ -59,10 +59,11 @@ type AppOptions struct {
 }
 
 type cachedIndexState struct {
-	signature string
-	index     Index
-	recheckAt time.Time
-	ready     bool
+	probeSignature   string
+	contentSignature string
+	index            Index
+	recheckAt        time.Time
+	ready            bool
 }
 
 type cachedHTTPResponse struct {
@@ -554,7 +555,7 @@ func (a *App) index() (Index, error) {
 		a.indexBuildCh = ch
 		a.indexMu.Unlock()
 
-		signature, err := a.currentIndexSignature()
+		probeSignature, err := a.currentIndexSignature()
 		if err != nil {
 			a.indexMu.Lock()
 			a.indexBuildCh = nil
@@ -564,7 +565,7 @@ func (a *App) index() (Index, error) {
 		}
 
 		a.indexMu.Lock()
-		if a.indexCache.ready && a.indexCache.signature == signature {
+		if a.indexCache.ready && a.indexCache.probeSignature == probeSignature {
 			a.indexCache.recheckAt = now.Add(indexCacheProbeInterval)
 			index := a.indexCache.index.Clone()
 			a.indexBuildCh = nil
@@ -584,11 +585,13 @@ func (a *App) index() (Index, error) {
 		}
 
 		a.indexMu.Lock()
+		contentSignature := contentSignatureForIndex(index)
 		a.indexCache = cachedIndexState{
-			signature: signature,
-			index:     index,
-			recheckAt: now.Add(indexCacheProbeInterval),
-			ready:     true,
+			probeSignature:   probeSignature,
+			contentSignature: contentSignature,
+			index:            index,
+			recheckAt:        now.Add(indexCacheProbeInterval),
+			ready:            true,
 		}
 		index = a.indexCache.index.Clone()
 		a.indexBuildCh = nil
