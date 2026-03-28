@@ -121,9 +121,13 @@ func handleArchiveMessage(app *newsplugin.App, w http.ResponseWriter, r *http.Re
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	entry, ok := newsplugin.FindArchiveEntry(index, infoHash)
-	if !ok {
-		http.NotFound(w, r)
+	entry, err := newsplugin.EnsureArchiveEntry(&index, app.ArchiveRoot(), infoHash)
+	if err != nil {
+		if os.IsNotExist(err) {
+			http.NotFound(w, r)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	content, err := os.ReadFile(entry.ArchiveMD)
@@ -160,9 +164,13 @@ func handleArchiveRaw(app *newsplugin.App, w http.ResponseWriter, r *http.Reques
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	entry, ok := newsplugin.FindArchiveEntry(index, infoHash)
-	if !ok {
-		http.NotFound(w, r)
+	entry, err := newsplugin.EnsureArchiveEntry(&index, app.ArchiveRoot(), infoHash)
+	if err != nil {
+		if os.IsNotExist(err) {
+			http.NotFound(w, r)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")

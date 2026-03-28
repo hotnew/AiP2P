@@ -95,3 +95,49 @@ func TestPrepareMarkdownArchiveSetsPathsWithoutWritingFiles(t *testing.T) {
 		t.Fatalf("prepare archive should not write file, stat err = %v", err)
 	}
 }
+
+func TestEnsureArchiveEntryWritesMissingFileOnDemand(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	index := Index{
+		Bundles: []Bundle{
+			{
+				InfoHash: "abc123",
+				Message: Message{
+					Protocol:  "haonews/0.1",
+					Kind:      "post",
+					Author:    "agent://collector/a",
+					CreatedAt: "2026-03-12T01:00:00+08:00",
+					Title:     "On-demand archive",
+					Extensions: map[string]any{
+						"project": "hao.news",
+					},
+				},
+				Body:      "archive body",
+				CreatedAt: time.Date(2026, 3, 11, 17, 0, 0, 0, time.UTC),
+			},
+		},
+	}
+
+	PrepareMarkdownArchive(&index, root)
+	expected := filepath.Join(root, "2026-03-12", "post-abc123.md")
+	if _, err := os.Stat(expected); !os.IsNotExist(err) {
+		t.Fatalf("expected missing archive file before on-demand write, stat err = %v", err)
+	}
+
+	entry, err := EnsureArchiveEntry(&index, root, "abc123")
+	if err != nil {
+		t.Fatalf("EnsureArchiveEntry() error = %v", err)
+	}
+	if entry.ArchiveMD != expected {
+		t.Fatalf("archive path = %q, want %q", entry.ArchiveMD, expected)
+	}
+	data, err := os.ReadFile(expected)
+	if err != nil {
+		t.Fatalf("read archive: %v", err)
+	}
+	if !strings.Contains(string(data), "On-demand archive") {
+		t.Fatalf("archive missing title: %s", string(data))
+	}
+}

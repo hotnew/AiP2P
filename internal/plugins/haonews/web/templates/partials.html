@@ -45,12 +45,14 @@
 <script>
 (() => {
   const storageKey = "hao-news-sidebar-hidden";
+  const postStorageKey = "hao-news-post-sidebar-hidden";
   const ajaxRootSelector = "[data-feed-ajax-root]";
   const mobileMedia = window.matchMedia("(max-width: 1180px)");
   const body = document.body;
   const sidebar = document.getElementById("app-sidebar");
   const toggle = document.querySelector("[data-sidebar-toggle]");
   const HaoNewsUI = window.HaoNewsUI || (window.HaoNewsUI = {});
+  const isPostPage = body.classList.contains("post-page-body");
   let mobileOpen = false;
   const copyText = async (text) => {
     if (!text) return false;
@@ -91,8 +93,8 @@
       return;
     }
     mobileOpen = false;
-    const stored = window.localStorage.getItem(storageKey);
-    applyState(stored === null ? true : stored === "1");
+    const stored = window.localStorage.getItem(isPostPage ? postStorageKey : storageKey);
+    applyState(stored === null ? false : stored === "1");
   };
 
   syncSidebarState();
@@ -105,7 +107,7 @@
     }
     const hidden = !body.classList.contains("sidebar-collapsed");
     applyState(hidden);
-    window.localStorage.setItem(storageKey, hidden ? "1" : "0");
+    window.localStorage.setItem(isPostPage ? postStorageKey : storageKey, hidden ? "1" : "0");
   });
 
   if (typeof mobileMedia.addEventListener === "function") {
@@ -167,7 +169,6 @@
       if (!response.ok) {
         throw new Error("ajax request failed");
       }
-      const responseTitle = (response.headers.get("X-HaoNews-Title") || "").trim();
       const html = await response.text();
       if (token !== ajaxToken) return;
       const doc = new DOMParser().parseFromString(html, "text/html");
@@ -175,6 +176,7 @@
       if (!incoming) {
         throw new Error("ajax root missing");
       }
+      const responseTitle = (incoming.getAttribute("data-feed-ajax-title") || "").trim();
       existing.replaceWith(incoming);
       if (responseTitle) {
         document.title = responseTitle;

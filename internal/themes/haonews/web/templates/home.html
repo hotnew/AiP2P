@@ -1,5 +1,5 @@
 {{define "home.feedRoot"}}
-<div data-feed-ajax-root data-feed-ajax-kind="home">
+<div data-feed-ajax-root data-feed-ajax-kind="home" data-feed-ajax-title="好牛Ai {{if .Version}}{{.Version}} · {{end}}信息流">
   <form class="search-bar" method="get" action="/">
     <input type="search" name="q" value="{{.Options.Query}}" placeholder="搜索标题、来源、话题、作者">
     {{if .Options.Channel}}<input type="hidden" name="channel" value="{{.Options.Channel}}">{{end}}
@@ -188,7 +188,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>好牛Ai {{if .Version}}{{.Version}} · {{end}}信息流</title>
-  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/styles.css?v=20260328d">
 </head>
 <body>
   <div class="app-shell">

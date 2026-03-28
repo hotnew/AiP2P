@@ -92,18 +92,12 @@ func renderCachedPageOrFragment(
 	if err != nil {
 		return err
 	}
-	if fragment && title != "" {
-		w.Header().Set("X-HaoNews-Title", title)
-	}
 	newsplugin.WriteConditionalResponse(w, r, entry)
 	return nil
 }
 
 func renderPageOrFragment(app *newsplugin.App, w http.ResponseWriter, r *http.Request, pageTemplate, fragmentTemplate, title string, data any) {
 	if ajaxFragmentRequest(r) {
-		if title != "" {
-			w.Header().Set("X-HaoNews-Title", title)
-		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		if err := app.Templates().ExecuteTemplate(w, fragmentTemplate, data); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -405,6 +399,8 @@ func handlePost(app *newsplugin.App, w http.ResponseWriter, r *http.Request) {
 		Version:                   app.VersionString(),
 		PageNav:                   app.PageNav("/"),
 		BackURL:                   postBackURL(r, post),
+		SidebarTopicFacets:        newsplugin.BuildFeedFacets(index.TopicStats, newsplugin.FeedOptions{}, "/", "topic"),
+		SidebarWindowOptions:      newsplugin.BuildWindowOptions(newsplugin.FeedOptions{}, "/"),
 		Post:                      post,
 		Replies:                   index.RepliesByPost[strings.ToLower(infoHash)],
 		Reactions:                 index.ReactionsByPost[strings.ToLower(infoHash)],

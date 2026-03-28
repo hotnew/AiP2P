@@ -238,6 +238,8 @@ type PostPageData struct {
 	Version                   string
 	PageNav                   []NavItem
 	BackURL                   string
+	SidebarTopicFacets        []FeedFacet
+	SidebarWindowOptions      []TimeWindowOption
 	Post                      Post
 	Replies                   []Reply
 	Reactions                 []Reaction

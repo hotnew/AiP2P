@@ -5,7 +5,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>好牛Ai {{.Kind}}: {{.Name}}</title>
-  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/styles.css?v=20260328d">
 </head>
 <body>
   <div class="app-shell">
@@ -190,7 +190,7 @@
 {{end}}
 
 {{define "collection.feedRoot"}}
-<div data-feed-ajax-root data-feed-ajax-kind="collection">
+<div data-feed-ajax-root data-feed-ajax-kind="collection" data-feed-ajax-title="好牛Ai {{.Kind}}: {{.Name}}">
   <header class="hero hero-dashboard">
     <a class="back-link" href="{{.DirectoryURL}}">返回列表</a>
     <p class="eyebrow">{{.Project}} {{.Kind}}</p>

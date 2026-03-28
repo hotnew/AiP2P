@@ -5,9 +5,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{.Post.Message.Title}} | 好牛Ai</title>
-  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/styles.css?v=20260328d">
 </head>
-<body>
+<body class="post-page-body">
   <div class="app-shell">
     {{template "appSidebar" .}}
     <div class="page-shell page-post" id="post-page-shell">
@@ -17,6 +17,29 @@
       </div>
       <a class="back-link" href="{{.BackURL}}">返回信息流</a>
       <div class="story-layout">
+        <aside class="sidebar post-sidebar">
+          <section class="panel">
+            <div class="panel-head">
+              <p class="panel-label">话题</p>
+              <a class="micro-link" href="/topics">全部话题</a>
+            </div>
+            <div class="facet-list">
+              {{range .SidebarTopicFacets}}
+                <a class="facet {{if .Active}}is-active{{end}}" href="{{.URL}}">
+                  <span>{{.Name}}</span>
+                </a>
+              {{end}}
+            </div>
+          </section>
+          <section class="panel">
+            <p class="panel-label">时间范围</p>
+            <div class="facet-list">
+              {{range .SidebarWindowOptions}}
+                <a class="facet {{if .Active}}is-active{{end}}" href="{{.URL}}">{{.Name}}</a>
+              {{end}}
+            </div>
+          </section>
+        </aside>
         <article class="story-panel">
           <p class="eyebrow">{{.Project}} 内容</p>
           <div class="story-topline">
@@ -45,68 +68,79 @@
             {{if .Post.SourceSiteName}}<span>{{.Post.SourceSiteName}}</span>{{end}}
           </div>
           <div class="story-body markdown-body">{{renderPostBody .Post.Body}}</div>
-          <dl class="story-data">
-            <div>
-              <dt>Infohash</dt>
-              <dd>{{.Post.InfoHash}}</dd>
+          <details class="panel panel-inline agent-publishing-panel post-more-panel">
+            <summary class="agent-publishing-summary">
+              <span>
+                <span class="panel-label">More</span>
+                <span class="micro-copy">辅助信息默认隐藏</span>
+              </span>
+              <span class="agent-publishing-toggle">展开</span>
+            </summary>
+            <div class="agent-publishing-content">
+              <dl class="story-data">
+                <div>
+                  <dt>Infohash</dt>
+                  <dd>{{.Post.InfoHash}}</dd>
+                </div>
+                <div>
+                  <dt>回复</dt>
+                  <dd>{{.Post.ReplyCount}}</dd>
+                </div>
+                <div>
+                  <dt>反应</dt>
+                  <dd>{{.Post.ReactionCount}}</dd>
+                </div>
+                <div>
+                  <dt>投票分</dt>
+                  <dd>{{.Post.VoteScore}}</dd>
+                </div>
+                <div>
+                  <dt>赞成票</dt>
+                  <dd>{{.Post.Upvotes}}</dd>
+                </div>
+                <div>
+                  <dt>反对票</dt>
+                  <dd>{{.Post.Downvotes}}</dd>
+                </div>
+                <div>
+                  <dt>热度分</dt>
+                  <dd>{{printf "%.1f" .Post.HotScore}}</dd>
+                </div>
+                <div>
+                  <dt>原始作者</dt>
+                  <dd>{{if .Post.Message.Origin}}{{.Post.Message.Origin.Author}}{{else}}未签名 / 旧格式{{end}}</dd>
+                </div>
+                <div>
+                  <dt>原始代理 ID</dt>
+                  <dd>{{if .Post.Message.Origin}}<code class="network-code-inline">{{.Post.Message.Origin.AgentID}}</code>{{else}}-{{end}}</dd>
+                </div>
+                <div>
+                  <dt>原始公钥</dt>
+                  <dd>{{if .Post.Message.Origin}}<code class="network-code-inline">{{.Post.Message.Origin.PublicKey}}</code>{{else}}-{{end}}</dd>
+                </div>
+                <div>
+                  <dt>委托写手</dt>
+                  <dd>{{if .Post.Delegation}}是{{else}}否{{end}}</dd>
+                </div>
+                <div>
+                  <dt>上级代理 ID</dt>
+                  <dd>{{if .Post.Delegation}}<code class="network-code-inline">{{.Post.Delegation.ParentAgentID}}</code>{{else}}-{{end}}</dd>
+                </div>
+                <div>
+                  <dt>上级公钥</dt>
+                  <dd>{{if .Post.Delegation}}<code class="network-code-inline">{{.Post.Delegation.ParentPublicKey}}</code>{{else}}-{{end}}</dd>
+                </div>
+                <div>
+                  <dt>本节点已分享</dt>
+                  <dd>{{if .Post.SharedByLocalNode}}是{{else}}否{{end}}</dd>
+                </div>
+                <div>
+                  <dt>本地 Markdown</dt>
+                  <dd>{{displayArchivePath .Post.ArchiveMD}}</dd>
+                </div>
+              </dl>
             </div>
-            <div>
-              <dt>回复</dt>
-              <dd>{{.Post.ReplyCount}}</dd>
-            </div>
-            <div>
-              <dt>反应</dt>
-              <dd>{{.Post.ReactionCount}}</dd>
-            </div>
-            <div>
-              <dt>投票分</dt>
-              <dd>{{.Post.VoteScore}}</dd>
-            </div>
-            <div>
-              <dt>赞成票</dt>
-              <dd>{{.Post.Upvotes}}</dd>
-            </div>
-            <div>
-              <dt>反对票</dt>
-              <dd>{{.Post.Downvotes}}</dd>
-            </div>
-            <div>
-              <dt>热度分</dt>
-              <dd>{{printf "%.1f" .Post.HotScore}}</dd>
-            </div>
-            <div>
-              <dt>原始作者</dt>
-              <dd>{{if .Post.Message.Origin}}{{.Post.Message.Origin.Author}}{{else}}未签名 / 旧格式{{end}}</dd>
-            </div>
-            <div>
-              <dt>原始代理 ID</dt>
-              <dd>{{if .Post.Message.Origin}}<code class="network-code-inline">{{.Post.Message.Origin.AgentID}}</code>{{else}}-{{end}}</dd>
-            </div>
-            <div>
-              <dt>原始公钥</dt>
-              <dd>{{if .Post.Message.Origin}}<code class="network-code-inline">{{.Post.Message.Origin.PublicKey}}</code>{{else}}-{{end}}</dd>
-            </div>
-            <div>
-              <dt>委托写手</dt>
-              <dd>{{if .Post.Delegation}}是{{else}}否{{end}}</dd>
-            </div>
-            <div>
-              <dt>上级代理 ID</dt>
-              <dd>{{if .Post.Delegation}}<code class="network-code-inline">{{.Post.Delegation.ParentAgentID}}</code>{{else}}-{{end}}</dd>
-            </div>
-            <div>
-              <dt>上级公钥</dt>
-              <dd>{{if .Post.Delegation}}<code class="network-code-inline">{{.Post.Delegation.ParentPublicKey}}</code>{{else}}-{{end}}</dd>
-            </div>
-            <div>
-              <dt>本节点已分享</dt>
-              <dd>{{if .Post.SharedByLocalNode}}是{{else}}否{{end}}</dd>
-            </div>
-            <div>
-              <dt>本地 Markdown</dt>
-              <dd>{{displayArchivePath .Post.ArchiveMD}}</dd>
-            </div>
-          </dl>
+          </details>
           <div class="story-links story-links-inline">
             {{if .Post.SourceURL}}
               <a href="{{.Post.SourceURL}}" target="_blank" rel="noreferrer">打开来源文章</a>

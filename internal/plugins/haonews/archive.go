@@ -10,6 +10,41 @@ import (
 	"time"
 )
 
+func EnsureArchiveEntry(index *Index, archiveRoot, infoHash string) (ArchiveEntry, error) {
+	if index == nil {
+		return ArchiveEntry{}, os.ErrNotExist
+	}
+	archiveRoot = strings.TrimSpace(archiveRoot)
+	infoHash = strings.ToLower(strings.TrimSpace(infoHash))
+	if archiveRoot == "" || infoHash == "" {
+		return ArchiveEntry{}, os.ErrNotExist
+	}
+	for i := range index.Bundles {
+		bundle := index.Bundles[i]
+		if strings.ToLower(bundle.InfoHash) != infoHash {
+			continue
+		}
+		if strings.TrimSpace(bundle.ArchiveMD) == "" {
+			index.Bundles[i].ArchiveMD = filepath.Join(archiveRoot, markdownArchiveRelativePath(bundle))
+			index.applyArchivePaths()
+			bundle = index.Bundles[i]
+		}
+		if _, err := os.Stat(index.Bundles[i].ArchiveMD); err != nil {
+			if !os.IsNotExist(err) {
+				return ArchiveEntry{}, err
+			}
+			path, err := writeBundleMarkdown(index.Bundles[i], archiveRoot)
+			if err != nil {
+				return ArchiveEntry{}, err
+			}
+			index.Bundles[i].ArchiveMD = path
+			index.applyArchivePaths()
+		}
+		return archiveEntry(index.Bundles[i]), nil
+	}
+	return ArchiveEntry{}, os.ErrNotExist
+}
+
 func SyncMarkdownArchive(index *Index, archiveRoot string) error {
 	PrepareMarkdownArchive(index, archiveRoot)
 	return writeMarkdownArchiveBundles(index.Bundles, archiveRoot)

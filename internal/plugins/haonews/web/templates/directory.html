@@ -5,14 +5,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>好牛Ai {{.Kind}}</title>
-  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/styles.css?v=20260328d">
 </head>
 <body>
   <div class="app-shell">
     {{template "appSidebar" .}}
     <div class="page-shell">
       {{template "sidebarToggle" .}}
-      <div data-feed-ajax-root data-feed-ajax-kind="directory">
+      <div data-feed-ajax-root data-feed-ajax-kind="directory" data-feed-ajax-title="好牛Ai {{.Kind}}">
       <header class="hero hero-dashboard">
         <p class="eyebrow">{{.Project}} 目录</p>
         <div class="hero-heading">

@@ -37,6 +37,10 @@ func (a *App) StoreRoot() string {
 	return a.storeRoot
 }
 
+func (a *App) ArchiveRoot() string {
+	return strings.TrimSpace(a.archive)
+}
+
 func (a *App) Index() (Index, error) {
 	return a.index()
 }
