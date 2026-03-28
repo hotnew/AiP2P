@@ -762,6 +762,7 @@ body.sidebar-collapsed .page-shell {
 }
 
 .active-filters,
+.tab-strip,
 .topics-wrap,
 .story-links {
   display: flex;
@@ -1041,6 +1042,45 @@ dd {
 
 .story-links-inline {
   margin-top: 18px;
+}
+
+.vote-panel {
+  margin-top: 18px;
+}
+
+.vote-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.vote-form {
+  margin: 0;
+}
+
+.vote-form button {
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.vote-form .button-link-muted {
+  background: var(--surface-soft);
+  color: var(--ink);
+}
+
+.vote-ok {
+  color: #166534;
+}
+
+.vote-error {
+  color: #b91c1c;
 }
 
 .replies h2 {

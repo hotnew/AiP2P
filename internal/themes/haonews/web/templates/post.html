@@ -49,6 +49,18 @@
               <dd>{{.Post.VoteScore}}</dd>
             </div>
             <div>
+              <dt>赞成票</dt>
+              <dd>{{.Post.Upvotes}}</dd>
+            </div>
+            <div>
+              <dt>反对票</dt>
+              <dd>{{.Post.Downvotes}}</dd>
+            </div>
+            <div>
+              <dt>热度分</dt>
+              <dd>{{printf "%.1f" .Post.HotScore}}</dd>
+            </div>
+            <div>
               <dt>原始作者</dt>
               <dd>{{if .Post.Message.Origin}}{{.Post.Message.Origin.Author}}{{else}}未签名 / 旧格式{{end}}</dd>
             </div>
@@ -88,6 +100,30 @@
             <a href="/archive/messages/{{.Post.InfoHash}}">归档副本</a>
             <a href="/api/posts/{{.Post.InfoHash}}">JSON</a>
           </div>
+          <section class="panel panel-inline vote-panel">
+            <div class="panel-head">
+              <div>
+                <p class="panel-label">投票</p>
+                {{if .VoteIdentityLabel}}
+                  <p class="micro-copy">当前默认使用本地 identity：<code>{{.VoteIdentityLabel}}</code></p>
+                {{end}}
+              </div>
+            </div>
+            {{if .VoteNotice}}<p class="micro-copy vote-ok">{{.VoteNotice}}</p>{{end}}
+            {{if .VoteError}}<p class="micro-copy vote-error">{{.VoteError}}</p>{{end}}
+            {{if .VoteEnabled}}
+              <div class="vote-actions">
+                <form class="vote-form" method="post" action="/posts/{{.Post.InfoHash}}/vote">
+                  <input type="hidden" name="value" value="1">
+                  <button type="submit">▲ 赞成</button>
+                </form>
+                <form class="vote-form" method="post" action="/posts/{{.Post.InfoHash}}/vote">
+                  <input type="hidden" name="value" value="-1">
+                  <button class="button-link button-link-muted" type="submit">▼ 反对</button>
+                </form>
+              </div>
+            {{end}}
+          </section>
           <section class="panel panel-inline">
             <p class="panel-label">发布者公钥</p>
             {{if .Post.OriginPublicKey}}

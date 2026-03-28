@@ -67,8 +67,13 @@ type Post struct {
 	PostType             string
 	Summary              string
 	ReplyCount           int
+	CommentCount         int
 	ReactionCount        int
+	Upvotes              int
+	Downvotes            int
 	VoteScore            int
+	HotScore             float64
+	IsHotCandidate       bool
 	TruthScoreAverage    *float64
 	SourceScoreAverage   *float64
 	LatestReactionAuthor string
@@ -108,6 +113,7 @@ type FeedOptions struct {
 	Channel  string
 	Topic    string
 	Source   string
+	Tab      string
 	Sort     string
 	Query    string
 	Window   string
@@ -124,6 +130,13 @@ type FeedFacet struct {
 }
 
 type SortOption struct {
+	Name   string
+	Value  string
+	URL    string
+	Active bool
+}
+
+type TabOption struct {
 	Name   string
 	Value  string
 	URL    string

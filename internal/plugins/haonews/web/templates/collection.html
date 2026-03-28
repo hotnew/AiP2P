@@ -47,6 +47,7 @@
         <form class="search-bar" method="get" action="{{.Path}}">
           <input type="search" name="q" value="{{.Options.Query}}" placeholder="在 {{compactIdentity .Name}} 内搜索">
           {{if .Options.Channel}}<input type="hidden" name="channel" value="{{.Options.Channel}}">{{end}}
+          {{if .Options.Tab}}<input type="hidden" name="tab" value="{{.Options.Tab}}">{{end}}
           {{if .Options.Sort}}<input type="hidden" name="sort" value="{{.Options.Sort}}">{{end}}
           {{if .Options.Window}}<input type="hidden" name="window" value="{{.Options.Window}}">{{end}}
           {{if gt .Options.PageSize 0}}<input type="hidden" name="page_size" value="{{.Options.PageSize}}">{{end}}
@@ -77,18 +78,30 @@
             </div>
           </section>
 
-          <section class="panel">
-            <p class="panel-label">排序</p>
-            <div class="facet-list">
-              {{range .SortOptions}}
-                <a class="facet {{if .Active}}is-active{{end}}" href="{{.URL}}">{{.Name}}</a>
-              {{end}}
-            </div>
-          </section>
+          {{if not .TabOptions}}
+            <section class="panel">
+              <p class="panel-label">排序</p>
+              <div class="facet-list">
+                {{range .SortOptions}}
+                  <a class="facet {{if .Active}}is-active{{end}}" href="{{.URL}}">{{.Name}}</a>
+                {{end}}
+              </div>
+            </section>
+          {{end}}
 
         </aside>
 
         <main class="feed">
+          {{if .TabOptions}}
+            <section class="panel panel-inline">
+              <p class="panel-label">Topic 分类</p>
+              <div class="tab-strip">
+                {{range .TabOptions}}
+                  <a class="filter-chip {{if .Active}}is-active{{end}}" href="{{.URL}}">{{.Name}}</a>
+                {{end}}
+              </div>
+            </section>
+          {{end}}
           <section class="panel panel-inline">
             <p class="panel-label">当前视图</p>
             <div class="summary-grid">

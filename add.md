@@ -472,3 +472,87 @@
 
 - `go test ./internal/haonews -run 'TestSubscribedAnnouncementTopicsCanonicalizesDiscoveryFeeds'`
 - `go test ./internal/plugins/haonews -run 'TestLoadSubscriptionRulesNormalizesDiscoverySelectors'`
+
+## 2026-03-28 10:26 CST - Hot/New 第一版与最小投票链
+
+目标：
+
+- 在每个 `topic` 页面增加：
+  - `New`
+  - `Hot`
+- `New` 默认按发布时间倒序
+- `Hot` 只看最近 `36` 小时内的帖子，并按：
+  - `upvotes - downvotes + comment_count * 0.5`
+  排序
+- 先补最小投票入口，让帖子页能直接发：
+  - `upvote`
+  - `downvote`
+
+已完成：
+
+- `internal/plugins/haonews/types.go`
+  - `Post` 新增：
+    - `CommentCount`
+    - `Upvotes`
+    - `Downvotes`
+    - `HotScore`
+    - `IsHotCandidate`
+  - `FeedOptions` 新增：
+    - `Tab`
+  - 新增：
+    - `TabOption`
+- `internal/plugins/haonews/index.go`
+  - 构建索引时统计：
+    - `upvotes`
+    - `downvotes`
+    - `comment_count`
+    - `hot_score`
+  - 新增 `hotWindow=36h`
+  - 新增 `hotThreshold=3.0`
+  - `FilterPosts()` 现在支持：
+    - `tab=new`
+    - `tab=hot`
+  - `tab=hot` 时只保留：
+    - 最近 `36` 小时
+    - `hot_score >= 3`
+  - `sortPosts()` 新增：
+    - `hot`
+- `internal/plugins/haonews/runtime_content.go`
+  - 新增 `BuildTabOptions()`
+  - API 输出增加：
+    - `comment_count`
+    - `upvotes`
+    - `downvotes`
+    - `hot_score`
+    - `is_hot_candidate`
+  - `pageURL()/encodeOptions()/APIOptions()` 接通：
+    - `tab`
+- `internal/plugins/haonewscontent/handler.go`
+  - topic 页面增加：
+    - `New`
+    - `Hot`
+    切换
+  - 新增帖子投票 POST：
+    - `/posts/<infohash>/vote`
+  - 最小投票实现直接走现有：
+    - `kind=reaction`
+    - `reaction_type=vote`
+    - `value=1|-1`
+  - 默认从本地 `identities/` 目录选择一个可用 signing identity
+  - 只允许：
+    - 本机
+    - 局域网
+    请求代发投票，避免公网直接滥用节点身份
+- 模板与样式：
+  - `collection.html`
+    - topic 页面顶部新增 `New/Hot` tab
+  - `post.html`
+    - 增加投票区
+    - 增加 `赞成票 / 反对票 / 热度分`
+  - `styles.css`
+    - 新增 tab strip 和投票表单样式
+
+验证：
+
+- `go test ./internal/plugins/haonews -run 'TestFilterPostsSupportsHotTab|TestBuildIndexComputesVoteBreakdownAndHotScore|TestFilterPostsSupportsWindow|TestBuildIndexCanonicalizesTopicAliases'`
+- `go test ./cmd/haonews ./internal/plugins/haonews ./internal/plugins/haonewscontent ./internal/plugins/haonewsops`

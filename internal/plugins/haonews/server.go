@@ -123,6 +123,7 @@ type CollectionPageData struct {
 	Posts           []Post
 	Options         FeedOptions
 	PageNav         []NavItem
+	TabOptions      []TabOption
 	SortOptions     []SortOption
 	WindowOptions   []TimeWindowOption
 	PageSizeOptions []PageSizeOption
@@ -150,14 +151,18 @@ type DirectoryPageData struct {
 }
 
 type PostPageData struct {
-	Project    string
-	Version    string
-	PageNav    []NavItem
-	Post       Post
-	Replies    []Reply
-	Reactions  []Reaction
-	Related    []Post
-	NodeStatus NodeStatus
+	Project           string
+	Version           string
+	PageNav           []NavItem
+	Post              Post
+	Replies           []Reply
+	Reactions         []Reaction
+	Related           []Post
+	NodeStatus        NodeStatus
+	VoteEnabled       bool
+	VoteIdentityLabel string
+	VoteNotice        string
+	VoteError         string
 }
 
 type ArchiveIndexPageData struct {

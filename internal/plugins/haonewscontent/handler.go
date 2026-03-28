@@ -1,10 +1,14 @@
 package haonewscontent
 
 import (
+	"errors"
 	"io/fs"
+	"net"
 	"net/http"
+	"net/netip"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -115,6 +119,10 @@ func handleHome(app *newsplugin.App, w http.ResponseWriter, r *http.Request) {
 }
 
 func handlePost(app *newsplugin.App, w http.ResponseWriter, r *http.Request) {
+	if strings.HasSuffix(strings.TrimSpace(r.URL.Path), "/vote") {
+		handlePostVote(app, w, r)
+		return
+	}
 	infoHash := newsplugin.PathValue("/posts/", r.URL.Path)
 	if infoHash == "" {
 		http.NotFound(w, r)
@@ -130,16 +138,23 @@ func handlePost(app *newsplugin.App, w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	voteIdentityPath, voteIdentityLabel, voteErr := defaultVoteIdentity(app)
+	voteEnabled := voteErr == nil && voteRequestTrusted(r)
 	data := newsplugin.PostPageData{
-		Project:    app.ProjectName(),
-		Version:    app.VersionString(),
-		PageNav:    app.PageNav("/"),
-		Post:       post,
-		Replies:    index.RepliesByPost[strings.ToLower(infoHash)],
-		Reactions:  index.ReactionsByPost[strings.ToLower(infoHash)],
-		Related:    index.RelatedPosts(infoHash, 4),
-		NodeStatus: app.NodeStatus(index),
+		Project:           app.ProjectName(),
+		Version:           app.VersionString(),
+		PageNav:           app.PageNav("/"),
+		Post:              post,
+		Replies:           index.RepliesByPost[strings.ToLower(infoHash)],
+		Reactions:         index.ReactionsByPost[strings.ToLower(infoHash)],
+		Related:           index.RelatedPosts(infoHash, 4),
+		NodeStatus:        app.NodeStatus(index),
+		VoteEnabled:       voteEnabled,
+		VoteIdentityLabel: voteIdentityLabel,
+		VoteNotice:        voteNotice(r),
+		VoteError:         voteError(r, voteErr),
 	}
+	_ = voteIdentityPath
 	if err := app.Templates().ExecuteTemplate(w, "post.html", data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
@@ -204,6 +219,7 @@ func handleSource(app *newsplugin.App, w http.ResponseWriter, r *http.Request) {
 		Posts:           posts,
 		Options:         opts,
 		PageNav:         app.PageNav("/sources"),
+		TabOptions:      nil,
 		SortOptions:     newsplugin.BuildSortOptions(opts, newsplugin.SourcePath(name), "source"),
 		WindowOptions:   newsplugin.BuildWindowOptions(opts, newsplugin.SourcePath(name), "source"),
 		PageSizeOptions: newsplugin.BuildPageSizeOptions(opts, newsplugin.SourcePath(name), "source"),
@@ -280,6 +296,7 @@ func handleTopic(app *newsplugin.App, w http.ResponseWriter, r *http.Request) {
 		Posts:           posts,
 		Options:         opts,
 		PageNav:         app.PageNav("/topics"),
+		TabOptions:      newsplugin.BuildTabOptions(opts, newsplugin.TopicPath(name), "topic"),
 		SortOptions:     newsplugin.BuildSortOptions(opts, newsplugin.TopicPath(name), "topic"),
 		WindowOptions:   newsplugin.BuildWindowOptions(opts, newsplugin.TopicPath(name), "topic"),
 		PageSizeOptions: newsplugin.BuildPageSizeOptions(opts, newsplugin.TopicPath(name), "topic"),
@@ -482,6 +499,7 @@ func readFeedOptions(r *http.Request) newsplugin.FeedOptions {
 		Channel:  strings.TrimSpace(r.URL.Query().Get("channel")),
 		Topic:    strings.TrimSpace(r.URL.Query().Get("topic")),
 		Source:   strings.TrimSpace(r.URL.Query().Get("source")),
+		Tab:      strings.TrimSpace(r.URL.Query().Get("tab")),
 		Sort:     strings.TrimSpace(r.URL.Query().Get("sort")),
 		Query:    strings.TrimSpace(r.URL.Query().Get("q")),
 		Window:   canonicalWindow(r.URL.Query().Get("window")),
@@ -489,6 +507,189 @@ func readFeedOptions(r *http.Request) newsplugin.FeedOptions {
 		PageSize: parseFeedPageSize(r.URL.Query().Get("page_size")),
 		Now:      time.Now(),
 	}
+}
+
+func handlePostVote(app *newsplugin.App, w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	infoHash := newsplugin.PathValue("/posts/", strings.TrimSuffix(r.URL.Path, "/vote"))
+	if infoHash == "" {
+		http.NotFound(w, r)
+		return
+	}
+	if !voteRequestTrusted(r) {
+		http.Redirect(w, r, "/posts/"+infoHash+"?vote_error=untrusted", http.StatusSeeOther)
+		return
+	}
+	identityPath, _, err := defaultVoteIdentity(app)
+	if err != nil {
+		http.Redirect(w, r, "/posts/"+infoHash+"?vote_error=no_identity", http.StatusSeeOther)
+		return
+	}
+	value := 0
+	switch strings.TrimSpace(r.FormValue("value")) {
+	case "1":
+		value = 1
+	case "-1":
+		value = -1
+	default:
+		http.Redirect(w, r, "/posts/"+infoHash+"?vote_error=invalid", http.StatusSeeOther)
+		return
+	}
+	store, err := haonews.OpenStore(app.StoreRoot())
+	if err != nil {
+		http.Redirect(w, r, "/posts/"+infoHash+"?vote_error=store", http.StatusSeeOther)
+		return
+	}
+	identity, err := haonews.LoadAgentIdentity(identityPath)
+	if err != nil {
+		http.Redirect(w, r, "/posts/"+infoHash+"?vote_error=identity", http.StatusSeeOther)
+		return
+	}
+	body := "upvote"
+	if value < 0 {
+		body = "downvote"
+	}
+	_, err = haonews.PublishMessage(store, haonews.MessageInput{
+		Kind:     "reaction",
+		Author:   strings.TrimSpace(identity.Author),
+		Channel:  "hao.news/reactions",
+		Body:     body,
+		Identity: &identity,
+		Extensions: map[string]any{
+			"project":       app.ProjectID(),
+			"reaction_type": "vote",
+			"value":         value,
+			"subject": map[string]any{
+				"infohash": strings.ToLower(strings.TrimSpace(infoHash)),
+			},
+		},
+		CreatedAt: time.Now().UTC(),
+	})
+	if err != nil {
+		http.Redirect(w, r, "/posts/"+infoHash+"?vote_error=publish", http.StatusSeeOther)
+		return
+	}
+	result := "up"
+	if value < 0 {
+		result = "down"
+	}
+	http.Redirect(w, r, "/posts/"+infoHash+"?vote="+result, http.StatusSeeOther)
+}
+
+func defaultVoteIdentity(app *newsplugin.App) (string, string, error) {
+	root := filepath.Dir(strings.TrimSpace(app.WriterPolicyPath()))
+	if root == "" || root == "." {
+		return "", "", errors.New("runtime root unavailable")
+	}
+	identitiesRoot := filepath.Join(root, "identities")
+	entries, err := os.ReadDir(identitiesRoot)
+	if err != nil {
+		return "", "", err
+	}
+	type candidate struct {
+		path    string
+		label   string
+		signing bool
+		modTime time.Time
+	}
+	candidates := make([]candidate, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(strings.ToLower(entry.Name()), ".json") {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		name := entry.Name()
+		candidates = append(candidates, candidate{
+			path:    filepath.Join(identitiesRoot, name),
+			label:   strings.TrimSuffix(name, filepath.Ext(name)),
+			signing: strings.Contains(strings.ToLower(name), "signing"),
+			modTime: info.ModTime(),
+		})
+	}
+	if len(candidates) == 0 {
+		return "", "", errors.New("no identity files")
+	}
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].signing != candidates[j].signing {
+			return candidates[i].signing
+		}
+		if !candidates[i].modTime.Equal(candidates[j].modTime) {
+			return candidates[i].modTime.After(candidates[j].modTime)
+		}
+		return candidates[i].label < candidates[j].label
+	})
+	return candidates[0].path, candidates[0].label, nil
+}
+
+func voteNotice(r *http.Request) string {
+	switch strings.TrimSpace(r.URL.Query().Get("vote")) {
+	case "up":
+		return "已投赞成票。"
+	case "down":
+		return "已投反对票。"
+	default:
+		return ""
+	}
+}
+
+func voteError(r *http.Request, identityErr error) string {
+	if value := strings.TrimSpace(r.URL.Query().Get("vote_error")); value != "" {
+		switch value {
+		case "untrusted":
+			return "当前只允许本机或局域网请求代发投票。"
+		case "no_identity":
+			return "当前节点没有可用 signing identity。"
+		case "invalid":
+			return "投票参数无效。"
+		case "store":
+			return "本地 store 打开失败。"
+		case "identity":
+			return "本地 identity 读取失败。"
+		case "publish":
+			return "投票发布失败。"
+		default:
+			return "投票失败。"
+		}
+	}
+	if identityErr != nil {
+		return "当前节点未找到可用 signing identity，暂时不能投票。"
+	}
+	return ""
+}
+
+func voteRequestTrusted(r *http.Request) bool {
+	addr := clientIP(r)
+	if !addr.IsValid() {
+		return false
+	}
+	return addr.IsLoopback() || addr.IsPrivate()
+}
+
+func clientIP(r *http.Request) netip.Addr {
+	if r == nil {
+		return netip.Addr{}
+	}
+	if forwarded := strings.TrimSpace(strings.Split(r.Header.Get("X-Forwarded-For"), ",")[0]); forwarded != "" {
+		if addr, err := netip.ParseAddr(strings.TrimSpace(forwarded)); err == nil {
+			return addr.Unmap()
+		}
+	}
+	host, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
+	if err == nil {
+		if addr, err := netip.ParseAddr(strings.TrimSpace(host)); err == nil {
+			return addr.Unmap()
+		}
+	}
+	if addr, err := netip.ParseAddr(strings.TrimSpace(r.RemoteAddr)); err == nil {
+		return addr.Unmap()
+	}
+	return netip.Addr{}
 }
 
 func parsePositiveInt(raw string, fallback int) int {

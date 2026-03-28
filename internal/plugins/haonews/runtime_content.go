@@ -74,6 +74,27 @@ func BuildSortOptions(opts FeedOptions, basePath string, omit ...string) []SortO
 	return items
 }
 
+func BuildTabOptions(opts FeedOptions, basePath string, omit ...string) []TabOption {
+	order := []struct {
+		Name  string
+		Value string
+	}{
+		{Name: "New", Value: "new"},
+		{Name: "Hot", Value: "hot"},
+	}
+	active := canonicalTab(opts.Tab)
+	items := make([]TabOption, 0, len(order))
+	for _, item := range order {
+		items = append(items, TabOption{
+			Name:   item.Name,
+			Value:  item.Value,
+			URL:    pageURL(basePath, opts, "tab", item.Value, omit...),
+			Active: item.Value == active,
+		})
+	}
+	return items
+}
+
 func BuildWindowOptions(opts FeedOptions, basePath string, omit ...string) []TimeWindowOption {
 	order := []struct {
 		Name  string
@@ -130,6 +151,12 @@ func BuildActiveFilters(opts FeedOptions, basePath string, omit ...string) []Act
 		filters = append(filters, ActiveFilter{
 			Label: "Window: " + strings.ToUpper(opts.Window),
 			URL:   pageURL(basePath, opts, "window", "", omit...),
+		})
+	}
+	if canonicalTab(opts.Tab) == "hot" {
+		filters = append(filters, ActiveFilter{
+			Label: "Tab: Hot",
+			URL:   pageURL(basePath, opts, "tab", "new", omit...),
 		})
 	}
 	if opts.Channel != "" {
@@ -384,6 +411,7 @@ func APIOptions(opts FeedOptions) map[string]string {
 		"channel": opts.Channel,
 		"topic":   canonicalTopic(opts.Topic),
 		"source":  opts.Source,
+		"tab":     canonicalTab(opts.Tab),
 		"sort":    opts.Sort,
 		"q":       opts.Query,
 		"window":  canonicalWindow(opts.Window),
@@ -428,8 +456,13 @@ func APIPost(post Post, withBody bool) map[string]any {
 		"post_type":            post.PostType,
 		"summary":              post.Summary,
 		"reply_count":          post.ReplyCount,
+		"comment_count":        post.CommentCount,
 		"reaction_count":       post.ReactionCount,
+		"upvotes":              post.Upvotes,
+		"downvotes":            post.Downvotes,
 		"vote_score":           post.VoteScore,
+		"hot_score":            post.HotScore,
+		"is_hot_candidate":     post.IsHotCandidate,
 		"truth_score":          scoreValue(post.TruthScoreAverage),
 		"source_quality":       scoreValue(post.SourceScoreAverage),
 		"thread_path":          "/posts/" + post.InfoHash,
@@ -509,6 +542,8 @@ func withOption(opts FeedOptions, key, value string) FeedOptions {
 		next.Topic = canonicalTopic(value)
 	case "source":
 		next.Source = value
+	case "tab":
+		next.Tab = canonicalTab(value)
 	case "sort":
 		next.Sort = value
 	case "q":
@@ -544,6 +579,9 @@ func encodeOptions(opts FeedOptions, omit ...string) string {
 	set("channel", opts.Channel)
 	set("topic", canonicalTopic(opts.Topic))
 	set("source", opts.Source)
+	if canonicalTab(opts.Tab) == "hot" {
+		set("tab", "hot")
+	}
 	if opts.Sort != "" && opts.Sort != "new" {
 		set("sort", opts.Sort)
 	}
@@ -568,6 +606,8 @@ func activeFeedValue(opts FeedOptions, key string) string {
 		return canonicalTopic(opts.Topic)
 	case "source":
 		return opts.Source
+	case "tab":
+		return canonicalTab(opts.Tab)
 	case "window":
 		return canonicalWindow(opts.Window)
 	default:

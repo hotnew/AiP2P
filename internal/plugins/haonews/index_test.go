@@ -184,6 +184,121 @@ func TestFilterPostsSupportsWindow(t *testing.T) {
 	}
 }
 
+func TestFilterPostsSupportsHotTab(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 3, 28, 12, 0, 0, 0, time.UTC)
+	index := Index{
+		Posts: []Post{
+			{
+				Bundle:       Bundle{InfoHash: "hot", CreatedAt: now.Add(-2 * time.Hour)},
+				Topics:       []string{"futures"},
+				Upvotes:      4,
+				Downvotes:    0,
+				ReplyCount:   2,
+				CommentCount: 2,
+			},
+			{
+				Bundle:       Bundle{InfoHash: "cold", CreatedAt: now.Add(-2 * time.Hour)},
+				Topics:       []string{"futures"},
+				Upvotes:      1,
+				Downvotes:    0,
+				ReplyCount:   1,
+				CommentCount: 1,
+			},
+			{
+				Bundle:       Bundle{InfoHash: "old", CreatedAt: now.Add(-72 * time.Hour)},
+				Topics:       []string{"futures"},
+				Upvotes:      10,
+				Downvotes:    0,
+				ReplyCount:   5,
+				CommentCount: 5,
+			},
+		},
+	}
+	for i := range index.Posts {
+		index.Posts[i].VoteScore = index.Posts[i].Upvotes - index.Posts[i].Downvotes
+		index.Posts[i].HotScore = hotScore(index.Posts[i])
+	}
+
+	got := index.FilterPosts(FeedOptions{Topic: "期货", Tab: "hot", Now: now})
+	if len(got) != 1 {
+		t.Fatalf("len = %d, want 1", len(got))
+	}
+	if got[0].InfoHash != "hot" {
+		t.Fatalf("infohash = %s, want hot", got[0].InfoHash)
+	}
+}
+
+func TestBuildIndexComputesVoteBreakdownAndHotScore(t *testing.T) {
+	t.Parallel()
+
+	bundles := []Bundle{
+		{
+			InfoHash:  "post-1",
+			CreatedAt: time.Date(2026, 3, 28, 10, 0, 0, 0, time.UTC),
+			Message: Message{
+				Kind:      "post",
+				Title:     "Hot post",
+				Channel:   "hao.news/news",
+				CreatedAt: "2026-03-28T10:00:00Z",
+				Extensions: map[string]any{
+					"project": "hao.news",
+					"topics":  []any{"新闻"},
+				},
+			},
+		},
+		{
+			InfoHash:  "reply-1",
+			CreatedAt: time.Date(2026, 3, 28, 10, 5, 0, 0, time.UTC),
+			Body:      "reply",
+			Message: Message{
+				Kind:      "reply",
+				CreatedAt: "2026-03-28T10:05:00Z",
+				ReplyTo:   &MessageLink{InfoHash: "post-1"},
+			},
+		},
+		{
+			InfoHash:  "upvote-1",
+			CreatedAt: time.Date(2026, 3, 28, 10, 6, 0, 0, time.UTC),
+			Message: Message{
+				Kind:      "reaction",
+				CreatedAt: "2026-03-28T10:06:00Z",
+				Extensions: map[string]any{
+					"subject":       map[string]any{"infohash": "post-1"},
+					"reaction_type": "vote",
+					"value":         1,
+				},
+			},
+		},
+		{
+			InfoHash:  "downvote-1",
+			CreatedAt: time.Date(2026, 3, 28, 10, 7, 0, 0, time.UTC),
+			Message: Message{
+				Kind:      "reaction",
+				CreatedAt: "2026-03-28T10:07:00Z",
+				Extensions: map[string]any{
+					"subject":       map[string]any{"infohash": "post-1"},
+					"reaction_type": "vote",
+					"value":         -1,
+				},
+			},
+		},
+	}
+
+	index := buildIndex(bundles, "hao.news")
+	post := index.PostByInfoHash["post-1"]
+	if post.Upvotes != 1 || post.Downvotes != 1 {
+		t.Fatalf("votes = %d/%d, want 1/1", post.Upvotes, post.Downvotes)
+	}
+	if post.CommentCount != 1 {
+		t.Fatalf("comment_count = %d, want 1", post.CommentCount)
+	}
+	if post.HotScore != 0.5 {
+		t.Fatalf("hot_score = %.1f, want 0.5", post.HotScore)
+	}
+}
+
 func TestFilterPostsCanonicalizesTopicAliases(t *testing.T) {
 	t.Parallel()
 

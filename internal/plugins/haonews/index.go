@@ -23,6 +23,11 @@ const (
 	bodyFileName    = "body.txt"
 )
 
+const (
+	hotWindow    = 36 * time.Hour
+	hotThreshold = 3.0
+)
+
 func LoadIndex(storeRoot, project string) (Index, error) {
 	refs, err := loadTorrentRefs(filepath.Join(storeRoot, "torrents"))
 	if err != nil {
@@ -233,8 +238,11 @@ func buildIndex(bundles []Bundle, project string) Index {
 		replies := repliesByPost[infoHash]
 		reactions := reactionsByPost[infoHash]
 		post.ReplyCount = len(replies)
+		post.CommentCount = len(replies)
 		post.ReactionCount = len(reactions)
-		post.VoteScore = voteScore(reactions)
+		post.Upvotes, post.Downvotes = voteBreakdown(reactions)
+		post.VoteScore = post.Upvotes - post.Downvotes
+		post.HotScore = hotScore(post)
 		post.TruthScoreAverage = averageScore(reactions, "truth_score")
 		post.SourceScoreAverage = averageScore(reactions, "source_quality")
 		if author := latestReactionAuthor(reactions); author != "" {
@@ -276,14 +284,24 @@ func parseReaction(bundle Bundle) Reaction {
 	}
 }
 
-func voteScore(reactions []Reaction) int {
-	total := 0
+func voteBreakdown(reactions []Reaction) (int, int) {
+	upvotes := 0
+	downvotes := 0
 	for _, reaction := range reactions {
 		if reaction.ReactionType == "vote" {
-			total += reaction.VoteValue
+			switch {
+			case reaction.VoteValue > 0:
+				upvotes++
+			case reaction.VoteValue < 0:
+				downvotes++
+			}
 		}
 	}
-	return total
+	return upvotes, downvotes
+}
+
+func hotScore(post Post) float64 {
+	return float64(post.Upvotes-post.Downvotes) + float64(post.CommentCount)*0.5
 }
 
 func averageScore(reactions []Reaction, reactionType string) *float64 {
@@ -317,6 +335,7 @@ func (idx Index) FilterPosts(opts FeedOptions) []Post {
 	filtered := make([]Post, 0, len(idx.Posts))
 	now := opts.referenceTime()
 	topic := canonicalTopic(opts.Topic)
+	tab := canonicalTab(opts.Tab)
 	for _, post := range idx.Posts {
 		if opts.Channel != "" && !strings.EqualFold(post.ChannelGroup, opts.Channel) {
 			continue
@@ -333,10 +352,26 @@ func (idx Index) FilterPosts(opts FeedOptions) []Post {
 		if !matchesWindow(post, opts.Window, now) {
 			continue
 		}
+		post.IsHotCandidate = isHotCandidate(post, now)
+		post.HotScore = hotScore(post)
+		if tab == "hot" && (!post.IsHotCandidate || post.HotScore < hotThreshold) {
+			continue
+		}
 		filtered = append(filtered, post)
 	}
-	sortPosts(filtered, opts.Sort)
+	sortPosts(filtered, effectiveSort(opts))
 	return filtered
+}
+
+func effectiveSort(opts FeedOptions) string {
+	switch canonicalTab(opts.Tab) {
+	case "hot":
+		return "hot"
+	case "new":
+		return "new"
+	default:
+		return opts.Sort
+	}
 }
 
 func (idx Index) RelatedPosts(infoHash string, limit int) []Post {
@@ -414,6 +449,10 @@ func sortPosts(posts []Post, mode string) {
 		left := posts[i]
 		right := posts[j]
 		switch mode {
+		case "hot":
+			if left.HotScore != right.HotScore {
+				return left.HotScore > right.HotScore
+			}
 		case "discussed":
 			if left.ReplyCount != right.ReplyCount {
 				return left.ReplyCount > right.ReplyCount
@@ -454,6 +493,24 @@ func (opts FeedOptions) referenceTime() time.Time {
 		return time.Now()
 	}
 	return opts.Now
+}
+
+func canonicalTab(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "new":
+		return "new"
+	case "hot":
+		return "hot"
+	default:
+		return "new"
+	}
+}
+
+func isHotCandidate(post Post, now time.Time) bool {
+	if post.CreatedAt.IsZero() {
+		return false
+	}
+	return !post.CreatedAt.Before(now.Add(-hotWindow))
 }
 
 func matchesWindow(post Post, window string, now time.Time) bool {
