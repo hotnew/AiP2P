@@ -138,7 +138,7 @@ func startLibP2PRuntime(ctx context.Context, cfg NetworkBootstrapConfig, store *
 		return nil, err
 	}
 
-	dhtOptions := []kaddht.Option{kaddht.Mode(kaddht.ModeAutoServer)}
+	dhtOptions := []kaddht.Option{kaddht.Mode(DHTModeForConfig(cfg))}
 	if len(peers) > 0 {
 		dhtOptions = append(dhtOptions, kaddht.BootstrapPeers(peers...))
 	}
@@ -146,11 +146,6 @@ func startLibP2PRuntime(ctx context.Context, cfg NetworkBootstrapConfig, store *
 	if err != nil {
 		_ = h.Close()
 		return nil, fmt.Errorf("create libp2p dht: %w", err)
-	}
-	if err := dht.Bootstrap(ctx); err != nil {
-		_ = dht.Close()
-		_ = h.Close()
-		return nil, fmt.Errorf("bootstrap libp2p dht: %w", err)
 	}
 	mdnsTracker := newMDNSTracker(h)
 	serviceName := mdnsServiceName(cfg.NetworkID)
@@ -218,7 +213,15 @@ func startLibP2PRuntime(ctx context.Context, cfg NetworkBootstrapConfig, store *
 	}
 	rt.startEventWatchers(ctx)
 	rt.startRelayReservationLoop(ctx)
+	rt.startBootstrapLoop(ctx)
 	return rt, nil
+}
+
+func DHTModeForConfig(cfg NetworkBootstrapConfig) kaddht.ModeOpt {
+	if cfg.IsPublicMode() {
+		return kaddht.ModeAutoServer
+	}
+	return kaddht.ModeClient
 }
 
 func BuildLibP2PAddrsFactory(cfg NetworkBootstrapConfig) func([]ma.Multiaddr) []ma.Multiaddr {
@@ -647,6 +650,40 @@ func (r *libp2pRuntime) startRelayReservationLoop(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
+			}
+		}
+	}()
+}
+
+func (r *libp2pRuntime) startBootstrapLoop(ctx context.Context) {
+	if r == nil || r.dht == nil {
+		return
+	}
+	go func() {
+		run := func() {
+			bootstrapCtx, cancel := context.WithTimeout(ctx, 12*time.Second)
+			err := r.dht.Bootstrap(bootstrapCtx)
+			cancel()
+			now := time.Now().UTC()
+			r.statusMu.Lock()
+			r.lastBootstrappedAt = &now
+			if err != nil {
+				if r.bootstrapWarning != "" {
+					r.bootstrapWarning += "; "
+				}
+				r.bootstrapWarning += "bootstrap libp2p dht: " + err.Error()
+			}
+			r.statusMu.Unlock()
+		}
+		run()
+		ticker := time.NewTicker(15 * time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				run()
 			}
 		}
 	}()

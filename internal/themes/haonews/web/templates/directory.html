@@ -49,6 +49,17 @@
           </div>
         </section>
 
+        {{if .TabOptions}}
+          <section class="panel panel-inline">
+            <p class="panel-label">Topic 分类</p>
+            <div class="tab-strip">
+              {{range .TabOptions}}
+                <a class="filter-chip {{if .Active}}is-active{{end}}" href="{{.URL}}">{{.Name}}</a>
+              {{end}}
+            </div>
+          </section>
+        {{end}}
+
         {{if .Items}}
           <section class="directory-grid">
             {{range .Items}}

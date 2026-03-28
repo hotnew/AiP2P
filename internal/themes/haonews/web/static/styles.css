@@ -837,6 +837,15 @@ body.sidebar-collapsed .page-shell {
   min-width: 0;
 }
 
+.story-headline-row-post {
+  margin-top: 8px;
+  margin-bottom: 10px;
+}
+
+.story-headline-row-post h1 {
+  margin: 0;
+}
+
 .story-social-rail {
   display: grid;
   gap: 6px;
@@ -1059,6 +1068,10 @@ dd {
 }
 
 .vote-form button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   min-height: 38px;
   padding: 0 14px;
   border-radius: 12px;
@@ -1068,6 +1081,12 @@ dd {
   font: inherit;
   font-weight: 700;
   cursor: pointer;
+}
+
+.vote-form button strong {
+  min-width: 3ch;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 .vote-form .button-link-muted {

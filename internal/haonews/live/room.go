@@ -708,7 +708,7 @@ func startTransport(ctx context.Context, cfg haonews.NetworkBootstrapConfig) (ho
 		_ = h.Close()
 		return nil, nil, nil, nil, nil, err
 	}
-	dhtOptions := []kaddht.Option{kaddht.Mode(kaddht.ModeAutoServer)}
+	dhtOptions := []kaddht.Option{kaddht.Mode(haonews.DHTModeForConfig(cfg))}
 	if len(bootstrapPeers) > 0 {
 		dhtOptions = append(dhtOptions, kaddht.BootstrapPeers(bootstrapPeers...))
 	}
@@ -717,11 +717,11 @@ func startTransport(ctx context.Context, cfg haonews.NetworkBootstrapConfig) (ho
 		_ = h.Close()
 		return nil, nil, nil, nil, nil, err
 	}
-	if err := dhtRuntime.Bootstrap(ctx); err != nil {
-		_ = dhtRuntime.Close()
-		_ = h.Close()
-		return nil, nil, nil, nil, nil, err
-	}
+	go func() {
+		bootstrapCtx, cancel := context.WithTimeout(ctx, 12*time.Second)
+		_ = dhtRuntime.Bootstrap(bootstrapCtx)
+		cancel()
+	}()
 	for _, info := range bootstrapPeers {
 		connectCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		_ = h.Connect(connectCtx, info)

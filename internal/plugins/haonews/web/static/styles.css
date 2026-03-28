@@ -757,6 +757,72 @@ body.sidebar-collapsed .page-shell {
   border-left: 1px solid var(--line);
 }
 
+.story-headline-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.story-headline-copy {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.story-headline-row-post {
+  margin-top: 8px;
+  margin-bottom: 10px;
+}
+
+.story-headline-row-post h1 {
+  margin: 0;
+}
+
+.story-social-rail {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+
+.story-social-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 28px;
+  min-width: 88px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.story-social-pill strong {
+  font-size: 14px;
+  line-height: 1;
+  min-width: 3ch;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.story-social-icon {
+  font-size: 16px;
+  line-height: 1;
+  color: #111827;
+}
+
+.story-social-text {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.story-social-link:hover {
+  background: #e4ebf5;
+}
+
 .story-links-column {
   flex-direction: column;
   align-items: flex-start;
@@ -855,6 +921,10 @@ dd {
 }
 
 .vote-form button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   min-height: 38px;
   padding: 0 14px;
   border-radius: 12px;
@@ -864,6 +934,12 @@ dd {
   font: inherit;
   font-weight: 700;
   cursor: pointer;
+}
+
+.vote-form button strong {
+  min-width: 3ch;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 .vote-form .button-link-muted {

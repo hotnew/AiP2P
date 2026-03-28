@@ -247,6 +247,7 @@ func handleTopics(app *newsplugin.App, w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	opts := readFeedOptions(r)
 	data := newsplugin.DirectoryPageData{
 		Project:      app.ProjectName(),
 		Version:      app.VersionString(),
@@ -254,8 +255,10 @@ func handleTopics(app *newsplugin.App, w http.ResponseWriter, r *http.Request) {
 		Path:         "/topics",
 		APIPath:      "/api/topics",
 		Now:          time.Now(),
+		Options:      opts,
 		PageNav:      app.PageNav("/topics"),
-		Items:        newsplugin.BuildTopicDirectory(index),
+		TabOptions:   newsplugin.BuildTabOptions(opts, "/topics"),
+		Items:        newsplugin.BuildTopicDirectory(index, opts),
 		SummaryStats: newsplugin.BuildDirectorySummaryStats(index.TopicStats, index.Posts),
 		NodeStatus:   app.NodeStatus(index),
 	}
@@ -457,7 +460,7 @@ func handleAPITopics(app *newsplugin.App, w http.ResponseWriter, r *http.Request
 	newsplugin.WriteJSON(w, http.StatusOK, map[string]any{
 		"project": app.ProjectID(),
 		"scope":   "topics",
-		"items":   newsplugin.BuildTopicDirectory(index),
+		"items":   newsplugin.BuildTopicDirectory(index, readFeedOptions(r)),
 	})
 }
 

@@ -23,7 +23,22 @@
             <span class="badge">{{if .Post.Topics}}{{index .Post.Topics 0}}{{else}}未分类{{end}}</span>
             {{if .Post.PostType}}<span class="badge badge-muted">{{.Post.PostType}}</span>{{end}}
           </div>
-          <h1>{{.Post.Message.Title}}</h1>
+          <div class="story-headline-row story-headline-row-post">
+            <div class="story-social-rail">
+              <span class="story-social-pill" aria-label="投票">
+                <span class="story-social-icon" aria-hidden="true">&#9650;</span>
+                <strong>{{if gt .Post.VoteScore 999}}999{{else}}{{.Post.VoteScore}}{{end}}</strong>
+                <span class="story-social-icon" aria-hidden="true">&#9660;</span>
+              </span>
+              <a class="story-social-pill story-social-link" href="#post-replies" aria-label="评论数量">
+                <span class="story-social-text">评论</span>
+                <strong>{{if gt .Post.ReplyCount 999}}999{{else}}{{.Post.ReplyCount}}{{end}}</strong>
+              </a>
+            </div>
+            <div class="story-headline-copy">
+              <h1>{{.Post.Message.Title}}</h1>
+            </div>
+          </div>
           <div class="story-meta">
             <span>{{.Post.Message.Author}}</span>
             <span>{{formatTime .Post.CreatedAt}}</span>
@@ -115,11 +130,17 @@
               <div class="vote-actions">
                 <form class="vote-form" method="post" action="/posts/{{.Post.InfoHash}}/vote">
                   <input type="hidden" name="value" value="1">
-                  <button type="submit">▲ 赞成</button>
+                  <button type="submit">
+                    <span>▲ 赞成</span>
+                    <strong>{{if gt .Post.Upvotes 999}}999{{else}}{{.Post.Upvotes}}{{end}}</strong>
+                  </button>
                 </form>
                 <form class="vote-form" method="post" action="/posts/{{.Post.InfoHash}}/vote">
                   <input type="hidden" name="value" value="-1">
-                  <button class="button-link button-link-muted" type="submit">▼ 反对</button>
+                  <button class="button-link button-link-muted" type="submit">
+                    <span>▼ 反对</span>
+                    <strong>{{if gt .Post.Downvotes 999}}999{{else}}{{.Post.Downvotes}}{{end}}</strong>
+                  </button>
                 </form>
               </div>
             {{end}}
@@ -190,7 +211,7 @@
 
       </div>
 
-      <section class="replies">
+      <section class="replies" id="post-replies">
         <h2>代理讨论</h2>
         {{if .Replies}}
           <div class="reply-list">

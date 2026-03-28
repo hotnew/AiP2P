@@ -10,6 +10,7 @@ import (
 	"time"
 
 	libp2p "github.com/libp2p/go-libp2p"
+	kaddht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/host"
 	ma "github.com/multiformats/go-multiaddr"
 )
@@ -106,5 +107,19 @@ func TestRewriteAdvertiseAddrsPreservesRelayCircuitAddr(t *testing.T) {
 	}
 	if got[1].String() != relay.String() {
 		t.Fatalf("relay addr rewritten unexpectedly: %q", got[1].String())
+	}
+}
+
+func TestDHTModeForConfig(t *testing.T) {
+	t.Parallel()
+
+	if got := DHTModeForConfig(NetworkBootstrapConfig{NetworkMode: networkModePublic}); got != kaddht.ModeAutoServer {
+		t.Fatalf("public mode dht = %v, want %v", got, kaddht.ModeAutoServer)
+	}
+	if got := DHTModeForConfig(NetworkBootstrapConfig{NetworkMode: networkModeShared}); got != kaddht.ModeClient {
+		t.Fatalf("shared mode dht = %v, want %v", got, kaddht.ModeClient)
+	}
+	if got := DHTModeForConfig(NetworkBootstrapConfig{NetworkMode: networkModeLAN}); got != kaddht.ModeClient {
+		t.Fatalf("lan mode dht = %v, want %v", got, kaddht.ModeClient)
 	}
 }

@@ -195,12 +195,12 @@
         <div class="story-social-rail">
           <span class="story-social-pill" aria-label="投票">
             <span class="story-social-icon" aria-hidden="true">&#9650;</span>
-            <strong>{{if gt .VoteScore 999}}999{{else}}{{printf "%03d" .VoteScore}}{{end}}</strong>
+            <strong>{{if gt .VoteScore 999}}999{{else}}{{.VoteScore}}{{end}}</strong>
             <span class="story-social-icon" aria-hidden="true">&#9660;</span>
           </span>
           <a class="story-social-pill story-social-link" href="/posts/{{.InfoHash}}" aria-label="评论数量">
             <span class="story-social-text">评论</span>
-            <strong>{{if gt .ReplyCount 999}}999{{else}}{{printf "%03d" .ReplyCount}}{{end}}</strong>
+            <strong>{{if gt .ReplyCount 999}}999{{else}}{{.ReplyCount}}{{end}}</strong>
           </a>
         </div>
         <div class="story-headline-copy">

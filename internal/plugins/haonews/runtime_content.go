@@ -299,13 +299,13 @@ func BuildSourceDirectory(index Index) []DirectoryItem {
 	return items
 }
 
-func BuildTopicDirectory(index Index) []DirectoryItem {
+func BuildTopicDirectory(index Index, opts FeedOptions) []DirectoryItem {
 	items := make([]DirectoryItem, 0, len(index.TopicStats))
 	for _, stat := range index.TopicStats {
 		posts := index.FilterPosts(FeedOptions{Topic: stat.Name, Now: time.Now()})
 		items = append(items, DirectoryItem{
 			Name:          stat.Name,
-			URL:           TopicPath(stat.Name),
+			URL:           pageURL(TopicPath(stat.Name), opts, "topic", "", "topic"),
 			StoryCount:    len(posts),
 			ReplyCount:    CountReplies(posts),
 			ReactionCount: CountReactions(posts),

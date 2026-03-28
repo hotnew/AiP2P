@@ -144,7 +144,9 @@ type DirectoryPageData struct {
 	Path         string
 	APIPath      string
 	Now          time.Time
+	Options      FeedOptions
 	PageNav      []NavItem
+	TabOptions   []TabOption
 	Items        []DirectoryItem
 	SummaryStats []SummaryStat
 	NodeStatus   NodeStatus
