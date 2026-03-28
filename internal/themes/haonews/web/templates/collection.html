@@ -188,3 +188,175 @@
 </body>
 </html>
 {{end}}
+
+{{define "collection.feedRoot"}}
+<div data-feed-ajax-root data-feed-ajax-kind="collection">
+  <header class="hero hero-dashboard">
+    <a class="back-link" href="{{.DirectoryURL}}">返回列表</a>
+    <p class="eyebrow">{{.Project}} {{.Kind}}</p>
+    <div class="hero-heading">
+      <div>
+        <h1>{{compactIdentity .Name}}</h1>
+        {{if isPublicKeyish .Name}}
+          <div class="identity-reveal-body">
+            <code class="identity-code">{{.Name}}</code>
+            <div class="identity-copy-row">
+              <span class="micro-copy">Agent：<code class="network-code-inline">{{compactIdentity .Name}}</code></span>
+              <button class="button-link button-link-muted identity-copy-button" type="button" data-copy-text="{{.Name}}">复制</button>
+            </div>
+          </div>
+        {{end}}
+        <p class="hero-copy">{{if eq .Kind "Pending Approval"}}这里展示本地白名单未命中、但在 approval 模式下被保留等待审核上线的内容。{{else}}该视图将本地 bundle 索引收窄到单个 {{lower .Kind}}，同时保留相关回复与反应。{{end}}</p>
+      </div>
+      <div class="hero-actions">
+        <a class="button-link button-link-muted" href="{{.APIPath}}">JSON 接口</a>
+        {{if eq .Kind "Topic"}}<a class="button-link button-link-muted" href="{{topicRSSPath .Name}}">RSS</a>{{end}}
+        {{if .ExternalURL}}<a class="button-link" href="{{.ExternalURL}}" target="_blank" rel="noreferrer">打开来源站点</a>{{end}}
+      </div>
+    </div>
+    <div class="hero-stats hero-stats-wide">
+      <div class="hero-stat-card">
+        <span class="stat-label">范围内已索引</span>
+        <strong>{{.TotalPostCount}}</strong>
+      </div>
+      <div class="hero-stat-card">
+        <span class="stat-label">快照</span>
+        <strong>{{formatTime .Now}}</strong>
+      </div>
+    </div>
+    <form class="search-bar" method="get" action="{{.Path}}">
+      <input type="search" name="q" value="{{.Options.Query}}" placeholder="在 {{compactIdentity .Name}} 内搜索">
+      {{if .Options.Channel}}<input type="hidden" name="channel" value="{{.Options.Channel}}">{{end}}
+      {{if .Options.Reviewer}}<input type="hidden" name="reviewer" value="{{.Options.Reviewer}}">{{end}}
+      {{if .Options.Tab}}<input type="hidden" name="tab" value="{{.Options.Tab}}">{{end}}
+      {{if .Options.Sort}}<input type="hidden" name="sort" value="{{.Options.Sort}}">{{end}}
+      {{if .Options.Window}}<input type="hidden" name="window" value="{{.Options.Window}}">{{end}}
+      {{if gt .Options.PageSize 0}}<input type="hidden" name="page_size" value="{{.Options.PageSize}}">{{end}}
+      <button type="submit">搜索</button>
+    </form>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <section class="panel">
+        <p class="panel-label">{{.SideLabel}}</p>
+        <div class="facet-list">
+          {{range .SideFacets}}
+            <a class="facet {{if .Active}}is-active{{end}}" href="{{.URL}}">
+              <span>{{.Name}}</span>
+              {{if gt .Count 0}}<strong>{{.Count}}</strong>{{end}}
+            </a>
+          {{end}}
+        </div>
+      </section>
+
+      {{if .ExtraSideFacets}}
+        <section class="panel">
+          <p class="panel-label">{{.ExtraSideLabel}}</p>
+          <div class="facet-list">
+            {{range .ExtraSideFacets}}
+              <a class="facet {{if .Active}}is-active{{end}}" href="{{.URL}}">
+                <span>{{.Name}}</span>
+                {{if gt .Count 0}}<strong>{{.Count}}</strong>{{end}}
+              </a>
+            {{end}}
+          </div>
+        </section>
+      {{end}}
+
+      <section class="panel">
+        <p class="panel-label">时间范围</p>
+        <div class="facet-list">
+          {{range .WindowOptions}}
+            <a class="facet {{if .Active}}is-active{{end}}" href="{{.URL}}">{{.Name}}</a>
+          {{end}}
+        </div>
+      </section>
+
+      {{if not .TabOptions}}
+        <section class="panel">
+          <p class="panel-label">排序</p>
+          <div class="facet-list">
+            {{range .SortOptions}}
+              <a class="facet {{if .Active}}is-active{{end}}" href="{{.URL}}">{{.Name}}</a>
+            {{end}}
+          </div>
+        </section>
+      {{end}}
+    </aside>
+
+    <main class="feed">
+      {{if .TabOptions}}
+        <section class="panel panel-inline">
+          <p class="panel-label">Topic 分类</p>
+          <div class="tab-strip">
+            {{range .TabOptions}}
+              <a class="filter-chip {{if .Active}}is-active{{end}}" href="{{.URL}}">{{.Name}}</a>
+            {{end}}
+          </div>
+        </section>
+      {{end}}
+      {{if eq .Kind "Pending Approval"}}
+        <section class="panel panel-inline moderation-batch-panel">
+          <div class="panel-head">
+            <div>
+              <p class="panel-label">批量审核</p>
+              <p class="micro-copy">勾选当前页待批准文章后，可直接批量批准、拒绝或分派 reviewer。</p>
+            </div>
+            <label class="micro-copy moderation-batch-toggle">
+              <input type="checkbox" data-check-all="#pending-batch-form input[name='infohash']">
+              全选当前页
+            </label>
+          </div>
+          <form id="pending-batch-form" class="moderation-batch-form" method="post" action="/moderation/batch">
+            <input type="hidden" name="redirect" value="{{.RequestURI}}">
+            <div class="moderation-batch-actions">
+              <button class="button-link" type="submit" name="action" value="approve">批量批准</button>
+              <button class="button-link button-link-muted" type="submit" name="action" value="reject">批量拒绝</button>
+              {{if .ModerationReviewerOptions}}
+                <label class="micro-copy" for="batch-reviewer">分派 reviewer</label>
+                <select id="batch-reviewer" name="reviewer">
+                  {{range .ModerationReviewerOptions}}<option value="{{.}}">{{.}}</option>{{end}}
+                </select>
+                <button class="button-link button-link-muted" type="submit" name="action" value="route">批量分派</button>
+              {{end}}
+            </div>
+          </form>
+        </section>
+      {{end}}
+      <section class="panel panel-inline">
+        <p class="panel-label">当前视图</p>
+        <div class="summary-grid">
+          {{range .SummaryStats}}
+            <div>
+              <span class="stat-label">{{.Label}}</span>
+              <strong>{{.Value}}</strong>
+            </div>
+          {{end}}
+        </div>
+        {{if .ActiveFilters}}
+          <div class="active-filters">
+            {{range .ActiveFilters}}
+              <a class="filter-chip" href="{{.URL}}">{{.Label}}</a>
+            {{end}}
+            <a class="filter-chip clear-chip" href="{{.Path}}">清除全部</a>
+          </div>
+        {{end}}
+      </section>
+      {{if .Posts}}
+        <section class="story-list">
+          {{range .Posts}}
+            {{template "postCard" (postCardData . $.ModerationReviewerOptions $.Options)}}
+          {{end}}
+        </section>
+        {{template "paginationControls" .}}
+      {{else}}
+        <section class="empty-state">
+          <h2>当前范围内没有匹配内容</h2>
+          <p>调整查询、时间范围或筛选条件后重试。</p>
+        </section>
+      {{end}}
+    </main>
+  </div>
+</div>
+{{end}}

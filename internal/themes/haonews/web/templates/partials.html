@@ -172,6 +172,7 @@
       if (!response.ok) {
         throw new Error("ajax request failed");
       }
+      const responseTitle = (response.headers.get("X-HaoNews-Title") || "").trim();
       const html = await response.text();
       if (token !== ajaxToken) return;
       const doc = new DOMParser().parseFromString(html, "text/html");
@@ -180,7 +181,9 @@
         throw new Error("ajax root missing");
       }
       existing.replaceWith(incoming);
-      if (doc.title) {
+      if (responseTitle) {
+        document.title = responseTitle;
+      } else if (doc.title) {
         document.title = doc.title;
       }
       if (historyMode === "push") {

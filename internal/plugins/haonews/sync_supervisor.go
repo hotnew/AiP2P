@@ -28,6 +28,7 @@ type ManagedSyncConfig struct {
 	NetPath          string
 	RulesPath        string
 	WriterPolicyPath string
+	InitialDelay     time.Duration
 	StaleAfter       time.Duration
 	Logf             func(string, ...any)
 }
@@ -108,10 +109,18 @@ func (s *ManagedSyncSupervisor) Stop() {
 func (s *ManagedSyncSupervisor) loop(ctx context.Context) {
 	defer close(s.done)
 	backoff := time.Second
+	firstStart := true
 	for {
 		if ctx.Err() != nil {
 			s.stopChild()
 			return
+		}
+		if firstStart && s.cfg.InitialDelay > 0 {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(s.cfg.InitialDelay):
+			}
 		}
 		cmd, exitCh, err := s.startChild()
 		if err != nil {
@@ -126,6 +135,7 @@ func (s *ManagedSyncSupervisor) loop(ctx context.Context) {
 				continue
 			}
 		}
+		firstStart = false
 		backoff = time.Second
 		staleTicker := time.NewTicker(30 * time.Second)
 		running := true

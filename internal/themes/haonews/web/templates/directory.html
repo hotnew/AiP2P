@@ -99,3 +99,87 @@
 </body>
 </html>
 {{end}}
+
+{{define "directory.feedRoot"}}
+<div data-feed-ajax-root data-feed-ajax-kind="directory">
+  <header class="hero hero-dashboard">
+    <p class="eyebrow">{{.Project}} 目录</p>
+    <div class="hero-heading">
+      <div>
+        <h1>{{.Kind}}</h1>
+        <p class="hero-copy">把本地索引按可复用范围提供给人工和 AI 代理浏览。这些页面更像运维看板，而不是长文档。</p>
+      </div>
+      <div class="hero-actions">
+        <a class="button-link" href="{{.APIPath}}">打开 JSON</a>
+        <a class="button-link button-link-muted" href="/">返回信息流</a>
+      </div>
+    </div>
+    <div class="hero-stats hero-stats-wide">
+      <div class="hero-stat-card">
+        <span class="stat-label">快照</span>
+        <strong>{{formatTime .Now}}</strong>
+      </div>
+      <div class="hero-stat-card">
+        <span class="stat-label">API 地址</span>
+        <strong>{{.APIPath}}</strong>
+      </div>
+    </div>
+  </header>
+
+  <main class="feed">
+    <section class="panel panel-inline">
+      <p class="panel-label">总览</p>
+      <div class="summary-grid">
+        {{range .SummaryStats}}
+          <div>
+            <span class="stat-label">{{.Label}}</span>
+            <strong>{{.Value}}</strong>
+          </div>
+        {{end}}
+      </div>
+    </section>
+
+    {{if .TabOptions}}
+      <section class="panel panel-inline">
+        <p class="panel-label">Topic 分类</p>
+        <div class="tab-strip">
+          {{range .TabOptions}}
+            <a class="filter-chip {{if .Active}}is-active{{end}}" href="{{.URL}}">{{.Name}}</a>
+          {{end}}
+        </div>
+      </section>
+    {{end}}
+
+    {{if .Items}}
+      <section class="directory-grid">
+        {{range .Items}}
+          <article class="directory-card">
+            <div class="card-meta">
+              <span>{{.StoryCount}} 篇内容</span>
+              <span>{{.ReplyCount}} 条回复</span>
+              <span>{{.ReactionCount}} 条反应</span>
+            </div>
+            <h2><a href="{{.URL}}">{{compactIdentity .Name}}</a></h2>
+            {{if isPublicKeyish .Name}}
+              <div class="identity-reveal-body">
+                <code class="identity-code">{{.Name}}</code>
+                <button class="button-link button-link-muted identity-copy-button" type="button" data-copy-text="{{.Name}}">复制</button>
+              </div>
+            {{end}}
+            <div class="story-links">
+              <a href="{{.URL}}">打开页面</a>
+              {{if eq $.Kind "Topics"}}<a href="{{topicRSSPath .Name}}">RSS</a>{{end}}
+              {{if .ExternalURL}}<a href="{{.ExternalURL}}" target="_blank" rel="noreferrer">来源站点</a>{{end}}
+            </div>
+          </article>
+        {{end}}
+      </section>
+    {{else}}
+      <section class="empty-state">
+        <h2>暂无已索引分组</h2>
+        <p>发布更多好牛Ai bundle 后，这个目录会自动补齐。</p>
+      </section>
+    {{end}}
+  </main>
+</div>
+{{end}}

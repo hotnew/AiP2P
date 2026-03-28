@@ -44,6 +44,18 @@ func (a *App) buildIndex() (Index, error) {
 }
 
 func (a *App) indexSignature() (string, error) {
+	a.indexMu.Lock()
+	if a.indexCache.ready && strings.TrimSpace(a.indexCache.signature) != "" {
+		signature := a.indexCache.signature
+		a.indexMu.Unlock()
+		return signature, nil
+	}
+	a.indexMu.Unlock()
+
+	return a.currentIndexSignature()
+}
+
+func (a *App) currentIndexSignature() (string, error) {
 	digester := fnv.New64a()
 	roots := []string{
 		filepath.Join(a.storeRoot, "data"),
@@ -103,9 +115,11 @@ func writePathSignature(digester hash.Hash64, root string) error {
 func (a *App) invalidateIndexCache() {
 	a.indexMu.Lock()
 	a.indexCache = cachedIndexState{}
+	a.indexBuildCh = nil
 	a.indexMu.Unlock()
 	a.responseMu.Lock()
 	a.responseCache = nil
+	a.responseEpoch++
 	a.responseMu.Unlock()
 	a.nodeStatusMu.Lock()
 	a.nodeStatusCache = cachedNodeStatusState{}

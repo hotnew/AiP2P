@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"hao.news/internal/apphost"
 )
@@ -38,6 +39,7 @@ func StartManagedSyncIfNeeded(parent context.Context, cfg apphost.Config, option
 		NetPath:          cfg.NetPath,
 		RulesPath:        cfg.RulesPath,
 		WriterPolicyPath: cfg.WriterPolicyPath,
+		InitialDelay:     5 * time.Second,
 		StaleAfter:       cfg.SyncStaleAfter,
 		Logf:             cfg.Logf,
 	})

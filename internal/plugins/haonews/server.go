@@ -38,8 +38,11 @@ type App struct {
 	options         AppOptions
 	indexMu         sync.Mutex
 	indexCache      cachedIndexState
+	indexBuildCh    chan struct{}
 	responseMu      sync.Mutex
 	responseCache   map[string]cachedHTTPResponse
+	responseBuilds  map[string]*responseBuildState
+	responseEpoch   uint64
 	nodeStatusMu    sync.Mutex
 	nodeStatusCache cachedNodeStatusState
 }
@@ -68,8 +71,17 @@ type cachedHTTPResponse struct {
 	contentType  string
 	cacheControl string
 	etag         string
+	variant      string
 	lastModified time.Time
 	expiresAt    time.Time
+	staleUntil   time.Time
+}
+
+type CachedHTTPResponse = cachedHTTPResponse
+
+type responseBuildState struct {
+	done chan struct{}
+	err  error
 }
 
 type cachedNodeStatusState struct {
@@ -525,44 +537,65 @@ func postURL(post Post, opts FeedOptions) string {
 }
 
 func (a *App) index() (Index, error) {
-	now := time.Now()
-	a.indexMu.Lock()
-	if a.indexCache.ready && now.Before(a.indexCache.recheckAt) {
-		index := a.indexCache.index.Clone()
+	for {
+		now := time.Now()
+		a.indexMu.Lock()
+		if a.indexCache.ready && now.Before(a.indexCache.recheckAt) {
+			index := a.indexCache.index.Clone()
+			a.indexMu.Unlock()
+			return index, nil
+		}
+		if ch := a.indexBuildCh; ch != nil {
+			a.indexMu.Unlock()
+			<-ch
+			continue
+		}
+		ch := make(chan struct{})
+		a.indexBuildCh = ch
+		a.indexMu.Unlock()
+
+		signature, err := a.currentIndexSignature()
+		if err != nil {
+			a.indexMu.Lock()
+			a.indexBuildCh = nil
+			close(ch)
+			a.indexMu.Unlock()
+			return Index{}, err
+		}
+
+		a.indexMu.Lock()
+		if a.indexCache.ready && a.indexCache.signature == signature {
+			a.indexCache.recheckAt = now.Add(indexCacheProbeInterval)
+			index := a.indexCache.index.Clone()
+			a.indexBuildCh = nil
+			close(ch)
+			a.indexMu.Unlock()
+			return index, nil
+		}
+		a.indexMu.Unlock()
+
+		index, err := a.buildIndex()
+		if err != nil {
+			a.indexMu.Lock()
+			a.indexBuildCh = nil
+			close(ch)
+			a.indexMu.Unlock()
+			return Index{}, err
+		}
+
+		a.indexMu.Lock()
+		a.indexCache = cachedIndexState{
+			signature: signature,
+			index:     index,
+			recheckAt: now.Add(indexCacheProbeInterval),
+			ready:     true,
+		}
+		index = a.indexCache.index.Clone()
+		a.indexBuildCh = nil
+		close(ch)
 		a.indexMu.Unlock()
 		return index, nil
 	}
-	a.indexMu.Unlock()
-
-	signature, err := a.indexSignature()
-	if err != nil {
-		return Index{}, err
-	}
-
-	a.indexMu.Lock()
-	if a.indexCache.ready && a.indexCache.signature == signature {
-		a.indexCache.recheckAt = now.Add(indexCacheProbeInterval)
-		index := a.indexCache.index.Clone()
-		a.indexMu.Unlock()
-		return index, nil
-	}
-	a.indexMu.Unlock()
-
-	index, err := a.buildIndex()
-	if err != nil {
-		return Index{}, err
-	}
-
-	a.indexMu.Lock()
-	a.indexCache = cachedIndexState{
-		signature: signature,
-		index:     index,
-		recheckAt: now.Add(indexCacheProbeInterval),
-		ready:     true,
-	}
-	index = a.indexCache.index.Clone()
-	a.indexMu.Unlock()
-	return index, nil
 }
 
 func (a *App) subscriptionRules() (SubscriptionRules, error) {

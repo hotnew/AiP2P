@@ -49,12 +49,20 @@ func (a *App) IndexSignature() (string, error) {
 	return a.indexSignature()
 }
 
-func (a *App) CachedHTTPResponse(key string) (cachedHTTPResponse, bool) {
+func (a *App) CachedHTTPResponse(key string) (CachedHTTPResponse, bool) {
 	return a.cachedHTTPResponse(key)
 }
 
-func (a *App) StoreHTTPResponse(key string, entry cachedHTTPResponse) {
+func (a *App) StoreHTTPResponse(key string, entry CachedHTTPResponse) {
 	a.storeHTTPResponse(key, entry)
+}
+
+func (a *App) FetchHTTPResponse(key string, build func() (CachedHTTPResponse, error)) (CachedHTTPResponse, error) {
+	return a.fetchHTTPResponse(key, build)
+}
+
+func (a *App) FetchHTTPResponseVariant(key, variant string, build func() (CachedHTTPResponse, error)) (CachedHTTPResponse, error) {
+	return a.fetchHTTPResponseVariant(key, variant, build)
 }
 
 func (a *App) SubscriptionRules() (SubscriptionRules, error) {

@@ -41,11 +41,7 @@ func (a *App) buildNodeStatus(index Index) NodeStatus {
 		storeState = "missing"
 		storeTone = "warn"
 	}
-	torrentCount := 0
-	store := &corehaonews.Store{TorrentDir: filepath.Join(a.storeRoot, "torrents")}
-	if count, err := store.TorrentCount(); err == nil {
-		torrentCount = count
-	}
+	torrentCount := len(index.Bundles)
 	netCfg, netErr := a.networkBootstrap()
 	syncStatus, syncErr := a.syncRuntimeStatus()
 

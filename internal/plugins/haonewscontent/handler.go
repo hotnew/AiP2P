@@ -24,6 +24,34 @@ const (
 	moderationActionRoute   = "route"
 )
 
+func ajaxFragmentRequest(r *http.Request) bool {
+	return strings.TrimSpace(r.Header.Get("X-HaoNews-Ajax")) == "1"
+}
+
+func renderPageOrFragment(app *newsplugin.App, w http.ResponseWriter, r *http.Request, pageTemplate, fragmentTemplate, title string, data any) {
+	if ajaxFragmentRequest(r) {
+		if title != "" {
+			w.Header().Set("X-HaoNews-Title", title)
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if err := app.Templates().ExecuteTemplate(w, fragmentTemplate, data); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+	if err := app.Templates().ExecuteTemplate(w, pageTemplate, data); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func homePageTitle(app *newsplugin.App) string {
+	version := strings.TrimSpace(app.VersionString())
+	if version != "" {
+		return "好牛Ai " + version + " · 信息流"
+	}
+	return "好牛Ai 信息流"
+}
+
 func newHandler(app *newsplugin.App, staticFS fs.FS) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -139,9 +167,7 @@ func handleHome(app *newsplugin.App, w http.ResponseWriter, r *http.Request) {
 		Subscriptions:   rules,
 		NodeStatus:      app.NodeStatus(index),
 	}
-	if err := app.Templates().ExecuteTemplate(w, "home.html", data); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
+	renderPageOrFragment(app, w, r, "home.html", "home.feedRoot", homePageTitle(app), data)
 }
 
 func handlePendingApproval(app *newsplugin.App, w http.ResponseWriter, r *http.Request) {
@@ -201,9 +227,7 @@ func handlePendingApproval(app *newsplugin.App, w http.ResponseWriter, r *http.R
 		Pagination:                pagination,
 		NodeStatus:                app.NodeStatus(index),
 	}
-	if err := app.Templates().ExecuteTemplate(w, "collection.html", data); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
+	renderPageOrFragment(app, w, r, "collection.html", "collection.feedRoot", "好牛Ai Pending Approval: "+rules.ApprovalFeed, data)
 }
 
 func moderationReviewerOptionLabels(app *newsplugin.App) []string {
@@ -685,9 +709,7 @@ func handleSources(app *newsplugin.App, w http.ResponseWriter, r *http.Request) 
 		SummaryStats: newsplugin.BuildDirectorySummaryStats(index.SourceStats, index.Posts),
 		NodeStatus:   app.NodeStatus(index),
 	}
-	if err := app.Templates().ExecuteTemplate(w, "directory.html", data); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
+	renderPageOrFragment(app, w, r, "directory.html", "directory.feedRoot", "好牛Ai Sources", data)
 }
 
 func handleSource(app *newsplugin.App, w http.ResponseWriter, r *http.Request) {
@@ -741,9 +763,7 @@ func handleSource(app *newsplugin.App, w http.ResponseWriter, r *http.Request) {
 		ExternalURL:     newsplugin.SourceURLFromPosts(fullSet),
 		NodeStatus:      app.NodeStatus(index),
 	}
-	if err := app.Templates().ExecuteTemplate(w, "collection.html", data); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
+	renderPageOrFragment(app, w, r, "collection.html", "collection.feedRoot", "好牛Ai Source: "+name, data)
 }
 
 func handleTopics(app *newsplugin.App, w http.ResponseWriter, r *http.Request) {
@@ -776,9 +796,7 @@ func handleTopics(app *newsplugin.App, w http.ResponseWriter, r *http.Request) {
 		SummaryStats: newsplugin.BuildDirectorySummaryStats(newsplugin.TopicStatsForPosts(visiblePosts), visiblePosts),
 		NodeStatus:   app.NodeStatus(index),
 	}
-	if err := app.Templates().ExecuteTemplate(w, "directory.html", data); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
+	renderPageOrFragment(app, w, r, "directory.html", "directory.feedRoot", "好牛Ai Topics", data)
 }
 
 func handleTopic(app *newsplugin.App, w http.ResponseWriter, r *http.Request) {
@@ -830,50 +848,50 @@ func handleTopic(app *newsplugin.App, w http.ResponseWriter, r *http.Request) {
 		Pagination:      pagination,
 		NodeStatus:      app.NodeStatus(index),
 	}
-	if err := app.Templates().ExecuteTemplate(w, "collection.html", data); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
+	renderPageOrFragment(app, w, r, "collection.html", "collection.feedRoot", "好牛Ai Topic: "+name, data)
 }
 
 func handleTopicRSS(app *newsplugin.App, w http.ResponseWriter, r *http.Request, name string) {
-	index, err := app.Index()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if !newsplugin.HasTopic(index, name) {
-		http.NotFound(w, r)
-		return
-	}
 	opts := readFeedOptions(r)
 	opts.Topic = name
-	posts := index.FilterPosts(opts)
 	indexSig, err := app.IndexSignature()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	optionsSig := newsplugin.FeedOptionsSignature(opts, false)
-	cacheKey := "topic-rss:" + newsplugin.TopicPath(name) + ":" + indexSig + ":" + optionsSig
-	if entry, ok := app.CachedHTTPResponse(cacheKey); ok {
-		newsplugin.WriteConditionalResponse(w, r, entry)
+	cacheKey := "topic-rss:" + newsplugin.TopicPath(name) + ":" + optionsSig
+	entry, err := app.FetchHTTPResponseVariant(cacheKey, indexSig, func() (newsplugin.CachedHTTPResponse, error) {
+		index, err := app.Index()
+		if err != nil {
+			return newsplugin.CachedHTTPResponse{}, err
+		}
+		if !newsplugin.HasTopic(index, name) {
+			return newsplugin.CachedHTTPResponse{}, os.ErrNotExist
+		}
+		posts := index.FilterPosts(opts)
+		payload, lastModified, err := newsplugin.TopicRSSBytes(r, app.ProjectName(), name, posts)
+		if err != nil {
+			return newsplugin.CachedHTTPResponse{}, err
+		}
+		return newsplugin.NewCachedHTTPResponse(
+			http.StatusOK,
+			"application/rss+xml; charset=utf-8",
+			"public, max-age=60, stale-while-revalidate=300",
+			newsplugin.QuotedETag("topic-rss:"+newsplugin.TopicPath(name), indexSig, optionsSig, false),
+			lastModified,
+			time.Now().Add(30*time.Second),
+			payload,
+		), nil
+	})
+	if errors.Is(err, os.ErrNotExist) {
+		http.NotFound(w, r)
 		return
 	}
-	payload, lastModified, err := newsplugin.TopicRSSBytes(r, app.ProjectName(), name, posts)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	entry := newsplugin.NewCachedHTTPResponse(
-		http.StatusOK,
-		"application/rss+xml; charset=utf-8",
-		"public, max-age=60, stale-while-revalidate=300",
-		newsplugin.QuotedETag("topic-rss:"+newsplugin.TopicPath(name), indexSig, optionsSig, false),
-		lastModified,
-		time.Now().Add(30*time.Second),
-		payload,
-	)
-	app.StoreHTTPResponse(cacheKey, entry)
 	newsplugin.WriteConditionalResponse(w, r, entry)
 }
 
@@ -913,53 +931,52 @@ func handleAPIFeed(app *newsplugin.App, w http.ResponseWriter, r *http.Request) 
 		http.NotFound(w, r)
 		return
 	}
-	index, err := app.Index()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
 	opts := readFeedOptions(r)
-	allPosts := index.FilterPosts(opts)
-	posts, pagination := newsplugin.PaginatePosts(allPosts, opts, "/api/feed")
 	indexSig, err := app.IndexSignature()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	optionsSig := newsplugin.FeedOptionsSignature(opts, true)
-	cacheKey := "api-feed:" + indexSig + ":" + optionsSig
-	if entry, ok := app.CachedHTTPResponse(cacheKey); ok {
-		newsplugin.WriteConditionalResponse(w, r, entry)
-		return
-	}
-	payload := map[string]any{
-		"project":    app.ProjectID(),
-		"scope":      "feed",
-		"options":    newsplugin.APIOptions(opts),
-		"summary":    newsplugin.BuildSummaryStats(allPosts),
-		"pagination": pagination,
-		"posts":      newsplugin.APIPosts(posts),
-		"facets": map[string]any{
-			"channels": index.ChannelStats,
-			"topics":   index.TopicStats,
-			"sources":  index.SourceStats,
-		},
-	}
-	body, err := newsplugin.MarshalJSONBytes(payload)
+	cacheKey := "api-feed:" + optionsSig
+	entry, err := app.FetchHTTPResponseVariant(cacheKey, indexSig, func() (newsplugin.CachedHTTPResponse, error) {
+		index, err := app.Index()
+		if err != nil {
+			return newsplugin.CachedHTTPResponse{}, err
+		}
+		allPosts := index.FilterPosts(opts)
+		posts, pagination := newsplugin.PaginatePosts(allPosts, opts, "/api/feed")
+		payload := map[string]any{
+			"project":    app.ProjectID(),
+			"scope":      "feed",
+			"options":    newsplugin.APIOptions(opts),
+			"summary":    newsplugin.BuildSummaryStats(allPosts),
+			"pagination": pagination,
+			"posts":      newsplugin.APIPosts(posts),
+			"facets": map[string]any{
+				"channels": index.ChannelStats,
+				"topics":   index.TopicStats,
+				"sources":  index.SourceStats,
+			},
+		}
+		body, err := newsplugin.MarshalJSONBytes(payload)
+		if err != nil {
+			return newsplugin.CachedHTTPResponse{}, err
+		}
+		return newsplugin.NewCachedHTTPResponse(
+			http.StatusOK,
+			"application/json; charset=utf-8",
+			"private, max-age=5, stale-while-revalidate=25",
+			newsplugin.QuotedETag("api-feed", indexSig, optionsSig, false),
+			newsplugin.LatestPostTime(allPosts),
+			time.Now().Add(5*time.Second),
+			body,
+		), nil
+	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	entry := newsplugin.NewCachedHTTPResponse(
-		http.StatusOK,
-		"application/json; charset=utf-8",
-		"private, max-age=5, stale-while-revalidate=25",
-		newsplugin.QuotedETag("api-feed", indexSig, optionsSig, false),
-		newsplugin.LatestPostTime(allPosts),
-		time.Now().Add(5*time.Second),
-		body,
-	)
-	app.StoreHTTPResponse(cacheKey, entry)
 	newsplugin.WriteConditionalResponse(w, r, entry)
 }
 
@@ -1159,50 +1176,49 @@ func handleAPITopics(app *newsplugin.App, w http.ResponseWriter, r *http.Request
 		http.NotFound(w, r)
 		return
 	}
-	index, err := app.Index()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
 	opts := readFeedOptions(r)
-	visiblePosts := index.FilterPosts(newsplugin.FeedOptions{
-		Tab:    opts.Tab,
-		Window: opts.Window,
-		Now:    opts.Now,
-	})
 	indexSig, err := app.IndexSignature()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	optionsSig := newsplugin.FeedOptionsSignature(opts, false)
-	cacheKey := "api-topics:" + indexSig + ":" + optionsSig
-	if entry, ok := app.CachedHTTPResponse(cacheKey); ok {
-		newsplugin.WriteConditionalResponse(w, r, entry)
-		return
-	}
-	payload := map[string]any{
-		"project": app.ProjectID(),
-		"scope":   "topics",
-		"options": newsplugin.APIOptions(opts),
-		"summary": newsplugin.BuildDirectorySummaryStats(newsplugin.TopicStatsForPosts(visiblePosts), visiblePosts),
-		"items":   newsplugin.BuildTopicDirectory(index, opts),
-	}
-	body, err := newsplugin.MarshalJSONBytes(payload)
+	cacheKey := "api-topics:" + optionsSig
+	entry, err := app.FetchHTTPResponseVariant(cacheKey, indexSig, func() (newsplugin.CachedHTTPResponse, error) {
+		index, err := app.Index()
+		if err != nil {
+			return newsplugin.CachedHTTPResponse{}, err
+		}
+		visiblePosts := index.FilterPosts(newsplugin.FeedOptions{
+			Tab:    opts.Tab,
+			Window: opts.Window,
+			Now:    opts.Now,
+		})
+		payload := map[string]any{
+			"project": app.ProjectID(),
+			"scope":   "topics",
+			"options": newsplugin.APIOptions(opts),
+			"summary": newsplugin.BuildDirectorySummaryStats(newsplugin.TopicStatsForPosts(visiblePosts), visiblePosts),
+			"items":   newsplugin.BuildTopicDirectory(index, opts),
+		}
+		body, err := newsplugin.MarshalJSONBytes(payload)
+		if err != nil {
+			return newsplugin.CachedHTTPResponse{}, err
+		}
+		return newsplugin.NewCachedHTTPResponse(
+			http.StatusOK,
+			"application/json; charset=utf-8",
+			"private, max-age=10, stale-while-revalidate=30",
+			newsplugin.QuotedETag("api-topics", indexSig, optionsSig, false),
+			newsplugin.LatestPostTime(visiblePosts),
+			time.Now().Add(10*time.Second),
+			body,
+		), nil
+	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	entry := newsplugin.NewCachedHTTPResponse(
-		http.StatusOK,
-		"application/json; charset=utf-8",
-		"private, max-age=10, stale-while-revalidate=30",
-		newsplugin.QuotedETag("api-topics", indexSig, optionsSig, false),
-		newsplugin.LatestPostTime(visiblePosts),
-		time.Now().Add(10*time.Second),
-		body,
-	)
-	app.StoreHTTPResponse(cacheKey, entry)
 	newsplugin.WriteConditionalResponse(w, r, entry)
 }
 
@@ -1212,57 +1228,59 @@ func handleAPITopic(app *newsplugin.App, w http.ResponseWriter, r *http.Request)
 		http.NotFound(w, r)
 		return
 	}
-	index, err := app.Index()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if !newsplugin.HasTopic(index, name) {
-		http.NotFound(w, r)
-		return
-	}
 	opts := readFeedOptions(r)
 	opts.Topic = name
-	posts := index.FilterPosts(opts)
-	fullSet := index.FilterPosts(newsplugin.FeedOptions{Topic: name, Now: opts.Now})
 	indexSig, err := app.IndexSignature()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	optionsSig := newsplugin.FeedOptionsSignature(opts, true)
-	cacheKey := "api-topic:" + newsplugin.TopicPath(name) + ":" + indexSig + ":" + optionsSig
-	if entry, ok := app.CachedHTTPResponse(cacheKey); ok {
-		newsplugin.WriteConditionalResponse(w, r, entry)
+	cacheKey := "api-topic:" + newsplugin.TopicPath(name) + ":" + optionsSig
+	entry, err := app.FetchHTTPResponseVariant(cacheKey, indexSig, func() (newsplugin.CachedHTTPResponse, error) {
+		index, err := app.Index()
+		if err != nil {
+			return newsplugin.CachedHTTPResponse{}, err
+		}
+		if !newsplugin.HasTopic(index, name) {
+			return newsplugin.CachedHTTPResponse{}, os.ErrNotExist
+		}
+		posts := index.FilterPosts(opts)
+		fullSet := index.FilterPosts(newsplugin.FeedOptions{Topic: name, Now: opts.Now})
+		payload := map[string]any{
+			"project": app.ProjectID(),
+			"scope":   "topic",
+			"name":    name,
+			"options": newsplugin.APIOptions(opts),
+			"summary": newsplugin.BuildSummaryStats(posts),
+			"posts":   newsplugin.APIPosts(posts),
+			"facets": map[string]any{
+				"channels": newsplugin.ChannelStatsForPosts(fullSet),
+				"sources":  newsplugin.SourceStatsForPosts(fullSet),
+			},
+		}
+		body, err := newsplugin.MarshalJSONBytes(payload)
+		if err != nil {
+			return newsplugin.CachedHTTPResponse{}, err
+		}
+		return newsplugin.NewCachedHTTPResponse(
+			http.StatusOK,
+			"application/json; charset=utf-8",
+			"private, max-age=5, stale-while-revalidate=25",
+			newsplugin.QuotedETag("api-topic:"+newsplugin.TopicPath(name), indexSig, optionsSig, false),
+			newsplugin.LatestPostTime(fullSet),
+			time.Now().Add(5*time.Second),
+			body,
+		), nil
+	})
+	if errors.Is(err, os.ErrNotExist) {
+		http.NotFound(w, r)
 		return
 	}
-	payload := map[string]any{
-		"project": app.ProjectID(),
-		"scope":   "topic",
-		"name":    name,
-		"options": newsplugin.APIOptions(opts),
-		"summary": newsplugin.BuildSummaryStats(posts),
-		"posts":   newsplugin.APIPosts(posts),
-		"facets": map[string]any{
-			"channels": newsplugin.ChannelStatsForPosts(fullSet),
-			"sources":  newsplugin.SourceStatsForPosts(fullSet),
-		},
-	}
-	body, err := newsplugin.MarshalJSONBytes(payload)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	entry := newsplugin.NewCachedHTTPResponse(
-		http.StatusOK,
-		"application/json; charset=utf-8",
-		"private, max-age=5, stale-while-revalidate=25",
-		newsplugin.QuotedETag("api-topic:"+newsplugin.TopicPath(name), indexSig, optionsSig, false),
-		newsplugin.LatestPostTime(fullSet),
-		time.Now().Add(5*time.Second),
-		body,
-	)
-	app.StoreHTTPResponse(cacheKey, entry)
 	newsplugin.WriteConditionalResponse(w, r, entry)
 }
 

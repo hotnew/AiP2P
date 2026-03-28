@@ -3,6 +3,7 @@ package newsplugin
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -170,6 +171,10 @@ func WriteConditionalResponse(w http.ResponseWriter, r *http.Request, entry cach
 }
 
 func NewCachedHTTPResponse(status int, contentType, cacheControl, etag string, lastModified, expiresAt time.Time, body []byte) cachedHTTPResponse {
+	staleUntil := expiresAt
+	if seconds := staleWhileRevalidateSeconds(cacheControl); seconds > 0 && !expiresAt.IsZero() {
+		staleUntil = expiresAt.Add(time.Duration(seconds) * time.Second)
+	}
 	return cachedHTTPResponse{
 		status:       status,
 		body:         append([]byte(nil), body...),
@@ -178,6 +183,7 @@ func NewCachedHTTPResponse(status int, contentType, cacheControl, etag string, l
 		etag:         strings.TrimSpace(etag),
 		lastModified: lastModified,
 		expiresAt:    expiresAt,
+		staleUntil:   staleUntil,
 	}
 }
 
@@ -192,7 +198,6 @@ func (a *App) cachedHTTPResponse(key string) (cachedHTTPResponse, bool) {
 		return cachedHTTPResponse{}, false
 	}
 	if !entry.expiresAt.IsZero() && time.Now().After(entry.expiresAt) {
-		delete(a.responseCache, key)
 		return cachedHTTPResponse{}, false
 	}
 	return entry, true
@@ -205,4 +210,96 @@ func (a *App) storeHTTPResponse(key string, entry cachedHTTPResponse) {
 		a.responseCache = make(map[string]cachedHTTPResponse)
 	}
 	a.responseCache[key] = entry
+}
+
+var errCachedResponseUnavailable = errors.New("cached response unavailable")
+
+func staleWhileRevalidateSeconds(cacheControl string) int {
+	for _, part := range strings.Split(cacheControl, ",") {
+		part = strings.TrimSpace(part)
+		if !strings.HasPrefix(strings.ToLower(part), "stale-while-revalidate=") {
+			continue
+		}
+		value := strings.TrimSpace(strings.TrimPrefix(part, "stale-while-revalidate="))
+		seconds, err := strconv.Atoi(value)
+		if err == nil && seconds > 0 {
+			return seconds
+		}
+	}
+	return 0
+}
+
+func (a *App) cachedHTTPResponseStateLocked(key, variant string, now time.Time) (cachedHTTPResponse, bool, bool) {
+	if a.responseCache == nil {
+		return cachedHTTPResponse{}, false, false
+	}
+	entry, ok := a.responseCache[key]
+	if !ok {
+		return cachedHTTPResponse{}, false, false
+	}
+	variantMatch := strings.TrimSpace(variant) == "" || entry.variant == variant
+	fresh := variantMatch && (entry.expiresAt.IsZero() || now.Before(entry.expiresAt))
+	staleValid := fresh || entry.staleUntil.IsZero() || now.Before(entry.staleUntil)
+	if !fresh && !staleValid {
+		delete(a.responseCache, key)
+		return cachedHTTPResponse{}, false, false
+	}
+	return entry, fresh, staleValid
+}
+
+func (a *App) fetchHTTPResponseVariant(key, variant string, build func() (cachedHTTPResponse, error)) (cachedHTTPResponse, error) {
+	now := time.Now()
+	a.responseMu.Lock()
+	if entry, fresh, _ := a.cachedHTTPResponseStateLocked(key, variant, now); fresh {
+		a.responseMu.Unlock()
+		return entry, nil
+	}
+	if state, ok := a.responseBuilds[key]; ok {
+		if entry, _, staleValid := a.cachedHTTPResponseStateLocked(key, variant, now); staleValid {
+			a.responseMu.Unlock()
+			return entry, nil
+		}
+		done := state.done
+		a.responseMu.Unlock()
+		<-done
+		a.responseMu.Lock()
+		err := state.err
+		if entry, fresh, _ := a.cachedHTTPResponseStateLocked(key, variant, time.Now()); fresh {
+			a.responseMu.Unlock()
+			return entry, nil
+		}
+		a.responseMu.Unlock()
+		if err != nil {
+			return cachedHTTPResponse{}, err
+		}
+		return cachedHTTPResponse{}, errCachedResponseUnavailable
+	}
+	if a.responseBuilds == nil {
+		a.responseBuilds = make(map[string]*responseBuildState)
+	}
+	state := &responseBuildState{done: make(chan struct{})}
+	a.responseBuilds[key] = state
+	epoch := a.responseEpoch
+	a.responseMu.Unlock()
+
+	entry, err := build()
+
+	a.responseMu.Lock()
+	if err == nil && a.responseEpoch == epoch {
+		entry.variant = strings.TrimSpace(variant)
+		if a.responseCache == nil {
+			a.responseCache = make(map[string]cachedHTTPResponse)
+		}
+		a.responseCache[key] = entry
+	}
+	state.err = err
+	delete(a.responseBuilds, key)
+	close(state.done)
+	a.responseMu.Unlock()
+
+	return entry, err
+}
+
+func (a *App) fetchHTTPResponse(key string, build func() (cachedHTTPResponse, error)) (cachedHTTPResponse, error) {
+	return a.fetchHTTPResponseVariant(key, "", build)
 }
