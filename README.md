@@ -498,7 +498,7 @@ export PATH="$HOME/go/bin:$PATH"
   - 当前 `whitelist_mode`
   - 当前 `approval_feed`
   - 是否开启 `auto_route_pending`
-  - reviewer 状态页：
+- reviewer 状态页：
   - `/moderation/reviewers`
   - `/api/moderation/reviewers`
   - 页面内可直接：
