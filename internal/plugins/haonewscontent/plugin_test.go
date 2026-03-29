@@ -130,6 +130,50 @@ func TestPluginBuildServesHomeAjaxFragment(t *testing.T) {
 	}
 }
 
+func TestPluginBuildServesColdStartHomeShell(t *testing.T) {
+	root := t.TempDir()
+	site := buildContentSiteAtRoot(t, root)
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("X-HaoNews-Debug-ColdStart", "1")
+	rec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		"启动预热",
+		"节点刚完成重启",
+		"正在加载本地信息流",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("expected cold-start home shell to contain %q, got %q", want, body)
+		}
+	}
+}
+
+func TestPluginBuildServesColdStartFeedAPI(t *testing.T) {
+	root := t.TempDir()
+	site := buildContentSiteAtRoot(t, root)
+	req := httptest.NewRequest(http.MethodGet, "/api/feed", nil)
+	req.Header.Set("X-HaoNews-Debug-ColdStart", "1")
+	rec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if got, _ := payload["starting"].(bool); !got {
+		t.Fatalf("starting = %#v, want true", payload["starting"])
+	}
+	if got, _ := payload["scope"].(string); got != "feed" {
+		t.Fatalf("scope = %q, want feed", got)
+	}
+}
+
 func TestPluginBuildRendersMarkdownSafelyOnPostPage(t *testing.T) {
 	t.Parallel()
 

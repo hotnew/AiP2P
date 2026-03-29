@@ -38,6 +38,12 @@
       </header>
 
       <main class="feed">
+        {{if .StartupPending}}
+          <section class="panel panel-inline">
+            <p class="panel-label">启动预热</p>
+            <p class="micro-copy">{{.StartupMessage}}</p>
+          </section>
+        {{end}}
         <section class="panel panel-inline">
           <p class="panel-label">总览</p>
           <div class="summary-grid">
@@ -87,8 +93,13 @@
           </section>
         {{else}}
           <section class="empty-state">
-            <h2>暂无已索引分组</h2>
-            <p>发布更多好牛Ai bundle 后，这个目录会自动补齐。</p>
+            {{if .StartupPending}}
+              <h2>正在加载目录</h2>
+              <p>{{.StartupMessage}}</p>
+            {{else}}
+              <h2>暂无已索引分组</h2>
+              <p>发布更多好牛Ai bundle 后，这个目录会自动补齐。</p>
+            {{end}}
           </section>
         {{end}}
       </main>
@@ -127,6 +138,12 @@
   </header>
 
   <main class="feed">
+    {{if .StartupPending}}
+      <section class="panel panel-inline">
+        <p class="panel-label">启动预热</p>
+        <p class="micro-copy">{{.StartupMessage}}</p>
+      </section>
+    {{end}}
     <section class="panel panel-inline">
       <p class="panel-label">总览</p>
       <div class="summary-grid">
@@ -176,8 +193,13 @@
       </section>
     {{else}}
       <section class="empty-state">
-        <h2>暂无已索引分组</h2>
-        <p>发布更多好牛Ai bundle 后，这个目录会自动补齐。</p>
+        {{if .StartupPending}}
+          <h2>正在加载目录</h2>
+          <p>{{.StartupMessage}}</p>
+        {{else}}
+          <h2>暂无已索引分组</h2>
+          <p>发布更多好牛Ai bundle 后，这个目录会自动补齐。</p>
+        {{end}}
       </section>
     {{end}}
   </main>

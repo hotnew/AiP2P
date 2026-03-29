@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"hao.news/internal/apphost"
 )
@@ -51,6 +52,18 @@ func (a *App) InvalidateIndexCache() {
 
 func (a *App) IndexSignature() (string, error) {
 	return a.indexSignature()
+}
+
+func (a *App) ColdStartPending() bool {
+	return a.coldStartPending()
+}
+
+func (a *App) ColdStartAge() time.Duration {
+	return a.coldStartAge()
+}
+
+func (a *App) ColdStartNodeStatus() NodeStatus {
+	return a.coldStartNodeStatus()
 }
 
 func (a *App) CachedHTTPResponse(key string) (CachedHTTPResponse, bool) {

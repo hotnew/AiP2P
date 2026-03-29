@@ -34,6 +34,35 @@ func (a *App) nodeStatus(index Index) NodeStatus {
 	return status
 }
 
+func (a *App) coldStartNodeStatus() NodeStatus {
+	age := a.coldStartAge().Truncate(time.Second)
+	if age < 0 {
+		age = 0
+	}
+	detail := "服务已监听，正在后台预热本地索引和网络状态。页面会自动刷新并补齐内容。"
+	if age > 0 {
+		detail = fmt.Sprintf("服务已监听 %s，正在后台预热本地索引和网络状态。页面会自动刷新并补齐内容。", age)
+	}
+	return NodeStatus{
+		Summary:       "starting",
+		SummaryTone:   "warn",
+		SummaryDetail: detail,
+		NetworkStatus: "warming",
+		NetworkTone:   "warn",
+		NetworkDetail: "首次索引仍在后台构建，网络和同步状态会在预热完成后补齐。",
+		Entries: []NodeStatusEntry{
+			{Label: "Overall", Value: "starting", Detail: detail, Tone: "warn"},
+			{Label: "HTTP UI", Value: "online " + a.httpListenAddr(), Detail: "界面已上线，内容索引正在后台补齐。", Tone: "good"},
+			{Label: "Index warmup", Value: "running", Detail: "首次索引构建不再阻塞首个页面返回。", Tone: "warn"},
+		},
+		Dashboard: []NodeStatusCard{
+			{Label: "Node mode", Value: "starting", Detail: detail, Tone: "warn"},
+			{Label: "HTTP UI", Value: "online " + a.httpListenAddr(), Detail: "界面已上线。", Tone: "good"},
+			{Label: "Index warmup", Value: "running", Detail: "内容会在预热完成后自动出现。", Tone: "warn"},
+		},
+	}
+}
+
 func (a *App) buildNodeStatus(index Index) NodeStatus {
 	storeState := "ready"
 	storeTone := "good"

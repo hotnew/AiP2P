@@ -29,6 +29,13 @@ func ajaxFragmentRequest(r *http.Request) bool {
 	return strings.TrimSpace(r.Header.Get("X-HaoNews-Ajax")) == "1"
 }
 
+func forceColdStartForTests(r *http.Request) bool {
+	if !strings.HasSuffix(filepath.Base(os.Args[0]), ".test") {
+		return false
+	}
+	return strings.TrimSpace(r.Header.Get("X-HaoNews-Debug-ColdStart")) == "1"
+}
+
 func renderTemplateBytes(app *newsplugin.App, templateName string, data any) ([]byte, error) {
 	var buf bytes.Buffer
 	if err := app.Templates().ExecuteTemplate(&buf, templateName, data); err != nil {
@@ -117,6 +124,14 @@ func homePageTitle(app *newsplugin.App) string {
 	return "好牛Ai 信息流"
 }
 
+func coldStartMessage(app *newsplugin.App) string {
+	age := app.ColdStartAge().Truncate(time.Second)
+	if age <= 0 {
+		return "节点刚完成重启，正在后台预热索引。页面会自动刷新。"
+	}
+	return "节点重启后已运行 " + age.String() + "，正在后台预热索引。页面会自动刷新。"
+}
+
 func newHandler(app *newsplugin.App, staticFS fs.FS) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -186,7 +201,36 @@ func handleHome(app *newsplugin.App, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	opts := readFeedOptions(r)
+	agentView := isAgentViewer(r)
 	showNetworkWarn := shouldShowNetworkWarning(r)
+	if app.ColdStartPending() || forceColdStartForTests(r) {
+		rules, err := app.SubscriptionRules()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		data := newsplugin.HomePageData{
+			Project:         app.ProjectName(),
+			Version:         app.VersionString(),
+			StartupPending:  true,
+			StartupMessage:  coldStartMessage(app),
+			Now:             time.Now(),
+			ListenAddr:      app.HTTPListenAddr(),
+			AgentView:       agentView,
+			ShowNetworkWarn: showNetworkWarn,
+			Options:         opts,
+			PageNav:         app.PageNav("/"),
+			TabOptions:      newsplugin.BuildTabOptions(opts, "/"),
+			WindowOptions:   newsplugin.BuildWindowOptions(opts, "/"),
+			SortOptions:     newsplugin.BuildSortOptions(opts, "/"),
+			PageSizeOptions: newsplugin.BuildPageSizeOptions(opts, "/"),
+			ActiveFilters:   newsplugin.BuildActiveFilters(opts, "/"),
+			Subscriptions:   rules,
+			NodeStatus:      app.ColdStartNodeStatus(),
+		}
+		renderPageOrFragment(app, w, r, "home.html", "home.feedRoot", homePageTitle(app), data)
+		return
+	}
 	if showNetworkWarn {
 		index, err := app.Index()
 		if err != nil {
@@ -243,7 +287,6 @@ func handleHome(app *newsplugin.App, w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	agentView := isAgentViewer(r)
 	cacheKey := htmlResponseCacheKey("/", opts, ajaxFragmentRequest(r), "agent="+strconv.FormatBool(agentView))
 	if err := renderCachedPageOrFragment(app, w, r, cacheKey, indexSig, "home.html", "home.feedRoot", homePageTitle(app), func(fragment bool) (any, error) {
 		index, err := app.Index()
@@ -910,6 +953,24 @@ func handleTopics(app *newsplugin.App, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	opts := readFeedOptions(r)
+	if app.ColdStartPending() || forceColdStartForTests(r) {
+		data := newsplugin.DirectoryPageData{
+			Project:        app.ProjectName(),
+			Version:        app.VersionString(),
+			StartupPending: true,
+			StartupMessage: coldStartMessage(app),
+			Kind:           "Topics",
+			Path:           "/topics",
+			APIPath:        "/api/topics",
+			Now:            time.Now(),
+			Options:        opts,
+			PageNav:        app.PageNav("/topics"),
+			TabOptions:     newsplugin.BuildTabOptions(opts, "/topics"),
+			NodeStatus:     app.ColdStartNodeStatus(),
+		}
+		renderPageOrFragment(app, w, r, "directory.html", "directory.feedRoot", "好牛Ai Topics", data)
+		return
+	}
 	indexSig, err := app.IndexSignature()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -967,6 +1028,32 @@ func handleTopic(app *newsplugin.App, w http.ResponseWriter, r *http.Request) {
 	}
 	opts := readFeedOptions(r)
 	opts.Topic = name
+	if app.ColdStartPending() || forceColdStartForTests(r) {
+		data := newsplugin.CollectionPageData{
+			Project:        app.ProjectName(),
+			Version:        app.VersionString(),
+			StartupPending: true,
+			StartupMessage: coldStartMessage(app),
+			Kind:           "Topic",
+			Name:           name,
+			Path:           newsplugin.TopicPath(name),
+			RequestURI:     r.URL.RequestURI(),
+			DirectoryURL:   "/topics",
+			APIPath:        "/api" + newsplugin.TopicPath(name),
+			Now:            time.Now(),
+			Options:        opts,
+			PageNav:        app.PageNav("/topics"),
+			TabOptions:     newsplugin.BuildTabOptions(opts, newsplugin.TopicPath(name), "topic"),
+			SortOptions:    newsplugin.BuildSortOptions(opts, newsplugin.TopicPath(name), "topic"),
+			WindowOptions:  newsplugin.BuildWindowOptions(opts, newsplugin.TopicPath(name), "topic"),
+			PageSizeOptions: newsplugin.BuildPageSizeOptions(opts, newsplugin.TopicPath(name), "topic"),
+			SideLabel:      "Sources covering this topic",
+			ActiveFilters:  newsplugin.BuildActiveFilters(opts, newsplugin.TopicPath(name), "topic"),
+			NodeStatus:     app.ColdStartNodeStatus(),
+		}
+		renderPageOrFragment(app, w, r, "collection.html", "collection.feedRoot", "好牛Ai Topic: "+name, data)
+		return
+	}
 	indexSig, err := app.IndexSignature()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -1109,6 +1196,23 @@ func handleAPIFeed(app *newsplugin.App, w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	opts := readFeedOptions(r)
+	if app.ColdStartPending() || forceColdStartForTests(r) {
+		newsplugin.WriteJSON(w, http.StatusOK, map[string]any{
+			"project":  app.ProjectID(),
+			"scope":    "feed",
+			"starting": true,
+			"message":  coldStartMessage(app),
+			"options":  newsplugin.APIOptions(opts),
+			"summary":  []any{},
+			"posts":    []any{},
+			"facets": map[string]any{
+				"channels": []any{},
+				"topics":   []any{},
+				"sources":  []any{},
+			},
+		})
+		return
+	}
 	indexSig, err := app.IndexSignature()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -1374,6 +1478,18 @@ func handleAPITopics(app *newsplugin.App, w http.ResponseWriter, r *http.Request
 		return
 	}
 	opts := readFeedOptions(r)
+	if app.ColdStartPending() || forceColdStartForTests(r) {
+		newsplugin.WriteJSON(w, http.StatusOK, map[string]any{
+			"project":  app.ProjectID(),
+			"scope":    "topics",
+			"starting": true,
+			"message":  coldStartMessage(app),
+			"options":  newsplugin.APIOptions(opts),
+			"summary":  []any{},
+			"items":    []any{},
+		})
+		return
+	}
 	indexSig, err := app.IndexSignature()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -1434,6 +1550,23 @@ func handleAPITopic(app *newsplugin.App, w http.ResponseWriter, r *http.Request)
 	}
 	opts := readFeedOptions(r)
 	opts.Topic = name
+	if app.ColdStartPending() || forceColdStartForTests(r) {
+		newsplugin.WriteJSON(w, http.StatusOK, map[string]any{
+			"project":  app.ProjectID(),
+			"scope":    "topic",
+			"name":     name,
+			"starting": true,
+			"message":  coldStartMessage(app),
+			"options":  newsplugin.APIOptions(opts),
+			"summary":  []any{},
+			"posts":    []any{},
+			"facets": map[string]any{
+				"channels": []any{},
+				"sources":  []any{},
+			},
+		})
+		return
+	}
 	indexSig, err := app.IndexSignature()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

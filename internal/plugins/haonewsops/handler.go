@@ -4,6 +4,8 @@ import (
 	"io/fs"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -56,6 +58,13 @@ func newHandler(app *newsplugin.App, staticFS fs.FS) http.Handler {
 	})
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
 	return mux
+}
+
+func forceColdStartForTests(r *http.Request) bool {
+	if !strings.HasSuffix(filepath.Base(os.Args[0]), ".test") {
+		return false
+	}
+	return strings.TrimSpace(r.Header.Get("X-HaoNews-Debug-ColdStart")) == "1"
 }
 
 func handleNetwork(app *newsplugin.App, w http.ResponseWriter, r *http.Request) {
@@ -474,12 +483,28 @@ func handleAPINetworkBootstrap(app *newsplugin.App, w http.ResponseWriter, r *ht
 	lanPeerHealth, _, _ := app.LANPeerHealth()
 	explainDetail := buildPrimaryAdvertiseExplainDetail(host, advertiseHost, lanPeerHealth, advertiseHostHealth, syncStatus, netCfg)
 	explain := buildPrimaryAdvertiseExplanation(explainDetail)
+	age := app.ColdStartAge().Truncate(time.Second)
+	if age < 0 {
+		age = 0
+	}
+	cold := forceColdStartForTests(r)
+	readiness := &newsplugin.ReadinessStatus{
+		Stage:        "ready",
+		HTTPReady:    true,
+		IndexReady:   !cold,
+		ColdStarting: cold,
+		AgeSeconds:   int64(age / time.Second),
+	}
+	if cold {
+		readiness.Stage = "warming_index"
+	}
 	newsplugin.WriteJSON(w, http.StatusOK, newsplugin.NetworkBootstrapResponse{
 		Project:       app.ProjectName(),
 		Version:       app.VersionString(),
 		NetworkID:     syncStatus.NetworkID,
 		NetworkMode:   strings.TrimSpace(netCfg.NetworkMode),
 		PrimaryHost:   strings.TrimSpace(advertiseHost),
+		Readiness:     readiness,
 		PeerID:        syncStatus.LibP2P.PeerID,
 		ListenAddrs:   append([]string(nil), syncStatus.LibP2P.ListenAddrs...),
 		DialAddrs:     dialAddrs,

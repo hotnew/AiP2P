@@ -12,6 +12,7 @@ import (
 )
 
 var indexCacheProbeInterval = 2 * time.Second
+var coldStartGraceWindow = 45 * time.Second
 
 func (a *App) buildIndex() (Index, error) {
 	index, err := a.loadIndex(a.storeRoot, a.project)
@@ -176,4 +177,26 @@ func (a *App) invalidateIndexCache() {
 	a.nodeStatusMu.Lock()
 	a.nodeStatusCache = cachedNodeStatusState{}
 	a.nodeStatusMu.Unlock()
+}
+
+func (a *App) coldStartAge() time.Duration {
+	if a == nil || a.startedAt.IsZero() {
+		return 0
+	}
+	return time.Since(a.startedAt)
+}
+
+func (a *App) coldStartPending() bool {
+	if a == nil {
+		return false
+	}
+	if strings.HasSuffix(filepath.Base(os.Args[0]), ".test") {
+		return false
+	}
+	if a.coldStartAge() > coldStartGraceWindow {
+		return false
+	}
+	a.indexMu.Lock()
+	defer a.indexMu.Unlock()
+	return !a.indexCache.ready
 }

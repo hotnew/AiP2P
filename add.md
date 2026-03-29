@@ -1,6 +1,6 @@
 # Hao.News 更新记录
 
-更新时间：2026-03-27 16:45 CST
+更新时间：2026-03-28 23:45 CST
 
 这份文件只记录当前 `hao.news` 仓库仍然有效的近期架构调整、同步修复和部署结果。
 
@@ -121,6 +121,55 @@
 
 - `shared -> public` 历史正文链已经打通
 - `ai.jie.news` 会继续慢慢追平 `.75` 的历史文章
+
+## 2026-03-28 23:45 CST - 冷启动 readiness 收尾
+
+目标：
+
+- 收掉 `launchctl kickstart` 后首页和 API 的假挂空窗
+- 让 restart 后先快速返回轻量内容，再在后台补齐完整索引
+- 给 `/api/network/bootstrap` 增加可观察的 readiness 状态
+
+已完成：
+
+- `hao-news-content` 不再在 `Build()` 同步做：
+  - `app.Index()`
+  - `app.NodeStatus(index)`
+- 首页、`/topics`、`/topics/<topic>` 冷启动时先返回轻量 shell
+- `/api/feed`、`/api/topics`、`/api/topics/<topic>` 冷启动时先返回：
+  - `starting=true`
+  - 空列表
+- `haonewslive` 的 `AnnouncementWatcher` 改成后台启动
+- `/api/network/bootstrap` 新增：
+  - `readiness.stage`
+  - `http_ready`
+  - `index_ready`
+  - `cold_starting`
+  - `age_seconds`
+- 补了冷启动首页壳、feed API、bootstrap readiness 的回归测试
+
+实测结果：
+
+- 第一轮：
+  - `port_open ≈ 1.08s`
+  - `home_starting ≈ 1.08s`
+  - `home_full ≈ 2.54s`
+  - `api_starting ≈ 1.08s`
+  - `api_full ≈ 2.54s`
+- 收口后最新 `.75` 受控重启：
+  - `port_open ≈ 0.23s`
+  - `home_starting ≈ 0.23s`
+  - `home_full ≈ 1.28s`
+  - `api_starting ≈ 0.23s`
+  - `api_full ≈ 1.28s`
+  - `bootstrap_ready ≈ 0.23s`
+
+结果：
+
+- restart 后不再有几十秒“像挂住一样”的假故障
+- 首个页面和 API 约 `0.2s` 可见
+- 完整首页和完整 feed 约 `1.3s` 恢复
+- `/api/network/bootstrap` 现在能直接读 readiness，而不再误报 `warming_index`
 
 ## 当前状态
 

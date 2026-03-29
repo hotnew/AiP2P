@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"net/http"
 	"strings"
+	"sync"
 
 	"hao.news/internal/apphost"
 	"hao.news/internal/haonews/live"
@@ -47,16 +48,21 @@ func (Plugin) Build(ctx context.Context, cfg apphost.Config, theme apphost.WebTh
 		logf = func(string, ...any) {}
 	}
 	watchCtx, cancelWatch := context.WithCancel(ctx)
-	watcher, err := live.StartAnnouncementWatcher(watchCtx, cfg.StoreRoot, cfg.NetPath)
-	if err != nil {
-		logf("haonews live: announcement watcher disabled: %v", err)
-	}
+	var watcherMu sync.Mutex
+	var watcher *live.AnnouncementWatcher
+	go func() {
+		startedWatcher, startErr := live.StartAnnouncementWatcher(watchCtx, cfg.StoreRoot, cfg.NetPath)
+		if startErr != nil {
+			logf("haonews live: announcement watcher disabled: %v", startErr)
+			return
+		}
+		watcherMu.Lock()
+		watcher = startedWatcher
+		watcherMu.Unlock()
+	}()
 	staticFS, err := theme.StaticFS()
 	if err != nil {
 		cancelWatch()
-		if watcher != nil {
-			_ = watcher.Close()
-		}
 		return nil, err
 	}
 	return &apphost.Site{
@@ -65,8 +71,12 @@ func (Plugin) Build(ctx context.Context, cfg apphost.Config, theme apphost.WebTh
 		Handler:  newHandler(app, store, staticFS),
 		Close: func(context.Context) error {
 			cancelWatch()
-			if watcher != nil {
-				return watcher.Close()
+			watcherMu.Lock()
+			startedWatcher := watcher
+			watcher = nil
+			watcherMu.Unlock()
+			if startedWatcher != nil {
+				return startedWatcher.Close()
 			}
 			return nil
 		},

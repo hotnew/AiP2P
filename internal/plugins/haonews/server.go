@@ -21,6 +21,7 @@ type App struct {
 	storeRoot       string
 	project         string
 	version         string
+	startedAt       time.Time
 	archive         string
 	rulesPath       string
 	writerPath      string
@@ -159,6 +160,8 @@ type NodeStatus struct {
 type HomePageData struct {
 	Project                   string
 	Version                   string
+	StartupPending            bool
+	StartupMessage            string
 	Posts                     []Post
 	ModerationReviewerOptions []string
 	Now                       time.Time
@@ -184,6 +187,8 @@ type HomePageData struct {
 type CollectionPageData struct {
 	Project                   string
 	Version                   string
+	StartupPending            bool
+	StartupMessage            string
 	Kind                      string
 	Name                      string
 	Path                      string
@@ -221,6 +226,8 @@ type PostCardData struct {
 type DirectoryPageData struct {
 	Project      string
 	Version      string
+	StartupPending bool
+	StartupMessage string
 	Kind         string
 	Path         string
 	APIPath      string
@@ -406,11 +413,20 @@ type NetworkBootstrapResponse struct {
 	NetworkID     string                         `json:"network_id"`
 	NetworkMode   string                         `json:"network_mode,omitempty"`
 	PrimaryHost   string                         `json:"primary_host,omitempty"`
+	Readiness     *ReadinessStatus               `json:"readiness,omitempty"`
 	PeerID        string                         `json:"peer_id"`
 	ListenAddrs   []string                       `json:"listen_addrs"`
 	DialAddrs     []string                       `json:"dial_addrs"`
 	Explain       []string                       `json:"explain,omitempty"`
 	ExplainDetail *NetworkBootstrapExplainDetail `json:"explain_detail,omitempty"`
+}
+
+type ReadinessStatus struct {
+	Stage        string `json:"stage,omitempty"`
+	HTTPReady    bool   `json:"http_ready"`
+	IndexReady   bool   `json:"index_ready"`
+	ColdStarting bool   `json:"cold_starting"`
+	AgeSeconds   int64  `json:"age_seconds,omitempty"`
 }
 
 type NetworkBootstrapExplainDetail struct {
@@ -509,6 +525,7 @@ func newApp(storeRoot, project, version, archiveRoot, rulesPath, writerPath, net
 		storeRoot:  storeRoot,
 		project:    project,
 		version:    strings.TrimSpace(version),
+		startedAt:  time.Now(),
 		archive:    archiveRoot,
 		rulesPath:  rulesPath,
 		writerPath: writerPath,

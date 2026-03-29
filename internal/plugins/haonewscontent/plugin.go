@@ -38,9 +38,16 @@ func (Plugin) Build(ctx context.Context, cfg apphost.Config, theme apphost.WebTh
 		return nil, err
 	}
 	if !strings.HasSuffix(filepath.Base(os.Args[0]), ".test") {
-		if index, err := app.Index(); err == nil {
-			_ = app.NodeStatus(index)
-		}
+		go func() {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+			if index, err := app.Index(); err == nil {
+				_ = app.NodeStatus(index)
+			}
+		}()
 	}
 	stopSync, err := newsplugin.StartManagedSyncIfNeeded(ctx, cfg, options)
 	if err != nil {

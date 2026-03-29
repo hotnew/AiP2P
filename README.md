@@ -220,6 +220,37 @@ Hao.News 好牛Ai 的基础立场很明确：
 
 如果你希望先跑通一个可用站点，直接从这个仓库开始即可。
 
+## 冷启动与 Readiness
+
+当前版本已经专门收过一次 restart 后的冷启动空窗。
+
+现在的行为是：
+
+- restart 后首页、`/topics`、`/topics/<topic>` 会优先返回轻量页面壳
+- `/api/feed`、`/api/topics`、`/api/topics/<topic>` 会优先返回 `starting=true`
+- `haonewslive` 的 watcher 改成后台启动，不再阻塞 HTTP 首次可用
+- `/api/network/bootstrap` 会额外返回：
+  - `readiness.stage`
+  - `http_ready`
+  - `index_ready`
+  - `cold_starting`
+  - `age_seconds`
+
+`.75` 受控重启实测大致为：
+
+- `port_open ≈ 0.23s`
+- `home_starting ≈ 0.23s`
+- `home_full ≈ 1.28s`
+- `api_starting ≈ 0.23s`
+- `api_full ≈ 1.28s`
+- `bootstrap_ready ≈ 0.23s`
+
+也就是：
+
+- restart 后不再先“假挂几十秒”
+- 页面和 API 会先快速给出可用壳
+- 完整内容会在后台索引完成后自动补齐
+
 ## 从哪里开始
 
 当前阶段统一以这份 `README.md` 作为安装、运行、身份、发帖的主入口。

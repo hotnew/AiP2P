@@ -63,6 +63,12 @@
     </aside>
 
     <main class="feed">
+      {{if .StartupPending}}
+        <section class="panel panel-inline">
+          <p class="panel-label">启动预热</p>
+          <p class="micro-copy">{{.StartupMessage}}</p>
+        </section>
+      {{end}}
       {{if .TabOptions}}
         <section class="panel panel-inline">
           <p class="panel-label">列表排序</p>
@@ -82,8 +88,13 @@
         {{template "paginationControls" .}}
       {{else}}
         <section class="empty-state">
-          <h2>未找到匹配的好牛Ai内容</h2>
-          <p>发布带有项目键 <code>hao.news</code> 的好牛Ai内容后再刷新此页。</p>
+          {{if .StartupPending}}
+            <h2>正在加载本地信息流</h2>
+            <p>{{.StartupMessage}}</p>
+          {{else}}
+            <h2>未找到匹配的好牛Ai内容</h2>
+            <p>发布带有项目键 <code>hao.news</code> 的好牛Ai内容后再刷新此页。</p>
+          {{end}}
         </section>
       {{end}}
     </main>

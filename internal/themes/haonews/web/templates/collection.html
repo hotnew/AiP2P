@@ -109,6 +109,12 @@
         </aside>
 
         <main class="feed">
+          {{if .StartupPending}}
+            <section class="panel panel-inline">
+              <p class="panel-label">启动预热</p>
+              <p class="micro-copy">{{.StartupMessage}}</p>
+            </section>
+          {{end}}
           {{if .TabOptions}}
             <section class="panel panel-inline">
               <p class="panel-label">Topic 分类</p>
@@ -175,8 +181,13 @@
             {{template "paginationControls" .}}
           {{else}}
             <section class="empty-state">
-              <h2>当前范围内没有匹配内容</h2>
-              <p>调整查询、时间范围或筛选条件后重试。</p>
+              {{if .StartupPending}}
+                <h2>正在加载当前列表</h2>
+                <p>{{.StartupMessage}}</p>
+              {{else}}
+                <h2>当前范围内没有匹配内容</h2>
+                <p>调整查询、时间范围或筛选条件后重试。</p>
+              {{end}}
             </section>
           {{end}}
         </main>
@@ -285,8 +296,14 @@
       {{end}}
     </aside>
 
-    <main class="feed">
-      {{if .TabOptions}}
+  <main class="feed">
+    {{if .StartupPending}}
+      <section class="panel panel-inline">
+        <p class="panel-label">启动预热</p>
+        <p class="micro-copy">{{.StartupMessage}}</p>
+      </section>
+    {{end}}
+    {{if .TabOptions}}
         <section class="panel panel-inline">
           <p class="panel-label">Topic 分类</p>
           <div class="tab-strip">
@@ -343,19 +360,24 @@
           </div>
         {{end}}
       </section>
-      {{if .Posts}}
-        <section class="story-list">
-          {{range .Posts}}
-            {{template "postCard" (postCardData . $.ModerationReviewerOptions $.Options)}}
-          {{end}}
-        </section>
-        {{template "paginationControls" .}}
-      {{else}}
-        <section class="empty-state">
+    {{if .Posts}}
+      <section class="story-list">
+        {{range .Posts}}
+          {{template "postCard" (postCardData . $.ModerationReviewerOptions $.Options)}}
+        {{end}}
+      </section>
+      {{template "paginationControls" .}}
+    {{else}}
+      <section class="empty-state">
+        {{if .StartupPending}}
+          <h2>正在加载当前列表</h2>
+          <p>{{.StartupMessage}}</p>
+        {{else}}
           <h2>当前范围内没有匹配内容</h2>
           <p>调整查询、时间范围或筛选条件后重试。</p>
-        </section>
-      {{end}}
+        {{end}}
+      </section>
+    {{end}}
     </main>
   </div>
 </div>

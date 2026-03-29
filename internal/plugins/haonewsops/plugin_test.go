@@ -267,6 +267,101 @@ lan_peer=192.168.102.75
 	}
 }
 
+func TestPluginBuildServesBootstrapReadinessDuringColdStart(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	syncDir := filepath.Join(root, "store", "sync")
+	if err := os.MkdirAll(syncDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(syncDir) error = %v", err)
+	}
+	status := newsplugin.SyncRuntimeStatus{
+		UpdatedAt: time.Now().UTC(),
+		NetworkID: "test-network",
+		LibP2P: newsplugin.SyncLibP2PStatus{
+			Enabled:     true,
+			PeerID:      "QmBootstrapPeer",
+			ListenAddrs: []string{"/ip4/0.0.0.0/tcp/50584"},
+		},
+	}
+	data, err := json.Marshal(status)
+	if err != nil {
+		t.Fatalf("json.Marshal(status) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(syncDir, "status.json"), data, 0o644); err != nil {
+		t.Fatalf("WriteFile(status.json) error = %v", err)
+	}
+
+	site := buildOpsSiteAtRoot(t, root)
+	req := httptest.NewRequest(http.MethodGet, "/api/network/bootstrap", nil)
+	req.Header.Set("X-HaoNews-Debug-ColdStart", "1")
+	rec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var payload newsplugin.NetworkBootstrapResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if payload.Readiness == nil {
+		t.Fatal("payload.Readiness = nil, want readiness status")
+	}
+	if payload.Readiness.Stage != "warming_index" {
+		t.Fatalf("payload.Readiness = %#v, want warming_index", payload.Readiness)
+	}
+	if !payload.Readiness.HTTPReady || payload.Readiness.IndexReady || !payload.Readiness.ColdStarting {
+		t.Fatalf("payload.Readiness = %#v, want http_ready=true index_ready=false cold_starting=true", payload.Readiness)
+	}
+}
+
+func TestPluginBuildServesBootstrapReadinessReadyByDefault(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	syncDir := filepath.Join(root, "store", "sync")
+	if err := os.MkdirAll(syncDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(syncDir) error = %v", err)
+	}
+	status := newsplugin.SyncRuntimeStatus{
+		UpdatedAt: time.Now().UTC(),
+		NetworkID: "test-network",
+		LibP2P: newsplugin.SyncLibP2PStatus{
+			Enabled:     true,
+			PeerID:      "QmBootstrapPeer",
+			ListenAddrs: []string{"/ip4/0.0.0.0/tcp/50584"},
+		},
+	}
+	data, err := json.Marshal(status)
+	if err != nil {
+		t.Fatalf("json.Marshal(status) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(syncDir, "status.json"), data, 0o644); err != nil {
+		t.Fatalf("WriteFile(status.json) error = %v", err)
+	}
+
+	site := buildOpsSiteAtRoot(t, root)
+	req := httptest.NewRequest(http.MethodGet, "/api/network/bootstrap", nil)
+	rec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var payload newsplugin.NetworkBootstrapResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if payload.Readiness == nil {
+		t.Fatal("payload.Readiness = nil, want readiness status")
+	}
+	if payload.Readiness.Stage != "ready" {
+		t.Fatalf("payload.Readiness = %#v, want ready", payload.Readiness)
+	}
+	if !payload.Readiness.HTTPReady || !payload.Readiness.IndexReady || payload.Readiness.ColdStarting {
+		t.Fatalf("payload.Readiness = %#v, want http_ready=true index_ready=true cold_starting=false", payload.Readiness)
+	}
+}
+
 func TestPluginBuildServesBootstrapExplainAPIPublicModeUsesPublicPeerDialAddrs(t *testing.T) {
 	t.Parallel()
 
