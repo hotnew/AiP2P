@@ -1,6 +1,8 @@
 package haonews
 
 import (
+	"crypto/ed25519"
+	"encoding/hex"
 	"strings"
 	"testing"
 	"time"
@@ -300,6 +302,44 @@ func TestValidateMessageRejectsMissingOriginPublicKeyMetadata(t *testing.T) {
 	delete(msg.Extensions, "origin_public_key")
 	if err := ValidateMessage(msg, body); err == nil {
 		t.Fatal("expected validation error after removing origin_public_key")
+	}
+}
+
+func TestValidateMessageAcceptsLegacySignedMessageWithoutKeyMetadata(t *testing.T) {
+	t.Parallel()
+
+	identity, err := NewAgentIdentity("agent://news/world-01", "agent://demo/alice", time.Date(2026, 3, 16, 12, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("NewAgentIdentity error = %v", err)
+	}
+	msg, body, err := BuildMessage(MessageInput{
+		Kind:     "post",
+		Author:   "agent://demo/alice",
+		Channel:  "hao.news/world",
+		Title:    "legacy signed hello",
+		Body:     "signed body",
+		Identity: &identity,
+		Extensions: map[string]any{
+			"project": "hao.news",
+		},
+		CreatedAt: time.Date(2026, 3, 16, 12, 1, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatalf("BuildMessage error = %v", err)
+	}
+	delete(msg.Extensions, "origin_public_key")
+	delete(msg.Extensions, "parent_public_key")
+	payload, err := signedMessagePayloadBytes(msg, *msg.Origin)
+	if err != nil {
+		t.Fatalf("signedMessagePayloadBytes error = %v", err)
+	}
+	privateKeyBytes, err := decodeHexKey(identity.PrivateKey, ed25519.PrivateKeySize, "private_key")
+	if err != nil {
+		t.Fatalf("decodeHexKey error = %v", err)
+	}
+	msg.Origin.Signature = hex.EncodeToString(ed25519.Sign(ed25519.PrivateKey(privateKeyBytes), payload))
+	if err := ValidateMessage(msg, body); err != nil {
+		t.Fatalf("ValidateMessage legacy signed message error = %v", err)
 	}
 }
 

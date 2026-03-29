@@ -865,11 +865,11 @@ func TestEnqueueHistoryFromLANPeersUsesConfiguredPublicPeers(t *testing.T) {
 func TestSyncPeerSourcesIncludesLANPublicAndRelayPeers(t *testing.T) {
 	t.Parallel()
 
-	got := syncPeerSources(NetworkBootstrapConfig{
+	got := syncPeerSourcesWithLocalHosts(NetworkBootstrapConfig{
 		LANPeers:    []string{"192.168.102.75"},
 		PublicPeers: []string{"https://ai.jie.news"},
 		RelayPeers:  []string{"relay.jie.news", "192.168.102.75"},
-	})
+	}, nil)
 
 	if len(got) != 3 {
 		t.Fatalf("len(got) = %d, want 3", len(got))
@@ -888,17 +888,36 @@ func TestSyncPeerSourcesIncludesLANPublicAndRelayPeers(t *testing.T) {
 func TestSyncPeerSourcesExcludesSelfPublicPeersInPublicMode(t *testing.T) {
 	t.Parallel()
 
-	got := syncPeerSources(NetworkBootstrapConfig{
+	got := syncPeerSourcesWithLocalHosts(NetworkBootstrapConfig{
 		NetworkMode: networkModePublic,
 		PublicPeers: []string{"https://ai.jie.news"},
 		RelayPeers:  []string{"relay.jie.news"},
-	})
+	}, nil)
 
 	if len(got) != 1 {
 		t.Fatalf("len(got) = %d, want 1", len(got))
 	}
 	if got[0] != "relay.jie.news" {
 		t.Fatalf("got[0] = %q, want relay peer only", got[0])
+	}
+}
+
+func TestSyncPeerSourcesExcludesLocalLANPeerHosts(t *testing.T) {
+	t.Parallel()
+
+	got := syncPeerSourcesWithLocalHosts(NetworkBootstrapConfig{
+		NetworkMode: networkModeLAN,
+		LANPeers:    []string{"192.168.102.74", "192.168.102.75", "192.168.102.76"},
+	}, []string{"192.168.102.76"})
+
+	if len(got) != 2 {
+		t.Fatalf("len(got) = %d, want 2", len(got))
+	}
+	if got[0] != "192.168.102.74" {
+		t.Fatalf("got[0] = %q, want 192.168.102.74", got[0])
+	}
+	if got[1] != "192.168.102.75" {
+		t.Fatalf("got[1] = %q, want 192.168.102.75", got[1])
 	}
 }
 

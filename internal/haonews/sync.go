@@ -1640,8 +1640,20 @@ func sanitizeQueuedSyncRef(raw string, peerSources []string) (string, bool, erro
 }
 
 func syncPeerSources(cfg NetworkBootstrapConfig) []string {
+	return syncPeerSourcesWithLocalHosts(cfg, localPeerHosts(cfg.LANPeers))
+}
+
+func syncPeerSourcesWithLocalHosts(cfg NetworkBootstrapConfig, localHosts []string) []string {
 	seen := make(map[string]struct{})
 	out := make([]string, 0, len(cfg.LANPeers)+len(cfg.PublicPeers)+len(cfg.RelayPeers))
+	localSeen := make(map[string]struct{}, len(localHosts))
+	for _, value := range localHosts {
+		host := normalizeTorrentHTTPHost(value)
+		if host == "" {
+			continue
+		}
+		localSeen[host] = struct{}{}
+	}
 	type source struct {
 		value string
 		kind  string
@@ -1662,6 +1674,9 @@ func syncPeerSources(cfg NetworkBootstrapConfig) []string {
 		}
 		host := normalizeTorrentHTTPHost(item.value)
 		if host == "" {
+			continue
+		}
+		if _, ok := localSeen[host]; ok {
 			continue
 		}
 		if _, ok := seen[host]; ok {

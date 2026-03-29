@@ -468,13 +468,10 @@ func applySignedKeyMetadata(extensions map[string]any, originPublicKey, parentPu
 }
 
 func validateSignedKeyMetadata(msg Message, originPublicKey string) error {
-	metadataOrigin, ok := stringFromMap(msg.Extensions, "origin_public_key")
-	if !ok {
-		return errors.New("signed messages must include origin_public_key")
-	}
-	metadataParent, ok := stringFromMap(msg.Extensions, "parent_public_key")
-	if !ok {
-		return errors.New("signed messages must include parent_public_key")
+	metadataOrigin, hasOriginMetadata := stringFromMap(msg.Extensions, "origin_public_key")
+	metadataParent, hasParentMetadata := stringFromMap(msg.Extensions, "parent_public_key")
+	if !hasOriginMetadata || !hasParentMetadata {
+		return validateLegacySignedKeyMetadata(msg, originPublicKey, hasOriginMetadata, hasParentMetadata)
 	}
 	metadataOrigin = strings.ToLower(strings.TrimSpace(metadataOrigin))
 	metadataParent = strings.ToLower(strings.TrimSpace(metadataParent))
@@ -487,6 +484,27 @@ func validateSignedKeyMetadata(msg Message, originPublicKey string) error {
 	}
 	if _, err := decodeHexKey(metadataParent, ed25519.PublicKeySize, "parent_public_key"); err != nil {
 		return err
+	}
+	return nil
+}
+
+func validateLegacySignedKeyMetadata(msg Message, originPublicKey string, hasOriginMetadata, hasParentMetadata bool) error {
+	if hasOriginMetadata != hasParentMetadata {
+		if !hasOriginMetadata {
+			return errors.New("signed messages must include origin_public_key")
+		}
+		return errors.New("signed messages must include parent_public_key")
+	}
+	if hasOriginMetadata && hasParentMetadata {
+		return nil
+	}
+	if _, err := decodeHexKey(originPublicKey, ed25519.PublicKeySize, "origin.public_key"); err != nil {
+		return err
+	}
+	if parentPubKey, ok := stringFromMap(msg.Extensions, "hd.parent_pubkey"); ok {
+		if _, err := decodeHexKey(parentPubKey, ed25519.PublicKeySize, "hd.parent_pubkey"); err != nil {
+			return err
+		}
 	}
 	return nil
 }
