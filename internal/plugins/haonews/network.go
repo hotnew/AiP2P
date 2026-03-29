@@ -1,6 +1,7 @@
 package newsplugin
 
 import (
+	"fmt"
 	"encoding/hex"
 	"os"
 	"path/filepath"
@@ -12,6 +13,8 @@ const (
 	networkModePublic = "public"
 	networkModeShared = "shared"
 )
+
+const networkIDFileName = "network_id.inf"
 
 type NetworkBootstrapConfig struct {
 	Path             string
@@ -110,6 +113,13 @@ func LoadNetworkBootstrapConfig(path string) (NetworkBootstrapConfig, error) {
 	if cfg.NetworkMode == "" {
 		cfg.NetworkMode = networkModeLAN
 	}
+	fileNetworkID, err := loadNetworkIDFile(networkIDFilePath(path))
+	if err != nil {
+		return NetworkBootstrapConfig{}, err
+	}
+	if fileNetworkID != "" {
+		cfg.NetworkID = fileNetworkID
+	}
 	return cfg, nil
 }
 
@@ -147,4 +157,43 @@ func normalizeNetworkMode(value string) string {
 	default:
 		return ""
 	}
+}
+
+func networkIDFilePath(netPath string) string {
+	netPath = strings.TrimSpace(netPath)
+	if netPath == "" {
+		return ""
+	}
+	return filepath.Join(filepath.Dir(netPath), networkIDFileName)
+}
+
+func loadNetworkIDFile(path string) (string, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", err
+	}
+	for _, rawLine := range strings.Split(string(data), "\n") {
+		line := strings.TrimSpace(rawLine)
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, ";") || strings.HasPrefix(line, "//") {
+			continue
+		}
+		if key, value, ok := strings.Cut(line, "="); ok {
+			if strings.EqualFold(strings.TrimSpace(key), "network_id") {
+				line = strings.TrimSpace(value)
+			}
+		}
+		networkID := normalizeNetworkID(line)
+		if networkID != "" {
+			return networkID, nil
+		}
+		return "", fmt.Errorf("network_id could not be parsed from %s", filepath.Base(path))
+	}
+	return "", nil
 }

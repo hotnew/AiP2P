@@ -119,11 +119,11 @@ func (a *App) buildNodeStatus(index Index) NodeStatus {
 	}
 	networkIDValue := "not configured"
 	networkIDTone := "warn"
-	networkIDDetail := "Add a stable 256-bit network_id so same-name projects do not share the same Hao.News discovery space."
+	networkIDDetail := "Add a stable 256-bit network_id in network_id.inf so same-name projects do not share the same Hao.News discovery space."
 	if netErr != nil {
 		networkIDValue = "config error"
 		networkIDTone = "bad"
-		networkIDDetail = "network_id could not be parsed from hao_news_net.inf."
+		networkIDDetail = "network_id could not be parsed from network_id.inf."
 	} else if netCfg.NetworkID != "" {
 		networkIDValue = netCfg.NetworkID
 		networkIDTone = "good"
@@ -286,7 +286,7 @@ func buildLiveNodeStatus(index Index, storeState, storeTone string, torrentCount
 	}
 	networkIDValue := syncStatus.NetworkID
 	networkIDTone := "warn"
-	networkIDDetail := "No network_id is active; this node may still be using older shared discovery namespaces."
+	networkIDDetail := "No network_id is active; add network_id.inf so this node stays pinned to one shared discovery namespace."
 	if networkIDValue != "" {
 		networkIDTone = "good"
 		networkIDDetail = "Active 256-bit namespace used for pubsub topics, rendezvous discovery, and announcement filtering."

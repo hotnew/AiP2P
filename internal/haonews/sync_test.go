@@ -180,8 +180,7 @@ func TestLoadNetworkBootstrapConfig(t *testing.T) {
 
 	root := t.TempDir()
 	path := filepath.Join(root, "haonews_net.inf")
-	content := `network_id=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
-network_mode=shared
+	content := `network_mode=shared
 libp2p_transfer_max_size=123456
 lan_peer=192.168.102.74
 lan_peer=192.168.102.76
@@ -192,6 +191,9 @@ libp2p_bootstrap=/dnsaddr/bootstrap.libp2p.io/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVw
 `
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatalf("write net config: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, networkIDFileName), []byte("network_id=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n"), 0o644); err != nil {
+		t.Fatalf("write network_id.inf: %v", err)
 	}
 	cfg, err := LoadNetworkBootstrapConfig(path)
 	if err != nil {

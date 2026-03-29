@@ -13,7 +13,6 @@ func TestLoadNetworkBootstrapConfig(t *testing.T) {
 	path := filepath.Join(root, "hao_news_net.inf")
 content := `# default bootstrap nodes
 network_mode=public
-network_id=2c2d6cf7b255ba20d6ad01135654933851b02bd00c65c2a6a54b97ab56590475
 libp2p_listen=/ip4/0.0.0.0/tcp/4001
 libp2p_listen=/ip4/0.0.0.0/udp/4001/quic-v1
 lan_peer=192.168.102.74
@@ -27,6 +26,9 @@ libp2p_rendezvous=hao.news/global
 `
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatalf("write net config: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, networkIDFileName), []byte("network_id="+latestOrgNetworkID+"\n"), 0o644); err != nil {
+		t.Fatalf("write network id file: %v", err)
 	}
 
 	cfg, err := LoadNetworkBootstrapConfig(path)
@@ -62,6 +64,25 @@ libp2p_rendezvous=hao.news/global
 	}
 	if cfg.AllowsLANDiscovery() {
 		t.Fatal("public mode should not allow implicit LAN discovery")
+	}
+}
+
+func TestLoadNetworkBootstrapConfigReadsInlineNetworkIDAsFallback(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	path := filepath.Join(root, "hao_news_net.inf")
+	content := "network_mode=shared\nnetwork_id=" + latestOrgNetworkID + "\n"
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write net config: %v", err)
+	}
+
+	cfg, err := LoadNetworkBootstrapConfig(path)
+	if err != nil {
+		t.Fatalf("load network config: %v", err)
+	}
+	if cfg.NetworkID != latestOrgNetworkID {
+		t.Fatalf("network id = %q", cfg.NetworkID)
 	}
 }
 

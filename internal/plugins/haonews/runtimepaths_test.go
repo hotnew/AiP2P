@@ -11,13 +11,12 @@ import (
 
 func testDefaultLatestNetINF() (string, error) {
 	return fmt.Sprintf(`network_mode=lan
-network_id=%s
 libp2p_listen=/ip4/0.0.0.0/tcp/41001
 libp2p_listen=/ip4/0.0.0.0/udp/41001/quic-v1
 lan_peer=%s
 lan_peer=192.168.102.76
 lan_peer=192.168.102.75
-`, latestOrgNetworkID, defaultLANPeer), nil
+`, defaultLANPeer), nil
 }
 
 func TestDefaultRuntimePathsFromHome(t *testing.T) {
@@ -55,6 +54,9 @@ func TestDefaultRuntimePathsFromHome(t *testing.T) {
 	if paths.NetPath != "/tmp/example-home/.hao-news/hao_news_net.inf" {
 		t.Fatalf("net = %q", paths.NetPath)
 	}
+	if paths.NetworkIDPath != "/tmp/example-home/.hao-news/network_id.inf" {
+		t.Fatalf("network id path = %q", paths.NetworkIDPath)
+	}
 }
 
 func TestEnsureRuntimeLayoutCreatesDefaultConfigFiles(t *testing.T) {
@@ -68,6 +70,7 @@ func TestEnsureRuntimeLayoutCreatesDefaultConfigFiles(t *testing.T) {
 	rules := filepath.Join(root, "subscriptions.json")
 	writerPolicy := filepath.Join(root, "writer_policy.json")
 	netPath := filepath.Join(root, "hao_news_net.inf")
+	networkIDPath := filepath.Join(root, "network_id.inf")
 	if err := ensureRuntimeLayout(store, archive, rules, writerPolicy, netPath); err != nil {
 		t.Fatalf("ensureRuntimeLayout() error = %v", err)
 	}
@@ -83,6 +86,7 @@ func TestEnsureRuntimeLayoutCreatesDefaultConfigFiles(t *testing.T) {
 		filepath.Join(root, "WriterWhitelist.inf"),
 		filepath.Join(root, "WriterBlacklist.inf"),
 		netPath,
+		networkIDPath,
 	} {
 		if _, err := os.Stat(path); err != nil {
 			t.Fatalf("expected %s to exist: %v", path, err)
@@ -130,11 +134,18 @@ func TestEnsureRuntimeLayoutCreatesDefaultConfigFiles(t *testing.T) {
 	if !strings.Contains(netText, "\nlan_peer=192.168.102.76") || !strings.Contains(netText, "\nlan_peer=192.168.102.75") {
 		t.Fatalf("missing extra lan_peer entries in net config: %q", netText)
 	}
-	if !strings.Contains(netText, "network_id="+latestOrgNetworkID) {
-		t.Fatalf("missing hao.news network id in net config: %q", netText)
+	if strings.Contains(netText, "network_id=") {
+		t.Fatalf("network_id should live in network_id.inf, got net config: %q", netText)
 	}
 	if !strings.Contains(netText, "network_mode=lan\n") {
 		t.Fatalf("missing network_mode in net config: %q", netText)
+	}
+	idData, err := os.ReadFile(networkIDPath)
+	if err != nil {
+		t.Fatalf("ReadFile(networkIDPath) error = %v", err)
+	}
+	if !strings.Contains(string(idData), "network_id="+latestOrgNetworkID) {
+		t.Fatalf("missing hao.news network id in network_id.inf: %q", string(idData))
 	}
 }
 
@@ -149,12 +160,16 @@ func TestEnsureRuntimeLayoutPublicModeDoesNotAppendLANPeers(t *testing.T) {
 	rules := filepath.Join(root, "subscriptions.json")
 	writerPolicy := filepath.Join(root, "writer_policy.json")
 	netPath := filepath.Join(root, "hao_news_net.inf")
+	networkIDPath := filepath.Join(root, "network_id.inf")
 	if err := os.MkdirAll(filepath.Dir(netPath), 0o755); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
 	}
-	netText := "network_mode=public\nnetwork_id=" + latestOrgNetworkID + "\n"
+	netText := "network_mode=public\n"
 	if err := os.WriteFile(netPath, []byte(netText), 0o644); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
+	}
+	if err := os.WriteFile(networkIDPath, []byte("network_id="+latestOrgNetworkID+"\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(networkIDPath) error = %v", err)
 	}
 
 	if err := ensureRuntimeLayout(store, archive, rules, writerPolicy, netPath); err != nil {
@@ -280,6 +295,7 @@ func TestEnsureRuntimeLayoutAppendsLatestNetworkIDToExistingNetConfig(t *testing
 	rules := filepath.Join(root, "subscriptions.json")
 	writerPolicy := filepath.Join(root, "writer_policy.json")
 	netPath := filepath.Join(root, "hao_news_net.inf")
+	networkIDPath := filepath.Join(root, "network_id.inf")
 	if err := os.MkdirAll(filepath.Dir(netPath), 0o755); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
 	}
@@ -293,7 +309,51 @@ func TestEnsureRuntimeLayoutAppendsLatestNetworkIDToExistingNetConfig(t *testing
 	if err != nil {
 		t.Fatalf("ReadFile() error = %v", err)
 	}
-	if !strings.Contains(string(data), "network_id="+latestOrgNetworkID) {
-		t.Fatalf("expected network_id append, got %q", string(data))
+	if strings.Contains(string(data), "network_id=") {
+		t.Fatalf("network_id should no longer be appended to hao_news_net.inf: %q", string(data))
+	}
+	idData, err := os.ReadFile(networkIDPath)
+	if err != nil {
+		t.Fatalf("ReadFile(networkIDPath) error = %v", err)
+	}
+	if !strings.Contains(string(idData), "network_id="+latestOrgNetworkID) {
+		t.Fatalf("expected network_id.inf write, got %q", string(idData))
+	}
+}
+
+func TestEnsureRuntimeLayoutMigratesInlineNetworkIDToSeparateFile(t *testing.T) {
+	previous := buildDefaultLatestNetINF
+	buildDefaultLatestNetINF = testDefaultLatestNetINF
+	defer func() { buildDefaultLatestNetINF = previous }()
+
+	root := t.TempDir()
+	store := filepath.Join(root, "haonews", ".haonews")
+	archive := filepath.Join(root, "archive")
+	rules := filepath.Join(root, "subscriptions.json")
+	writerPolicy := filepath.Join(root, "writer_policy.json")
+	netPath := filepath.Join(root, "hao_news_net.inf")
+	networkIDPath := filepath.Join(root, "network_id.inf")
+	if err := os.MkdirAll(filepath.Dir(netPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(netPath, []byte("network_mode=shared\nnetwork_id="+latestOrgNetworkID+"\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	if err := ensureRuntimeLayout(store, archive, rules, writerPolicy, netPath); err != nil {
+		t.Fatalf("ensureRuntimeLayout() error = %v", err)
+	}
+	data, err := os.ReadFile(netPath)
+	if err != nil {
+		t.Fatalf("ReadFile(netPath) error = %v", err)
+	}
+	if strings.Contains(string(data), "network_id=") {
+		t.Fatalf("expected inline network_id to be stripped, got %q", string(data))
+	}
+	idData, err := os.ReadFile(networkIDPath)
+	if err != nil {
+		t.Fatalf("ReadFile(networkIDPath) error = %v", err)
+	}
+	if !strings.Contains(string(idData), "network_id="+latestOrgNetworkID) {
+		t.Fatalf("expected migrated network id, got %q", string(idData))
 	}
 }

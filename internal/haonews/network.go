@@ -11,6 +11,7 @@ import (
 
 const latestOrgNetworkID = "b2090347cee0ff1a577b1101d4adbd664c309932d3c2578971c11997fdd2164e"
 const defaultLANPeer = "192.168.102.74"
+const networkIDFileName = "network_id.inf"
 
 const (
 	networkModeLAN    = "lan"
@@ -28,7 +29,6 @@ func defaultNetworkBootstrapConfig(path string) (string, error) {
 #
 # Supported keys:
 #   network_mode=lan|public|shared
-#   network_id=<64 hex chars>
 #   libp2p_listen=/ip4/.../tcp/<port>
 #   lan_peer=<host-or-ip>
 #   public_peer=<host-or-domain>
@@ -38,8 +38,8 @@ func defaultNetworkBootstrapConfig(path string) (string, error) {
 #   libp2p_transfer_max_size=<bytes>
 #
 # Generated on first start. Reuse these ports on later restarts unless you intentionally change them.
+# Stable 256-bit network namespace now lives in %s beside this file.
 network_mode=lan
-network_id=%s
 libp2p_listen=/ip4/0.0.0.0/tcp/%d
 libp2p_listen=/ip4/0.0.0.0/udp/%d/quic-v1
 libp2p_transfer_max_size=%d
@@ -56,7 +56,7 @@ libp2p_bootstrap=/dnsaddr/bootstrap.libp2p.io/p2p/QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKN
 libp2p_bootstrap=/ip4/104.131.131.82/tcp/4001/p2p/QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtfsmvsqQLuvuJ
 libp2p_rendezvous=latest.org/global
 libp2p_rendezvous=latest.org/world
-`, path, latestOrgNetworkID, libp2pPort, libp2pPort, defaultLibP2PTransferMaxSize), nil
+`, path, networkIDFileName, libp2pPort, libp2pPort, defaultLibP2PTransferMaxSize), nil
 }
 
 type NetworkBootstrapConfig struct {
@@ -165,6 +165,13 @@ func LoadNetworkBootstrapConfig(path string) (NetworkBootstrapConfig, error) {
 	if cfg.NetworkMode == "" {
 		cfg.NetworkMode = networkModeLAN
 	}
+	fileNetworkID, err := loadNetworkIDFile(networkIDFilePath(path))
+	if err != nil {
+		return NetworkBootstrapConfig{}, err
+	}
+	if fileNetworkID != "" {
+		cfg.NetworkID = fileNetworkID
+	}
 	return cfg, nil
 }
 
@@ -248,24 +255,17 @@ func ensureNetworkID(path, networkID string) error {
 	if path == "" || networkID == "" {
 		return nil
 	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return err
-	}
-	cfg, err := LoadNetworkBootstrapConfig(path)
+	inlineNetworkID, err := loadInlineNetworkID(path)
 	if err != nil {
 		return err
 	}
-	if cfg.NetworkID != "" {
-		return nil
+	if inlineNetworkID != "" {
+		networkID = inlineNetworkID
 	}
-	body := strings.TrimRight(string(data), "\n")
-	body += "\n\n# Stable 256-bit Hao.News network namespace for latest.org.\n"
-	body += "network_id=" + networkID + "\n"
-	return os.WriteFile(path, []byte(body), 0o644)
+	if err := ensureNetworkIDFile(networkIDFilePath(path), networkID); err != nil {
+		return err
+	}
+	return stripInlineNetworkID(path)
 }
 
 func ensureLANPeer(path, lanPeer string) error {
@@ -299,4 +299,121 @@ func ensureLANPeer(path, lanPeer string) error {
 
 func ensureLANTorrentPeer(path, lanPeer string) error {
 	return nil
+}
+
+func networkIDFilePath(netPath string) string {
+	netPath = strings.TrimSpace(netPath)
+	if netPath == "" {
+		return ""
+	}
+	return filepath.Join(filepath.Dir(netPath), networkIDFileName)
+}
+
+func loadNetworkIDFile(path string) (string, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", err
+	}
+	for _, rawLine := range strings.Split(string(data), "\n") {
+		line := strings.TrimSpace(rawLine)
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, ";") || strings.HasPrefix(line, "//") {
+			continue
+		}
+		if key, value, ok := strings.Cut(line, "="); ok {
+			if strings.EqualFold(strings.TrimSpace(key), "network_id") {
+				line = strings.TrimSpace(value)
+			}
+		}
+		networkID := normalizeNetworkID(line)
+		if networkID != "" {
+			return networkID, nil
+		}
+		return "", fmt.Errorf("network_id could not be parsed from %s", filepath.Base(path))
+	}
+	return "", nil
+}
+
+func ensureNetworkIDFile(path, networkID string) error {
+	path = strings.TrimSpace(path)
+	networkID = normalizeNetworkID(networkID)
+	if path == "" || networkID == "" {
+		return nil
+	}
+	current, err := loadNetworkIDFile(path)
+	if err != nil {
+		return err
+	}
+	if current != "" {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	content := "# Stable 256-bit Hao.News network namespace.\nnetwork_id=" + networkID + "\n"
+	return os.WriteFile(path, []byte(content), 0o644)
+}
+
+func loadInlineNetworkID(path string) (string, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", err
+	}
+	for _, rawLine := range strings.Split(string(data), "\n") {
+		line := strings.TrimSpace(rawLine)
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, ";") || strings.HasPrefix(line, "//") {
+			continue
+		}
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		if strings.EqualFold(strings.TrimSpace(key), "network_id") {
+			return normalizeNetworkID(strings.TrimSpace(value)), nil
+		}
+	}
+	return "", nil
+}
+
+func stripInlineNetworkID(path string) error {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	lines := strings.Split(string(data), "\n")
+	filtered := make([]string, 0, len(lines))
+	changed := false
+	for _, rawLine := range lines {
+		line := strings.TrimSpace(rawLine)
+		if key, _, ok := strings.Cut(line, "="); ok && strings.EqualFold(strings.TrimSpace(key), "network_id") {
+			changed = true
+			continue
+		}
+		filtered = append(filtered, rawLine)
+	}
+	if !changed {
+		return nil
+	}
+	content := strings.TrimRight(strings.Join(filtered, "\n"), "\n") + "\n"
+	return os.WriteFile(path, []byte(content), 0o644)
 }

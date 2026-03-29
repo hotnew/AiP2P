@@ -33,7 +33,6 @@ func defaultLatestNetINF() (string, error) {
 #
 # Supported keys:
 #   network_mode=lan|public|shared
-#   network_id=<64 hex chars>
 #   libp2p_listen=/ip4/.../tcp/<port>
 #   lan_peer=<host-or-ip>
 #   public_peer=<host-or-domain>
@@ -42,8 +41,8 @@ func defaultLatestNetINF() (string, error) {
 #   libp2p_rendezvous=hao.news/<topic>
 #
 # Generated on first start. Reuse these ports on later restarts unless you intentionally change them.
+# Stable 256-bit network namespace now lives in %s beside this file.
 network_mode=lan
-network_id=%s
 libp2p_listen=/ip4/0.0.0.0/tcp/%d
 libp2p_listen=/ip4/0.0.0.0/udp/%d/quic-v1
 
@@ -65,7 +64,7 @@ libp2p_bootstrap=/dnsaddr/bootstrap.libp2p.io/p2p/QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKN
 libp2p_bootstrap=/ip4/104.131.131.82/tcp/4001/p2p/QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtfsmvsqQLuvuJ
 libp2p_rendezvous=hao.news/global
 libp2p_rendezvous=hao.news/world
-`, latestOrgNetworkID, libp2pPort, libp2pPort), nil
+`, networkIDFileName, libp2pPort, libp2pPort), nil
 }
 
 type RuntimePaths struct {
@@ -81,9 +80,9 @@ type RuntimePaths struct {
 	WriterWhitelistPath string
 	WriterBlacklistPath string
 	NetPath             string
+	NetworkIDPath       string
 	StatusPath          string
 	MagnetsPath         string
-	SyncLogPath         string
 	SyncBinPath         string
 	SupervisorStatePath string
 }
@@ -125,9 +124,9 @@ func RuntimePathsFromRoot(root string) RuntimePaths {
 		WriterWhitelistPath: filepath.Join(root, writerWhitelistINFName),
 		WriterBlacklistPath: filepath.Join(root, writerBlacklistINFName),
 		NetPath:             filepath.Join(root, "hao_news_net.inf"),
+		NetworkIDPath:       filepath.Join(root, networkIDFileName),
 		StatusPath:          filepath.Join(storeRoot, "sync", "status.json"),
 		MagnetsPath:         filepath.Join(storeRoot, "sync", "magnets.txt"),
-		SyncLogPath:         filepath.Join(root, "hao-news-sync.log"),
 		SyncBinPath:         filepath.Join(binRoot, projectSyncBinaryName+platformExecutableSuffix()),
 		SupervisorStatePath: filepath.Join(root, "sync-supervisor.json"),
 	}
@@ -203,24 +202,17 @@ func appendNetworkIDIfMissing(path, networkID string) error {
 	if path == "" || networkID == "" {
 		return nil
 	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil
-		}
-		return err
-	}
-	cfg, err := LoadNetworkBootstrapConfig(path)
+	inlineNetworkID, err := loadInlineNetworkID(path)
 	if err != nil {
 		return err
 	}
-	if cfg.NetworkID != "" {
-		return nil
+	if inlineNetworkID != "" {
+		networkID = inlineNetworkID
 	}
-	body := strings.TrimRight(string(data), "\n")
-	body += "\n\n# Stable 256-bit Hao.News network namespace for hao.news.\n"
-	body += "network_id=" + networkID + "\n"
-	return os.WriteFile(path, []byte(body), 0o644)
+	if err := ensureNetworkIDFile(networkIDFilePath(path), networkID); err != nil {
+		return err
+	}
+	return stripInlineNetworkID(path)
 }
 
 func appendLANPeerIfMissing(path, lanPeer string) error {
@@ -250,6 +242,84 @@ func appendLANPeerIfMissing(path, lanPeer string) error {
 	body += "\n\n# Optional LAN anchor for faster local discovery.\n"
 	body += "lan_peer=" + lanPeer + "\n"
 	return os.WriteFile(path, []byte(body), 0o644)
+}
+
+func ensureNetworkIDFile(path, networkID string) error {
+	path = strings.TrimSpace(path)
+	networkID = normalizeNetworkID(networkID)
+	if path == "" || networkID == "" {
+		return nil
+	}
+	current, err := loadNetworkIDFile(path)
+	if err != nil {
+		return err
+	}
+	if current != "" {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	content := "# Stable 256-bit Hao.News network namespace.\nnetwork_id=" + networkID + "\n"
+	return os.WriteFile(path, []byte(content), 0o644)
+}
+
+func loadInlineNetworkID(path string) (string, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", nil
+		}
+		return "", err
+	}
+	for _, rawLine := range strings.Split(string(data), "\n") {
+		line := strings.TrimSpace(rawLine)
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, ";") || strings.HasPrefix(line, "//") {
+			continue
+		}
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		if strings.EqualFold(strings.TrimSpace(key), "network_id") {
+			return normalizeNetworkID(strings.TrimSpace(value)), nil
+		}
+	}
+	return "", nil
+}
+
+func stripInlineNetworkID(path string) error {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	lines := strings.Split(string(data), "\n")
+	filtered := make([]string, 0, len(lines))
+	changed := false
+	for _, rawLine := range lines {
+		line := strings.TrimSpace(rawLine)
+		if key, _, ok := strings.Cut(line, "="); ok && strings.EqualFold(strings.TrimSpace(key), "network_id") {
+			changed = true
+			continue
+		}
+		filtered = append(filtered, rawLine)
+	}
+	if !changed {
+		return nil
+	}
+	content := strings.TrimRight(strings.Join(filtered, "\n"), "\n") + "\n"
+	return os.WriteFile(path, []byte(content), 0o644)
 }
 
 func appendLANTorrentPeerIfMissing(path, lanPeer string) error {
