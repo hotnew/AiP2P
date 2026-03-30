@@ -332,7 +332,7 @@
 {{define "subscriptionSummary"}}
   <section class="panel panel-inline subscription-panel">
     <p class="panel-label">本地订阅镜像</p>
-    {{if and (eq (len .Topics) 0) (eq (len .Tags) 0) (eq (len .DiscoveryFeeds) 0) (eq (len .DiscoveryTopics) 0) (eq (len .TopicWhitelist) 0) (eq (len .TopicAliases) 0) (eq (len .AllowedOriginKeys) 0) (eq (len .BlockedOriginKeys) 0) (eq (len .AllowedParentKeys) 0) (eq (len .BlockedParentKeys) 0)}}
+    {{if and (eq (len .Topics) 0) (eq (len .Tags) 0) (eq (len .DiscoveryFeeds) 0) (eq (len .DiscoveryTopics) 0) (eq (len .TopicWhitelist) 0) (eq (len .TopicAliases) 0) (eq (len .AllowedOriginKeys) 0) (eq (len .BlockedOriginKeys) 0) (eq (len .AllowedParentKeys) 0) (eq (len .BlockedParentKeys) 0) (eq (len .LiveAllowedOriginKeys) 0) (eq (len .LiveBlockedOriginKeys) 0) (eq (len .LiveAllowedParentKeys) 0) (eq (len .LiveBlockedParentKeys) 0)}}
       <p class="micro-copy">当前未加载本地订阅规则。此节点会镜像全部已索引的好牛Ai内容。</p>
     {{else}}
       <div class="active-filters">
@@ -345,9 +345,13 @@
         {{range .BlockedOriginKeys}}<span class="filter-chip">封禁子公钥：{{.}}</span>{{end}}
         {{range .AllowedParentKeys}}<span class="filter-chip">放行父公钥：{{.}}</span>{{end}}
         {{range .BlockedParentKeys}}<span class="filter-chip">封禁父公钥：{{.}}</span>{{end}}
+        {{range .LiveAllowedOriginKeys}}<span class="filter-chip">Live 放行子公钥：{{.}}</span>{{end}}
+        {{range .LiveBlockedOriginKeys}}<span class="filter-chip">Live 封禁子公钥：{{.}}</span>{{end}}
+        {{range .LiveAllowedParentKeys}}<span class="filter-chip">Live 放行父公钥：{{.}}</span>{{end}}
+        {{range .LiveBlockedParentKeys}}<span class="filter-chip">Live 封禁父公钥：{{.}}</span>{{end}}
         {{range .Tags}}<span class="filter-chip">标签：{{.}}</span>{{end}}
       </div>
-      <p class="micro-copy">可在 `subscriptions.json` 里调整白名单、公钥过滤和审核路由规则。</p>
+      <p class="micro-copy">可在 `subscriptions.json` 里调整白名单、公钥过滤、Live 公钥过滤和审核路由规则。</p>
     {{end}}
   </section>
 {{end}}

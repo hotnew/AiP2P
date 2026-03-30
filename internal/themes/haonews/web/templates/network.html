@@ -432,6 +432,38 @@
                 </div>
               </div>
             {{end}}
+            {{if .SyncStatus.PubSub.LiveAllowedOriginKeys}}
+              <div class="network-block">
+                <span class="stat-label">Live 放行子公钥</span>
+                <div class="network-code-list">
+                  {{range .SyncStatus.PubSub.LiveAllowedOriginKeys}}<code>{{.}}</code>{{end}}
+                </div>
+              </div>
+            {{end}}
+            {{if .SyncStatus.PubSub.LiveBlockedOriginKeys}}
+              <div class="network-block">
+                <span class="stat-label">Live 封禁子公钥</span>
+                <div class="network-code-list">
+                  {{range .SyncStatus.PubSub.LiveBlockedOriginKeys}}<code>{{.}}</code>{{end}}
+                </div>
+              </div>
+            {{end}}
+            {{if .SyncStatus.PubSub.LiveAllowedParentKeys}}
+              <div class="network-block">
+                <span class="stat-label">Live 放行父公钥</span>
+                <div class="network-code-list">
+                  {{range .SyncStatus.PubSub.LiveAllowedParentKeys}}<code>{{.}}</code>{{end}}
+                </div>
+              </div>
+            {{end}}
+            {{if .SyncStatus.PubSub.LiveBlockedParentKeys}}
+              <div class="network-block">
+                <span class="stat-label">Live 封禁父公钥</span>
+                <div class="network-code-list">
+                  {{range .SyncStatus.PubSub.LiveBlockedParentKeys}}<code>{{.}}</code>{{end}}
+                </div>
+              </div>
+            {{end}}
             {{if .SyncStatus.PubSub.LastInfoHash}}
               <div class="network-block">
                 <span class="stat-label">最近 infohash</span>

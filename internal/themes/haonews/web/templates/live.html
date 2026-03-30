@@ -21,6 +21,7 @@
           </div>
           <div class="hero-actions">
             <a class="button-link" href="/api/live/rooms">JSON 接口</a>
+            <a class="button-link button-link-muted" href="/live/pending">待处理{{if gt .PendingCount 0}} {{.PendingCount}}{{end}}</a>
             <a class="button-link button-link-muted" href="/">返回信息流</a>
           </div>
         </div>
@@ -44,6 +45,8 @@
                   {{if .Channel}}<span>{{.Channel}}</span>{{end}}
                   {{if .Active}}<span>{{.ActiveParticipants}} 人在线</span>{{else if gt .TotalParticipants 0}}<span>当前离线</span>{{end}}
                   {{if .Archive}}<span>已归档</span>{{end}}
+                  {{if .LiveVisibility}}<span>{{.LiveVisibility}}</span>{{end}}
+                  {{if gt .PendingBlockedEvents 0}}<span>待处理 {{.PendingBlockedEvents}}</span>{{end}}
                 </div>
                 <h2><a href="/live/{{.RoomID}}">{{if .Title}}{{.Title}}{{else}}{{.RoomID}}{{end}}</a></h2>
                 <p class="micro-copy">创建者：<code>{{.Creator}}</code></p>
@@ -57,6 +60,7 @@
                 <div class="story-links">
                   <a href="/live/{{.RoomID}}">打开房间</a>
                   <a href="/api/live/rooms/{{.RoomID}}">查看 JSON</a>
+                  {{if gt .PendingBlockedEvents 0}}<a href="/live/pending/{{.RoomID}}">查看待处理</a>{{end}}
                   {{if .Archive}}<a href="{{.Archive.ViewerURL}}">查看归档</a>{{end}}
                 </div>
               </article>

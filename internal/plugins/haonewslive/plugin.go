@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"io/fs"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 
@@ -14,6 +15,8 @@ import (
 )
 
 type Plugin struct{}
+
+var liveAnnouncementWatcherDisabledForTests bool
 
 //go:embed haonews.plugin.json
 var pluginManifestJSON []byte
@@ -50,16 +53,18 @@ func (Plugin) Build(ctx context.Context, cfg apphost.Config, theme apphost.WebTh
 	watchCtx, cancelWatch := context.WithCancel(ctx)
 	var watcherMu sync.Mutex
 	var watcher *live.AnnouncementWatcher
-	go func() {
-		startedWatcher, startErr := live.StartAnnouncementWatcher(watchCtx, cfg.StoreRoot, cfg.NetPath)
-		if startErr != nil {
-			logf("haonews live: announcement watcher disabled: %v", startErr)
-			return
-		}
-		watcherMu.Lock()
-		watcher = startedWatcher
-		watcherMu.Unlock()
-	}()
+	if !disableLiveAnnouncementWatcher() {
+		go func() {
+			startedWatcher, startErr := live.StartAnnouncementWatcher(watchCtx, cfg.StoreRoot, cfg.NetPath)
+			if startErr != nil {
+				logf("haonews live: announcement watcher disabled: %v", startErr)
+				return
+			}
+			watcherMu.Lock()
+			watcher = startedWatcher
+			watcherMu.Unlock()
+		}()
+	}
 	staticFS, err := theme.StaticFS()
 	if err != nil {
 		cancelWatch()
@@ -83,6 +88,14 @@ func (Plugin) Build(ctx context.Context, cfg apphost.Config, theme apphost.WebTh
 	}, nil
 }
 
+func disableLiveAnnouncementWatcher() bool {
+	if liveAnnouncementWatcherDisabledForTests {
+		return true
+	}
+	return strings.EqualFold(strings.TrimSpace(os.Getenv("HAONEWS_DISABLE_LIVE_ANNOUNCEMENT_WATCHER")), "1") ||
+		strings.EqualFold(strings.TrimSpace(os.Getenv("HAONEWS_DISABLE_LIVE_ANNOUNCEMENT_WATCHER")), "true")
+}
+
 func newHandler(app *newsplugin.App, store *live.LocalStore, staticFS fs.FS) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/live", func(w http.ResponseWriter, r *http.Request) {
@@ -91,6 +104,21 @@ func newHandler(app *newsplugin.App, store *live.LocalStore, staticFS fs.FS) htt
 			return
 		}
 		handleLiveIndex(app, store, w, r)
+	})
+	mux.HandleFunc("/live/pending", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/live/pending" {
+			http.NotFound(w, r)
+			return
+		}
+		handleLivePendingIndex(app, store, w, r)
+	})
+	mux.HandleFunc("/live/pending/", func(w http.ResponseWriter, r *http.Request) {
+		roomID := strings.TrimSpace(newsplugin.PathValue("/live/pending/", r.URL.Path))
+		if roomID == "" {
+			http.NotFound(w, r)
+			return
+		}
+		handleLivePendingRoom(app, store, roomID, w, r)
 	})
 	mux.HandleFunc("/live/", func(w http.ResponseWriter, r *http.Request) {
 		roomID := strings.TrimSpace(newsplugin.PathValue("/live/", r.URL.Path))
@@ -105,7 +133,22 @@ func newHandler(app *newsplugin.App, store *live.LocalStore, staticFS fs.FS) htt
 			http.NotFound(w, r)
 			return
 		}
-		handleAPILiveRooms(store, w, r)
+		handleAPILiveRooms(app, store, w, r)
+	})
+	mux.HandleFunc("/api/live/pending", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/live/pending" {
+			http.NotFound(w, r)
+			return
+		}
+		handleAPILivePendingRooms(app, store, w, r)
+	})
+	mux.HandleFunc("/api/live/pending/", func(w http.ResponseWriter, r *http.Request) {
+		roomID := strings.TrimSpace(newsplugin.PathValue("/api/live/pending/", r.URL.Path))
+		if roomID == "" {
+			http.NotFound(w, r)
+			return
+		}
+		handleAPILivePendingRoom(app, store, roomID, w, r)
 	})
 	mux.HandleFunc("/api/live/rooms/", func(w http.ResponseWriter, r *http.Request) {
 		roomID := strings.TrimSpace(newsplugin.PathValue("/api/live/rooms/", r.URL.Path))
@@ -113,7 +156,7 @@ func newHandler(app *newsplugin.App, store *live.LocalStore, staticFS fs.FS) htt
 			http.NotFound(w, r)
 			return
 		}
-		handleAPILiveRoom(store, roomID, w, r)
+		handleAPILiveRoom(app, store, roomID, w, r)
 	})
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
 	return mux

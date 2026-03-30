@@ -4,6 +4,71 @@
 
 这份文件只记录当前 `hao.news` 仓库仍然有效的近期架构调整、同步修复和部署结果。
 
+## 2026-03-30 08:25 CST - Live 本地父 / 子公钥白名单黑名单 Phase 2-3
+
+已完成：
+
+- `subscriptions.json` 里的 `live_*` 父 / 子公钥规则，已经真正接进 `Live` 运行时：
+  - `live_allowed_origin_public_keys`
+  - `live_blocked_origin_public_keys`
+  - `live_allowed_parent_public_keys`
+  - `live_blocked_parent_public_keys`
+- 当前已经生效的范围：
+  - `/live`
+  - `/live/<room>`
+  - `/api/live/rooms`
+  - `/api/live/rooms/<room>`
+- `Live` 房间级过滤现在按：
+  - 房间 `creator_pubkey`
+  - 房间 `parent_public_key`
+  做本地 allow / block 判定
+- `Live` 事件级过滤现在按：
+  - 事件 `sender_pubkey`
+  - 事件 `payload.metadata.parent_public_key`
+  做本地 allow / block 判定
+- 新建本地 `Live` 房间时，会把：
+  - `creator_pubkey`
+  - `parent_public_key`
+  写进 room metadata
+- `Live` 签名消息发送时会自动补：
+  - `origin_public_key`
+  - `parent_public_key`
+- `/network` 的 `libp2p PubSub` 面板和首页“本地订阅镜像”现在也会显示 `Live` 专属白黑名单
+- 回归测试已补：
+  - blocked room 不再出现在 `/live`
+  - blocked event 不再出现在 `/api/live/rooms/<room>`
+
+## 2026-03-30 09:10 CST - Live 本地父 / 子公钥白名单黑名单 Phase 4-5
+
+已完成：
+
+- `Live` 页面和 `Live` API 现在会显示：
+  - `live_visibility`
+  - `room_visibility`
+- 新增本地 `Live pending` 派生队列：
+  - `/live/pending`
+  - `/live/pending/<room>`
+  - `/api/live/pending`
+  - `/api/live/pending/<room>`
+- 这条 pending 链不新建存储，而是按本地 `Live` room/event 和当前 `live_*` 父 / 子公钥规则实时派生
+- `Live pending` 当前会收两类内容：
+  - 被整房挡下来的房间
+  - 房间仍可见、但存在被挡事件的房间
+- regular `Live` 现在也会显示：
+  - `pending_blocked_events`
+  - 房间卡片上的 `待处理 N`
+  - 房间页里的“本地待处理”入口
+- 回归测试已补：
+  - blocked room 会出现在 `/live/pending`
+  - blocked event 会出现在 `/api/live/pending/<room>`
+  - regular `/api/live/rooms/<room>` 会返回 `pending_blocked_events`
+  - `haonewslive` 测试已加 watcher 禁用开关，避免并行测试清理时的 flaky cleanup
+
+结果：
+
+- `Live` 本地父 / 子公钥白黑名单现在已经不只是过滤 regular `/live`
+- 本机也有了单独的 `Live` 运营 / 排查入口，不会因为 regular 视图被过滤就完全看不到被挡内容
+
 ## 记录规则
 
 - 后续重要更新统一追加到本文件

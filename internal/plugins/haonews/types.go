@@ -211,6 +211,10 @@ type SubscriptionRules struct {
 	BlockedOriginKeys   []string          `json:"blocked_origin_public_keys,omitempty"`
 	AllowedParentKeys   []string          `json:"allowed_parent_public_keys,omitempty"`
 	BlockedParentKeys   []string          `json:"blocked_parent_public_keys,omitempty"`
+	LiveAllowedOriginKeys []string        `json:"live_allowed_origin_public_keys,omitempty"`
+	LiveBlockedOriginKeys []string        `json:"live_blocked_origin_public_keys,omitempty"`
+	LiveAllowedParentKeys []string        `json:"live_allowed_parent_public_keys,omitempty"`
+	LiveBlockedParentKeys []string        `json:"live_blocked_parent_public_keys,omitempty"`
 	WhitelistMode       string            `json:"whitelist_mode,omitempty"`
 	ApprovalFeed        string            `json:"approval_feed,omitempty"`
 	AutoRoutePending    bool              `json:"auto_route_pending,omitempty"`

@@ -142,6 +142,30 @@ func TestLoadSubscriptionRulesNormalizesPublicKeyRules(t *testing.T) {
 	}
 }
 
+func TestLoadSubscriptionRulesNormalizesLivePublicKeyRules(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	path := root + "/subscriptions.json"
+	data := `{
+  "live_allowed_origin_public_keys": ["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "bad"],
+  "live_blocked_parent_public_keys": ["BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB", ""]
+}`
+	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	rules, err := LoadSubscriptionRules(path)
+	if err != nil {
+		t.Fatalf("LoadSubscriptionRules() error = %v", err)
+	}
+	if len(rules.LiveAllowedOriginKeys) != 1 || rules.LiveAllowedOriginKeys[0] != "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" {
+		t.Fatalf("live allowed origin keys = %v", rules.LiveAllowedOriginKeys)
+	}
+	if len(rules.LiveBlockedParentKeys) != 1 || rules.LiveBlockedParentKeys[0] != "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" {
+		t.Fatalf("live blocked parent keys = %v", rules.LiveBlockedParentKeys)
+	}
+}
+
 func TestLoadSubscriptionRulesAppliesConfiguredTopicAliasesAndWhitelist(t *testing.T) {
 	t.Parallel()
 

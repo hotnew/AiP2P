@@ -86,6 +86,10 @@ type SyncPubSubStatus struct {
 	BlockedOriginKeys   []string   `json:"blocked_origin_public_keys"`
 	AllowedParentKeys   []string   `json:"allowed_parent_public_keys"`
 	BlockedParentKeys   []string   `json:"blocked_parent_public_keys"`
+	LiveAllowedOriginKeys []string `json:"live_allowed_origin_public_keys"`
+	LiveBlockedOriginKeys []string `json:"live_blocked_origin_public_keys"`
+	LiveAllowedParentKeys []string `json:"live_allowed_parent_public_keys"`
+	LiveBlockedParentKeys []string `json:"live_blocked_parent_public_keys"`
 	Published           int        `json:"published"`
 	Received            int        `json:"received"`
 	Enqueued            int        `json:"enqueued"`

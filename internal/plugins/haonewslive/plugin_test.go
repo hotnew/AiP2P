@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -302,8 +303,347 @@ func TestPluginBuildServesLiveRoomAPIIncludesHeartbeatsWhenRequested(t *testing.
 	}
 }
 
+func TestPluginBuildFiltersBlockedLiveRoomByOriginPublicKey(t *testing.T) {
+	t.Parallel()
+
+	site, root := buildLiveSite(t)
+	store, err := live.OpenLocalStore(filepath.Join(root, "store"))
+	if err != nil {
+		t.Fatalf("OpenLocalStore error = %v", err)
+	}
+	blockedKey := strings.Repeat("b", 64)
+	rulesBody := []byte("{\n  \"live_blocked_origin_public_keys\": [\"" + blockedKey + "\"]\n}\n")
+	if err := os.MkdirAll(filepath.Join(root, "config"), 0o755); err != nil {
+		t.Fatalf("MkdirAll config error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "config", "subscriptions.json"), rulesBody, 0o644); err != nil {
+		t.Fatalf("WriteFile subscriptions error = %v", err)
+	}
+	if err := store.SaveRoom(live.RoomInfo{
+		RoomID:          "room-blocked",
+		Title:           "Blocked Room",
+		Creator:         "agent://pc75/blocked",
+		CreatorPubKey:   blockedKey,
+		ParentPublicKey: strings.Repeat("c", 64),
+		CreatedAt:       "2026-03-19T00:00:00Z",
+		Channel:         "hao.news/live",
+	}); err != nil {
+		t.Fatalf("SaveRoom error = %v", err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/live", nil)
+	rec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "Blocked Room") {
+		t.Fatalf("expected blocked room hidden from live index, got %q", rec.Body.String())
+	}
+}
+
+func TestPluginBuildFiltersBlockedLiveRoomEventsByOriginPublicKey(t *testing.T) {
+	t.Parallel()
+
+	site, root := buildLiveSite(t)
+	store, err := live.OpenLocalStore(filepath.Join(root, "store"))
+	if err != nil {
+		t.Fatalf("OpenLocalStore error = %v", err)
+	}
+	blockedKey := strings.Repeat("b", 64)
+	rulesBody := []byte("{\n  \"live_blocked_origin_public_keys\": [\"" + blockedKey + "\"]\n}\n")
+	if err := os.MkdirAll(filepath.Join(root, "config"), 0o755); err != nil {
+		t.Fatalf("MkdirAll config error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "config", "subscriptions.json"), rulesBody, 0o644); err != nil {
+		t.Fatalf("WriteFile subscriptions error = %v", err)
+	}
+	room := live.RoomInfo{
+		RoomID:          "room-events",
+		Title:           "Room Events",
+		Creator:         "agent://pc75/openclaw01",
+		CreatorPubKey:   strings.Repeat("a", 64),
+		ParentPublicKey: strings.Repeat("d", 64),
+		CreatedAt:       "2026-03-19T00:00:00Z",
+		Channel:         "hao.news/live",
+	}
+	if err := store.SaveRoom(room); err != nil {
+		t.Fatalf("SaveRoom error = %v", err)
+	}
+	if err := store.AppendEvent(room.RoomID, live.LiveMessage{
+		Protocol:     live.ProtocolVersion,
+		Type:         live.TypeMessage,
+		RoomID:       room.RoomID,
+		Sender:       "agent://pc75/allowed",
+		SenderPubKey: strings.Repeat("a", 64),
+		Seq:          1,
+		Timestamp:    "2026-03-19T00:00:10Z",
+		Payload: live.LivePayload{
+			Content: "allowed event",
+			Metadata: map[string]any{
+				"origin_public_key": strings.Repeat("a", 64),
+				"parent_public_key": strings.Repeat("d", 64),
+			},
+		},
+	}); err != nil {
+		t.Fatalf("AppendEvent allowed error = %v", err)
+	}
+	if err := store.AppendEvent(room.RoomID, live.LiveMessage{
+		Protocol:     live.ProtocolVersion,
+		Type:         live.TypeMessage,
+		RoomID:       room.RoomID,
+		Sender:       "agent://pc75/blocked",
+		SenderPubKey: blockedKey,
+		Seq:          2,
+		Timestamp:    "2026-03-19T00:00:20Z",
+		Payload: live.LivePayload{
+			Content: "blocked event",
+			Metadata: map[string]any{
+				"origin_public_key": blockedKey,
+				"parent_public_key": strings.Repeat("c", 64),
+			},
+		},
+	}); err != nil {
+		t.Fatalf("AppendEvent blocked error = %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/live/rooms/"+room.RoomID+"?show_heartbeats=1", nil)
+	rec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "allowed event") {
+		t.Fatalf("expected allowed live event in API body, got %q", body)
+	}
+	if strings.Contains(body, "blocked event") {
+		t.Fatalf("expected blocked live event hidden from API body, got %q", body)
+	}
+}
+
+func TestPluginBuildServesLiveRoomAPIVisibility(t *testing.T) {
+	t.Parallel()
+
+	site, root := buildLiveSite(t)
+	store, err := live.OpenLocalStore(filepath.Join(root, "store"))
+	if err != nil {
+		t.Fatalf("OpenLocalStore error = %v", err)
+	}
+	allowedParent := strings.Repeat("d", 64)
+	rulesBody := []byte("{\n  \"live_allowed_parent_public_keys\": [\"" + allowedParent + "\"]\n}\n")
+	if err := os.MkdirAll(filepath.Join(root, "config"), 0o755); err != nil {
+		t.Fatalf("MkdirAll config error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "config", "subscriptions.json"), rulesBody, 0o644); err != nil {
+		t.Fatalf("WriteFile subscriptions error = %v", err)
+	}
+	room := live.RoomInfo{
+		RoomID:          "room-visibility",
+		Title:           "Room Visibility",
+		Creator:         "agent://pc75/openclaw01",
+		CreatorPubKey:   strings.Repeat("a", 64),
+		ParentPublicKey: allowedParent,
+		CreatedAt:       "2026-03-19T00:00:00Z",
+		Channel:         "hao.news/live",
+	}
+	if err := store.SaveRoom(room); err != nil {
+		t.Fatalf("SaveRoom error = %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/live/rooms/"+room.RoomID, nil)
+	rec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "\"room_visibility\": \"allowed_parent\"") {
+		t.Fatalf("expected room_visibility in API body, got %q", body)
+	}
+}
+
+func TestPluginBuildServesLivePendingIndexForBlockedRoom(t *testing.T) {
+	t.Parallel()
+
+	site, root := buildLiveSite(t)
+	store, err := live.OpenLocalStore(filepath.Join(root, "store"))
+	if err != nil {
+		t.Fatalf("OpenLocalStore error = %v", err)
+	}
+	blockedKey := strings.Repeat("e", 64)
+	rulesBody := []byte("{\n  \"live_blocked_origin_public_keys\": [\"" + blockedKey + "\"]\n}\n")
+	if err := os.MkdirAll(filepath.Join(root, "config"), 0o755); err != nil {
+		t.Fatalf("MkdirAll config error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "config", "subscriptions.json"), rulesBody, 0o644); err != nil {
+		t.Fatalf("WriteFile subscriptions error = %v", err)
+	}
+	if err := store.SaveRoom(live.RoomInfo{
+		RoomID:          "room-pending",
+		Title:           "Pending Room",
+		Creator:         "agent://pc75/pending",
+		CreatorPubKey:   blockedKey,
+		ParentPublicKey: strings.Repeat("f", 64),
+		CreatedAt:       "2026-03-19T00:00:00Z",
+		Channel:         "hao.news/live",
+	}); err != nil {
+		t.Fatalf("SaveRoom error = %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/live/pending", nil)
+	rec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "Pending Room") || !strings.Contains(body, "blocked_origin") {
+		t.Fatalf("expected blocked room in pending live index, got %q", body)
+	}
+}
+
+func TestPluginBuildServesLivePendingRoomAPIForBlockedEvents(t *testing.T) {
+	t.Parallel()
+
+	site, root := buildLiveSite(t)
+	store, err := live.OpenLocalStore(filepath.Join(root, "store"))
+	if err != nil {
+		t.Fatalf("OpenLocalStore error = %v", err)
+	}
+	blockedKey := strings.Repeat("b", 64)
+	rulesBody := []byte("{\n  \"live_blocked_origin_public_keys\": [\"" + blockedKey + "\"]\n}\n")
+	if err := os.MkdirAll(filepath.Join(root, "config"), 0o755); err != nil {
+		t.Fatalf("MkdirAll config error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "config", "subscriptions.json"), rulesBody, 0o644); err != nil {
+		t.Fatalf("WriteFile subscriptions error = %v", err)
+	}
+	room := live.RoomInfo{
+		RoomID:          "room-pending-events",
+		Title:           "Pending Events",
+		Creator:         "agent://pc75/openclaw01",
+		CreatorPubKey:   strings.Repeat("a", 64),
+		ParentPublicKey: strings.Repeat("d", 64),
+		CreatedAt:       "2026-03-19T00:00:00Z",
+		Channel:         "hao.news/live",
+	}
+	if err := store.SaveRoom(room); err != nil {
+		t.Fatalf("SaveRoom error = %v", err)
+	}
+	if err := store.AppendEvent(room.RoomID, live.LiveMessage{
+		Protocol:     live.ProtocolVersion,
+		Type:         live.TypeMessage,
+		RoomID:       room.RoomID,
+		Sender:       "agent://pc75/allowed",
+		SenderPubKey: strings.Repeat("a", 64),
+		Seq:          1,
+		Timestamp:    "2026-03-19T00:00:10Z",
+		Payload: live.LivePayload{
+			Content: "allowed event",
+			Metadata: map[string]any{
+				"origin_public_key": strings.Repeat("a", 64),
+				"parent_public_key": strings.Repeat("d", 64),
+			},
+		},
+	}); err != nil {
+		t.Fatalf("AppendEvent allowed error = %v", err)
+	}
+	if err := store.AppendEvent(room.RoomID, live.LiveMessage{
+		Protocol:     live.ProtocolVersion,
+		Type:         live.TypeMessage,
+		RoomID:       room.RoomID,
+		Sender:       "agent://pc75/blocked",
+		SenderPubKey: blockedKey,
+		Seq:          2,
+		Timestamp:    "2026-03-19T00:00:20Z",
+		Payload: live.LivePayload{
+			Content: "blocked event",
+			Metadata: map[string]any{
+				"origin_public_key": blockedKey,
+				"parent_public_key": strings.Repeat("c", 64),
+			},
+		},
+	}); err != nil {
+		t.Fatalf("AppendEvent blocked error = %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/live/pending/"+room.RoomID, nil)
+	rec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "\"scope\": \"live-pending-room\"") {
+		t.Fatalf("expected pending room scope in API body, got %q", body)
+	}
+	if !strings.Contains(body, "blocked event") || strings.Contains(body, "allowed event") {
+		t.Fatalf("expected only blocked live event in pending room API, got %q", body)
+	}
+}
+
+func TestPluginBuildServesLiveRoomAPIIncludesPendingBlockedEvents(t *testing.T) {
+	t.Parallel()
+
+	site, root := buildLiveSite(t)
+	store, err := live.OpenLocalStore(filepath.Join(root, "store"))
+	if err != nil {
+		t.Fatalf("OpenLocalStore error = %v", err)
+	}
+	blockedKey := strings.Repeat("b", 64)
+	rulesBody := []byte("{\n  \"live_blocked_origin_public_keys\": [\"" + blockedKey + "\"]\n}\n")
+	if err := os.MkdirAll(filepath.Join(root, "config"), 0o755); err != nil {
+		t.Fatalf("MkdirAll config error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "config", "subscriptions.json"), rulesBody, 0o644); err != nil {
+		t.Fatalf("WriteFile subscriptions error = %v", err)
+	}
+	room := live.RoomInfo{
+		RoomID:          "room-api-pending-count",
+		Title:           "API Pending Count",
+		Creator:         "agent://pc75/openclaw01",
+		CreatorPubKey:   strings.Repeat("a", 64),
+		ParentPublicKey: strings.Repeat("d", 64),
+		CreatedAt:       "2026-03-19T00:00:00Z",
+		Channel:         "hao.news/live",
+	}
+	if err := store.SaveRoom(room); err != nil {
+		t.Fatalf("SaveRoom error = %v", err)
+	}
+	if err := store.AppendEvent(room.RoomID, live.LiveMessage{
+		Protocol:     live.ProtocolVersion,
+		Type:         live.TypeMessage,
+		RoomID:       room.RoomID,
+		Sender:       "agent://pc75/blocked",
+		SenderPubKey: blockedKey,
+		Seq:          1,
+		Timestamp:    "2026-03-19T00:00:20Z",
+		Payload: live.LivePayload{
+			Content: "blocked event",
+			Metadata: map[string]any{
+				"origin_public_key": blockedKey,
+				"parent_public_key": strings.Repeat("c", 64),
+			},
+		},
+	}); err != nil {
+		t.Fatalf("AppendEvent blocked error = %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/live/rooms/"+room.RoomID, nil)
+	rec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "\"pending_blocked_events\": 1") {
+		t.Fatalf("expected pending_blocked_events in live room API body, got %q", body)
+	}
+}
+
 func buildLiveSite(t *testing.T) (*apphost.Site, string) {
 	t.Helper()
+	liveAnnouncementWatcherDisabledForTests = true
 
 	root := t.TempDir()
 	cfg := apphost.Config{
@@ -322,5 +662,8 @@ func buildLiveSite(t *testing.T) (*apphost.Site, string) {
 	if err != nil {
 		t.Fatalf("Build() error = %v", err)
 	}
+	t.Cleanup(func() {
+		_ = site.Close(context.Background())
+	})
 	return site, root
 }

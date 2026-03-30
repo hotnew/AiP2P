@@ -50,6 +50,8 @@ type RoomInfo struct {
 	RoomID      string   `json:"room_id"`
 	Title       string   `json:"title"`
 	Creator     string   `json:"creator"`
+	CreatorPubKey string `json:"creator_pubkey,omitempty"`
+	ParentPublicKey string `json:"parent_public_key,omitempty"`
 	CreatedAt   string   `json:"created_at"`
 	NetworkID   string   `json:"network_id,omitempty"`
 	Channel     string   `json:"channel,omitempty"`

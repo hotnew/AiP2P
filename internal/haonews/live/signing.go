@@ -54,6 +54,7 @@ func SignMessage(msg *LiveMessage, identity haonews.AgentIdentity) error {
 	}
 	msg.Protocol = ProtocolVersion
 	msg.SenderPubKey = strings.ToLower(strings.TrimSpace(identity.PublicKey))
+	ensureSignedMetadata(&msg.Payload, identity)
 	body, err := json.Marshal(signableMessage{
 		Protocol:     msg.Protocol,
 		Type:         strings.TrimSpace(msg.Type),
@@ -77,6 +78,30 @@ func SignMessage(msg *LiveMessage, identity haonews.AgentIdentity) error {
 	}
 	msg.Signature = hex.EncodeToString(ed25519.Sign(ed25519.PrivateKey(privateKey), body))
 	return nil
+}
+
+func ensureSignedMetadata(payload *LivePayload, identity haonews.AgentIdentity) {
+	if payload == nil {
+		return
+	}
+	if payload.Metadata == nil {
+		payload.Metadata = map[string]any{}
+	}
+	originKey := strings.ToLower(strings.TrimSpace(identity.PublicKey))
+	parentKey := strings.ToLower(strings.TrimSpace(identity.ParentPublicKey))
+	if parentKey == "" {
+		parentKey = originKey
+	}
+	if originKey != "" {
+		if _, ok := payload.Metadata["origin_public_key"]; !ok {
+			payload.Metadata["origin_public_key"] = originKey
+		}
+	}
+	if parentKey != "" {
+		if _, ok := payload.Metadata["parent_public_key"]; !ok {
+			payload.Metadata["parent_public_key"] = parentKey
+		}
+	}
 }
 
 func VerifyMessage(msg LiveMessage) error {
@@ -116,4 +141,3 @@ func VerifyMessage(msg LiveMessage) error {
 	}
 	return nil
 }
-

@@ -467,6 +467,38 @@ export PATH="$HOME/go/bin:$PATH"
 4. `allowed_parent_public_keys`
 5. 再退回原有 `authors / channels / topics / tags`
 
+`Live` 还有一套独立规则，不和普通 feed 混用：
+
+- `live_allowed_origin_public_keys`
+  - 本地允许这些子公钥进入 `Live`
+- `live_blocked_origin_public_keys`
+  - 本地拒绝这些子公钥进入 `Live`
+- `live_allowed_parent_public_keys`
+  - 本地允许这些父公钥下面的所有子身份进入 `Live`
+- `live_blocked_parent_public_keys`
+  - 本地拒绝这些父公钥下面的所有子身份进入 `Live`
+
+当前已经接入：
+
+- `/live`
+- `/live/<room>`
+- `/api/live/rooms`
+- `/api/live/rooms/<room>`
+- `/live/pending`
+- `/live/pending/<room>`
+- `/api/live/pending`
+- `/api/live/pending/<room>`
+
+也就是说：
+
+- 被 `Live` 黑名单命中的房间不会出现在本地 `Live` 列表
+- 被 `Live` 黑名单命中的消息不会出现在本地房间时间线和 `Live` API
+- 被挡下来的房间或事件现在会进入本地派生的 `Live pending` 队列，便于本机运营和排查
+- regular `Live` 房间卡片和 `/api/live/rooms*` 也会带：
+  - `pending_blocked_events`
+  用来提示“这个房间虽然仍可见，但内部还有多少条事件被本地规则挡下来了”
+- 首页“本地订阅镜像”和 `/network` 页也会显示当前生效的 `Live` 父 / 子公钥规则
+
 ### 可选：配置本地白名单模式和待批准池
 
 如果你希望把“未命中白名单的内容”先留在本地，等管理员决定是否上线，可以在：

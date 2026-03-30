@@ -16,6 +16,8 @@ func archiveNoticeMetadata(info RoomInfo, result ArchiveResult) map[string]any {
 	return map[string]any{
 		"title":                strings.TrimSpace(info.Title),
 		"creator":              strings.TrimSpace(info.Creator),
+		"origin_public_key":    strings.TrimSpace(info.CreatorPubKey),
+		"parent_public_key":    strings.TrimSpace(info.ParentPublicKey),
 		"created_at":           strings.TrimSpace(info.CreatedAt),
 		"network_id":           strings.TrimSpace(info.NetworkID),
 		"channel":              strings.TrimSpace(info.Channel),

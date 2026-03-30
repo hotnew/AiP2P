@@ -151,9 +151,11 @@ func (w *AnnouncementWatcher) handleEvent(event LiveMessage) error {
 			return nil
 		}
 		info := RoomInfo{
-			RoomID:    strings.TrimSpace(event.RoomID),
-			Creator:   strings.TrimSpace(event.Sender),
-			CreatedAt: strings.TrimSpace(event.Timestamp),
+			RoomID:          strings.TrimSpace(event.RoomID),
+			Creator:         strings.TrimSpace(event.Sender),
+			CreatorPubKey:   strings.TrimSpace(event.SenderPubKey),
+			ParentPublicKey: metadataStringValue(event.Payload.Metadata, "parent_public_key"),
+			CreatedAt:       strings.TrimSpace(event.Timestamp),
 		}
 		if err := w.store.SaveRoom(info); err != nil {
 			return err

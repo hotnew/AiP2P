@@ -194,12 +194,14 @@ func startSession(ctx context.Context, opts SessionOptions) (*session, error) {
 		return nil, fmt.Errorf("subscribe live bus topic: %w", err)
 	}
 	info := RoomInfo{
-		RoomID:    roomID,
-		Title:     strings.TrimSpace(opts.Title),
-		Creator:   author,
-		CreatedAt: time.Now().UTC().Format(time.RFC3339),
-		NetworkID: netCfg.NetworkID,
-		Channel:   firstNonEmpty(strings.TrimSpace(opts.Channel), "hao.news/live"),
+		RoomID:          roomID,
+		Title:           strings.TrimSpace(opts.Title),
+		Creator:         author,
+		CreatorPubKey:   strings.ToLower(strings.TrimSpace(signingIdentity.PublicKey)),
+		ParentPublicKey: firstNonEmpty(strings.ToLower(strings.TrimSpace(signingIdentity.ParentPublicKey)), strings.ToLower(strings.TrimSpace(signingIdentity.PublicKey))),
+		CreatedAt:       time.Now().UTC().Format(time.RFC3339),
+		NetworkID:       netCfg.NetworkID,
+		Channel:         firstNonEmpty(strings.TrimSpace(opts.Channel), "hao.news/live"),
 	}
 	if err := store.SaveRoom(info); err != nil {
 		sub.Cancel()
@@ -614,6 +616,8 @@ func roomInfoFromAnnouncement(event LiveMessage) RoomInfo {
 		RoomID:      strings.TrimSpace(event.RoomID),
 		Title:       metadataStringValue(event.Payload.Metadata, "title"),
 		Creator:     firstNonEmpty(metadataStringValue(event.Payload.Metadata, "creator"), strings.TrimSpace(event.Sender)),
+		CreatorPubKey: firstNonEmpty(metadataStringValue(event.Payload.Metadata, "origin_public_key"), strings.TrimSpace(event.SenderPubKey)),
+		ParentPublicKey: metadataStringValue(event.Payload.Metadata, "parent_public_key"),
 		CreatedAt:   firstNonEmpty(metadataStringValue(event.Payload.Metadata, "created_at"), strings.TrimSpace(event.Timestamp)),
 		NetworkID:   metadataStringValue(event.Payload.Metadata, "network_id"),
 		Channel:     metadataStringValue(event.Payload.Metadata, "channel"),

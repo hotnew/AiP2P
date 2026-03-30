@@ -208,6 +208,30 @@ func TestSyncSubscriptionsNormalizePublicKeys(t *testing.T) {
 	}
 }
 
+func TestSyncSubscriptionsNormalizeLivePublicKeys(t *testing.T) {
+	t.Parallel()
+
+	rules := SyncSubscriptions{
+		LiveAllowedOriginKeys: []string{
+			"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+			"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			"bad",
+		},
+		LiveBlockedParentKeys: []string{
+			"BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+			"",
+		},
+	}
+	rules.Normalize()
+
+	if len(rules.LiveAllowedOriginKeys) != 1 || rules.LiveAllowedOriginKeys[0] != "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" {
+		t.Fatalf("live allowed origin keys = %v", rules.LiveAllowedOriginKeys)
+	}
+	if len(rules.LiveBlockedParentKeys) != 1 || rules.LiveBlockedParentKeys[0] != "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" {
+		t.Fatalf("live blocked parent keys = %v", rules.LiveBlockedParentKeys)
+	}
+}
+
 func TestMatchesAnnouncementFiltersByMaxAgeDays(t *testing.T) {
 	t.Parallel()
 

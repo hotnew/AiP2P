@@ -68,6 +68,10 @@ func (r *SubscriptionRules) normalize() {
 	r.BlockedOriginKeys = uniqueNormalizedPublicKeys(r.BlockedOriginKeys)
 	r.AllowedParentKeys = uniqueNormalizedPublicKeys(r.AllowedParentKeys)
 	r.BlockedParentKeys = uniqueNormalizedPublicKeys(r.BlockedParentKeys)
+	r.LiveAllowedOriginKeys = uniqueNormalizedPublicKeys(r.LiveAllowedOriginKeys)
+	r.LiveBlockedOriginKeys = uniqueNormalizedPublicKeys(r.LiveBlockedOriginKeys)
+	r.LiveAllowedParentKeys = uniqueNormalizedPublicKeys(r.LiveAllowedParentKeys)
+	r.LiveBlockedParentKeys = uniqueNormalizedPublicKeys(r.LiveBlockedParentKeys)
 	r.DiscoveryFeeds = uniqueCanonicalDiscoveryFeeds(r.DiscoveryFeeds)
 	r.DiscoveryTopics = uniqueCanonicalTopicsWithAliases(r.DiscoveryTopics, r.TopicAliases, whitelist)
 	r.HistoryChannels = uniqueFold(r.HistoryChannels)
@@ -89,6 +93,8 @@ func (r SubscriptionRules) Empty() bool {
 	return len(r.Channels) == 0 && len(r.Topics) == 0 && len(r.Tags) == 0 && len(r.Authors) == 0 &&
 		len(r.AllowedOriginKeys) == 0 && len(r.BlockedOriginKeys) == 0 &&
 		len(r.AllowedParentKeys) == 0 && len(r.BlockedParentKeys) == 0 &&
+		len(r.LiveAllowedOriginKeys) == 0 && len(r.LiveBlockedOriginKeys) == 0 &&
+		len(r.LiveAllowedParentKeys) == 0 && len(r.LiveBlockedParentKeys) == 0 &&
 		len(r.HistoryChannels) == 0 && len(r.HistoryTopics) == 0 && len(r.HistoryAuthors) == 0 &&
 		r.MaxAgeDays >= defaultMaxAgeDays && r.MaxBundleMB >= defaultMaxBundleMB && r.MaxItemsPerDay >= defaultMaxItemsPerDay
 }

@@ -1,0 +1,73 @@
+{{define "live_pending.html"}}
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>好牛Ai Live 待处理</title>
+  <link rel="stylesheet" href="/static/styles.css?v=20260328d">
+</head>
+<body>
+  <div class="app-shell">
+    {{template "appSidebar" .}}
+    <div class="page-shell">
+      {{template "sidebarToggle" .}}
+      <header class="hero hero-dashboard">
+        <p class="eyebrow">Live 本地待处理队列</p>
+        <div class="hero-heading">
+          <div>
+            <h1>Live Pending</h1>
+            <p class="hero-copy">这里显示被本机 Live 父 / 子公钥规则挡下来的房间或事件。它们不会出现在常规 <code>/live</code> 里，但本机仍可在这里查看和后续运营。</p>
+          </div>
+          <div class="hero-actions">
+            <a class="button-link" href="/api/live/pending">JSON 接口</a>
+            <a class="button-link button-link-muted" href="/live">返回 Live</a>
+          </div>
+        </div>
+        <div class="hero-stats hero-stats-wide">
+          {{range .SummaryStats}}
+            <div class="hero-stat-card">
+              <span class="stat-label">{{.Label}}</span>
+              <strong>{{.Value}}</strong>
+            </div>
+          {{end}}
+        </div>
+      </header>
+
+      <main class="feed">
+        {{if .Rooms}}
+          <section class="directory-grid">
+            {{range .Rooms}}
+              <article class="directory-card">
+                <div class="card-meta">
+                  {{if .Channel}}<span>{{.Channel}}</span>{{end}}
+                  {{if .RoomVisibility}}<span>{{.RoomVisibility}}</span>{{end}}
+                  {{if gt .BlockedEventCount 0}}<span>{{.BlockedEventCount}} 条待处理事件</span>{{end}}
+                </div>
+                <h2><a href="{{.PendingURL}}">{{if .Title}}{{.Title}}{{else}}{{.RoomID}}{{end}}</a></h2>
+                <p class="micro-copy">创建者：<code>{{.Creator}}</code></p>
+                <p class="micro-copy">房间 ID：<code>{{.RoomID}}</code></p>
+                {{if .BlockedReason}}
+                  <p class="micro-copy">原因：{{.BlockedReason}}</p>
+                {{end}}
+                <div class="story-links">
+                  <a href="{{.PendingURL}}">查看待处理</a>
+                  <a href="{{.APIURL}}">查看 JSON</a>
+                  <a href="/live/{{.RoomID}}">常规 Live</a>
+                </div>
+              </article>
+            {{end}}
+          </section>
+        {{else}}
+          <section class="empty-state">
+            <h2>暂无待处理 Live 内容</h2>
+            <p>当前没有被本机 Live 父 / 子公钥白黑名单挡下来的房间或事件。</p>
+          </section>
+        {{end}}
+      </main>
+    </div>
+  </div>
+{{template "sidebarScript" .}}
+</body>
+</html>
+{{end}}

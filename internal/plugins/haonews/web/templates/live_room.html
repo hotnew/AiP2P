@@ -26,6 +26,7 @@
           </div>
           <div class="hero-actions">
             <a class="button-link" href="/api/live/rooms/{{.Room.RoomID}}">JSON 接口</a>
+            <a class="button-link button-link-muted" href="/live/pending/{{.Room.RoomID}}">待处理视图</a>
             <a class="button-link button-link-muted" href="/">返回信息流</a>
           </div>
         </div>
@@ -38,9 +39,20 @@
             <div><span class="stat-label">Room ID</span><strong>{{.Room.RoomID}}</strong></div>
             <div><span class="stat-label">创建时间</span><strong>{{.Room.CreatedAt}}</strong></div>
             <div><span class="stat-label">创建者</span><strong>{{.Room.Creator}}</strong></div>
+            <div><span class="stat-label">本地可见性</span><strong>{{if .RoomVisibility}}{{.RoomVisibility}}{{else}}default{{end}}</strong></div>
             <div><span class="stat-label">归档频道</span><strong>{{if .Room.Channel}}{{.Room.Channel}}{{else}}hao.news/live{{end}}</strong></div>
           </div>
         </section>
+
+        {{if gt .PendingBlockedEvents 0}}
+          <section class="panel panel-inline">
+            <p class="panel-label">本地待处理</p>
+            <div class="summary-grid">
+              <div><span class="stat-label">被挡事件</span><strong>{{.PendingBlockedEvents}}</strong></div>
+              <div><span class="stat-label">查看</span><strong><a href="/live/pending/{{.Room.RoomID}}">打开待处理视图</a></strong></div>
+            </div>
+          </section>
+        {{end}}
 
         {{if .Archive}}
           <section class="panel panel-inline">
@@ -145,6 +157,7 @@
                     <span>{{.Type}}</span>
                     <span>{{.Timestamp}}</span>
                     <span>{{.Sender}}</span>
+                    {{if .Visibility}}<span>{{.Visibility}}</span>{{end}}
                   </div>
                   <h2>{{.Heading}}</h2>
                   {{if .Note}}

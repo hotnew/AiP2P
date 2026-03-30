@@ -23,6 +23,10 @@ type RoomSummary struct {
 	RoomID             string         `json:"room_id"`
 	Title              string         `json:"title"`
 	Creator            string         `json:"creator"`
+	CreatorPubKey      string         `json:"creator_pubkey,omitempty"`
+	ParentPublicKey    string         `json:"parent_public_key,omitempty"`
+	LiveVisibility     string         `json:"live_visibility,omitempty"`
+	PendingBlockedEvents int          `json:"pending_blocked_events,omitempty"`
 	CreatedAt          time.Time      `json:"created_at"`
 	LastEventAt        time.Time      `json:"last_event_at,omitempty"`
 	EventCount         int            `json:"event_count"`
@@ -255,12 +259,14 @@ func (s *LocalStore) ListRooms() ([]RoomSummary, error) {
 			return nil, err
 		}
 		summary := RoomSummary{
-			RoomID:     record.Info.RoomID,
-			Title:      record.Info.Title,
-			Creator:    record.Info.Creator,
-			EventCount: record.EventCount,
-			Channel:    record.Info.Channel,
-			Path:       filepath.Join(s.Root, entry.Name()),
+			RoomID:          record.Info.RoomID,
+			Title:           record.Info.Title,
+			Creator:         record.Info.Creator,
+			CreatorPubKey:   record.Info.CreatorPubKey,
+			ParentPublicKey: record.Info.ParentPublicKey,
+			EventCount:      record.EventCount,
+			Channel:         record.Info.Channel,
+			Path:            filepath.Join(s.Root, entry.Name()),
 		}
 		archive, err := s.LoadArchiveResult(entry.Name())
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -369,14 +375,16 @@ func (s *LocalStore) LoadArchiveResult(roomID string) (*ArchiveRecord, error) {
 
 func mergeRoomInfo(existing, incoming RoomInfo) RoomInfo {
 	return RoomInfo{
-		RoomID:      firstNonEmptyInfo(incoming.RoomID, existing.RoomID),
-		Title:       firstNonEmptyInfo(incoming.Title, existing.Title),
-		Creator:     firstNonEmptyInfo(incoming.Creator, existing.Creator),
-		CreatedAt:   firstNonEmptyInfo(incoming.CreatedAt, existing.CreatedAt),
-		NetworkID:   firstNonEmptyInfo(incoming.NetworkID, existing.NetworkID),
-		Channel:     firstNonEmptyInfo(incoming.Channel, existing.Channel),
-		Tags:        firstNonEmptySlice(incoming.Tags, existing.Tags),
-		Description: firstNonEmptyInfo(incoming.Description, existing.Description),
+		RoomID:          firstNonEmptyInfo(incoming.RoomID, existing.RoomID),
+		Title:           firstNonEmptyInfo(incoming.Title, existing.Title),
+		Creator:         firstNonEmptyInfo(incoming.Creator, existing.Creator),
+		CreatorPubKey:   firstNonEmptyInfo(incoming.CreatorPubKey, existing.CreatorPubKey),
+		ParentPublicKey: firstNonEmptyInfo(incoming.ParentPublicKey, existing.ParentPublicKey),
+		CreatedAt:       firstNonEmptyInfo(incoming.CreatedAt, existing.CreatedAt),
+		NetworkID:       firstNonEmptyInfo(incoming.NetworkID, existing.NetworkID),
+		Channel:         firstNonEmptyInfo(incoming.Channel, existing.Channel),
+		Tags:            firstNonEmptySlice(incoming.Tags, existing.Tags),
+		Description:     firstNonEmptyInfo(incoming.Description, existing.Description),
 	}
 }
 

@@ -14,6 +14,17 @@ type liveIndexPageData struct {
 	NodeStatus   newsplugin.NodeStatus
 	Now          time.Time
 	Rooms        []live.RoomSummary
+	PendingCount int
+	SummaryStats []newsplugin.SummaryStat
+}
+
+type livePendingIndexPageData struct {
+	Project      string
+	Version      string
+	PageNav      []newsplugin.NavItem
+	NodeStatus   newsplugin.NodeStatus
+	Now          time.Time
+	Rooms        []livePendingRoomSummary
 	SummaryStats []newsplugin.SummaryStat
 }
 
@@ -24,6 +35,8 @@ type liveRoomPageData struct {
 	NodeStatus     newsplugin.NodeStatus
 	Now            time.Time
 	Room           live.RoomInfo
+	RoomVisibility string
+	PendingBlockedEvents int
 	Events         []live.LiveMessage
 	EventViews     []liveEventView
 	TaskSummaries  []liveTaskSummaryView
@@ -35,14 +48,44 @@ type liveRoomPageData struct {
 	AutoRefresh    bool
 }
 
+type livePendingRoomPageData struct {
+	Project          string
+	Version          string
+	PageNav          []newsplugin.NavItem
+	NodeStatus       newsplugin.NodeStatus
+	Now              time.Time
+	Room             live.RoomInfo
+	RoomVisibility   string
+	BlockedEvents    []live.LiveMessage
+	EventViews       []liveEventView
+	BlockedEventCount int
+	ShowHeartbeats   bool
+}
+
+type livePendingRoomSummary struct {
+	RoomID            string               `json:"room_id"`
+	Title             string               `json:"title"`
+	Creator           string               `json:"creator"`
+	CreatedAt         time.Time            `json:"created_at"`
+	LastEventAt       time.Time            `json:"last_event_at,omitempty"`
+	Channel           string               `json:"channel,omitempty"`
+	Archive           *live.ArchiveRecord  `json:"archive,omitempty"`
+	RoomVisibility    string               `json:"room_visibility,omitempty"`
+	BlockedEventCount int                  `json:"blocked_event_count"`
+	BlockedReason     string               `json:"blocked_reason,omitempty"`
+	PendingURL        string               `json:"pending_url,omitempty"`
+	APIURL            string               `json:"api_url,omitempty"`
+}
+
 type liveEventView struct {
-	Type      string              `json:"type"`
-	Timestamp string              `json:"timestamp"`
-	Sender    string              `json:"sender"`
-	Heading   string              `json:"heading"`
-	Note      string              `json:"note,omitempty"`
-	Fields    []liveFieldView     `json:"fields,omitempty"`
-	Task      *liveTaskUpdateView `json:"task,omitempty"`
+	Type       string              `json:"type"`
+	Timestamp  string              `json:"timestamp"`
+	Sender     string              `json:"sender"`
+	Visibility string              `json:"live_visibility,omitempty"`
+	Heading    string              `json:"heading"`
+	Note       string              `json:"note,omitempty"`
+	Fields     []liveFieldView     `json:"fields,omitempty"`
+	Task       *liveTaskUpdateView `json:"task,omitempty"`
 }
 
 type liveFieldView struct {

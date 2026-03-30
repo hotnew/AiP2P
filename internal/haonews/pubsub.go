@@ -99,6 +99,10 @@ func startPubSubRuntime(
 			BlockedOriginKeys:   append([]string(nil), rules.BlockedOriginKeys...),
 			AllowedParentKeys:   append([]string(nil), rules.AllowedParentKeys...),
 			BlockedParentKeys:   append([]string(nil), rules.BlockedParentKeys...),
+			LiveAllowedOriginKeys: append([]string(nil), rules.LiveAllowedOriginKeys...),
+			LiveBlockedOriginKeys: append([]string(nil), rules.LiveBlockedOriginKeys...),
+			LiveAllowedParentKeys: append([]string(nil), rules.LiveAllowedParentKeys...),
+			LiveBlockedParentKeys: append([]string(nil), rules.LiveBlockedParentKeys...),
 		},
 	}
 
@@ -157,6 +161,10 @@ func (r *pubsubRuntime) Status() SyncPubSubStatus {
 	status.BlockedOriginKeys = append([]string(nil), r.status.BlockedOriginKeys...)
 	status.AllowedParentKeys = append([]string(nil), r.status.AllowedParentKeys...)
 	status.BlockedParentKeys = append([]string(nil), r.status.BlockedParentKeys...)
+	status.LiveAllowedOriginKeys = append([]string(nil), r.status.LiveAllowedOriginKeys...)
+	status.LiveBlockedOriginKeys = append([]string(nil), r.status.LiveBlockedOriginKeys...)
+	status.LiveAllowedParentKeys = append([]string(nil), r.status.LiveAllowedParentKeys...)
+	status.LiveBlockedParentKeys = append([]string(nil), r.status.LiveBlockedParentKeys...)
 	return status
 }
 
