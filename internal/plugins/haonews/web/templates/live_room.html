@@ -73,7 +73,15 @@
                     <a href="/?author={{urlquery .Sender}}">{{.Sender}}</a>
                     {{if .Visibility}}<span>{{.Visibility}}</span>{{end}}
                   </div>
-                  <h2>{{.Heading}}</h2>
+                  {{if .HeadingLines}}
+                    <div class="live-heading-lines">
+                      {{range .HeadingLines}}
+                        <div class="live-heading-line">{{.}}</div>
+                      {{end}}
+                    </div>
+                  {{else}}
+                    <h2>{{.Heading}}</h2>
+                  {{end}}
                   {{if .Note}}
                     <p class="micro-copy">{{.Note}}</p>
                   {{end}}

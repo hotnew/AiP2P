@@ -359,6 +359,7 @@ func handleLiveRoom(app *newsplugin.App, store *live.LocalStore, roomID string, 
 		roomVisibility, _ = classifyLivePublicKeyVisibility(strings.TrimSpace(room.CreatorPubKey), strings.TrimSpace(room.ParentPublicKey), rules)
 	}
 	publicHintTitle, publicHintBody, publicHintExample := publicLiveGuidance(room.RoomID)
+	room.CreatedAt = formatLiveDisplayTime(room.CreatedAt)
 	data := liveRoomPageData{
 		Project:                      app.ProjectName(),
 		Version:                      app.VersionString(),
@@ -429,6 +430,7 @@ func handleLivePendingRoom(app *newsplugin.App, store *live.LocalStore, roomID s
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	room.CreatedAt = formatLiveDisplayTime(room.CreatedAt)
 	data := livePendingRoomPageData{
 		Project:           app.ProjectName(),
 		Version:           app.VersionString(),
@@ -1146,18 +1148,17 @@ func buildEventViews(events []live.LiveMessage, rules newsplugin.SubscriptionRul
 			visibility, _ = classifyLivePublicKeyVisibility(strings.TrimSpace(event.SenderPubKey), metadataString(event.Payload.Metadata, "parent_public_key"), rules)
 		}
 		view := liveEventView{
-			Type:       event.Type,
-			Timestamp:  event.Timestamp,
-			Sender:     event.Sender,
-			Visibility: visibility,
-			Heading:    eventHeading(event),
-			Fields:     metadataFields(event.Payload.Metadata),
+			Type:         event.Type,
+			Timestamp:    formatLiveDisplayTime(event.Timestamp),
+			Sender:       event.Sender,
+			Visibility:   visibility,
+			Heading:      eventHeading(event),
+			HeadingLines: eventHeadingLines(event),
+			Fields:       metadataFields(event.Payload.Metadata),
 		}
 		if task := buildTaskUpdateView(event.Payload.Metadata); task != nil {
 			view.Task = task
 			view.Note = "任务更新"
-		} else if len(view.Fields) > 0 {
-			view.Note = "附带结构化元数据"
 		}
 		views = append(views, view)
 	}
@@ -1264,6 +1265,59 @@ func eventHeading(event live.LiveMessage) string {
 	default:
 		return "控制事件"
 	}
+}
+
+func eventHeadingLines(event live.LiveMessage) []string {
+	content := strings.TrimSpace(event.Payload.Content)
+	if content == "" || (!strings.Contains(content, "；") && !strings.Contains(content, ";")) {
+		return nil
+	}
+	parts := strings.Split(content, " | ")
+	if len(parts) < 2 {
+		items := splitNonEmpty(splitLiveItems(content))
+		if len(items) <= 1 {
+			return nil
+		}
+		return items
+	}
+	head := strings.Join(parts[:len(parts)-1], " | ")
+	items := splitNonEmpty(splitLiveItems(parts[len(parts)-1]))
+	if len(items) == 0 {
+		return nil
+	}
+	lines := make([]string, 0, len(items)+1)
+	lines = append(lines, head)
+	lines = append(lines, items...)
+	return lines
+}
+
+func splitNonEmpty(items []string) []string {
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		out = append(out, item)
+	}
+	return out
+}
+
+func splitLiveItems(raw string) []string {
+	raw = strings.ReplaceAll(raw, "；", ";")
+	return strings.Split(raw, ";")
+}
+
+func formatLiveDisplayTime(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	ts, err := time.Parse(time.RFC3339, raw)
+	if err != nil {
+		return raw
+	}
+	return ts.Local().Format("2006-01-02 15:04:05 MST")
 }
 
 func buildTaskUpdateView(metadata map[string]any) *liveTaskUpdateView {

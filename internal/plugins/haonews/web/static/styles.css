@@ -1221,6 +1221,20 @@ dd {
   cursor: pointer;
 }
 
+.live-heading-lines {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 10px;
+}
+
+.live-heading-line {
+  font-size: 18px;
+  line-height: 1.45;
+  font-weight: 700;
+  word-break: break-word;
+  color: var(--text-strong);
+}
+
 .identity-reveal {
   margin: 8px 0 0;
   padding: 10px 12px;

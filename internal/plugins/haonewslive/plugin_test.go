@@ -525,7 +525,7 @@ func TestPluginBuildServesLiveRoomDetails(t *testing.T) {
 	if strings.Contains(body, "<span>heartbeat</span>") {
 		t.Fatalf("expected heartbeats hidden by default, got %q", body)
 	}
-	if strings.Contains(body, "<span>archive_notice</span>") || strings.Contains(body, "archive.archived_at") || strings.Contains(body, "附带结构化元数据") {
+	if strings.Contains(body, "<span>archive_notice</span>") || strings.Contains(body, "archive.archived_at") {
 		t.Fatalf("expected archive notices hidden by default, got %q", body)
 	}
 	if !strings.Contains(body, "显示心跳") || !strings.Contains(body, "关闭自动更新") {

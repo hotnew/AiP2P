@@ -119,14 +119,15 @@ type liveRoomLinks struct {
 }
 
 type liveEventView struct {
-	Type       string              `json:"type"`
-	Timestamp  string              `json:"timestamp"`
-	Sender     string              `json:"sender"`
-	Visibility string              `json:"live_visibility,omitempty"`
-	Heading    string              `json:"heading"`
-	Note       string              `json:"note,omitempty"`
-	Fields     []liveFieldView     `json:"fields,omitempty"`
-	Task       *liveTaskUpdateView `json:"task,omitempty"`
+	Type         string              `json:"type"`
+	Timestamp    string              `json:"timestamp"`
+	Sender       string              `json:"sender"`
+	Visibility   string              `json:"live_visibility,omitempty"`
+	Heading      string              `json:"heading"`
+	HeadingLines []string            `json:"heading_lines,omitempty"`
+	Note         string              `json:"note,omitempty"`
+	Fields       []liveFieldView     `json:"fields,omitempty"`
+	Task         *liveTaskUpdateView `json:"task,omitempty"`
 }
 
 type liveFieldView struct {
