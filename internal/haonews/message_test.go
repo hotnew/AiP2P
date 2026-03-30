@@ -268,6 +268,9 @@ func TestBuildAndLoadDerivedChildSigningIdentityMessage(t *testing.T) {
 	if msg.Extensions["hd.parent"] != "agent://alice" {
 		t.Fatalf("hd.parent = %#v", msg.Extensions["hd.parent"])
 	}
+	if _, ok := msg.Extensions["hd.delegation"]; !ok {
+		t.Fatal("expected hd.delegation for child signed message")
+	}
 	if err := WriteMessage(dir, msg, body); err != nil {
 		t.Fatalf("WriteMessage error = %v", err)
 	}
@@ -310,6 +313,86 @@ func TestValidateMessageRejectsTamperedHDParentPubKey(t *testing.T) {
 	msg.Extensions["hd.parent_pubkey"] = strings.Repeat("0", 64)
 	if err := ValidateMessage(msg, body); err == nil {
 		t.Fatal("expected validation error after tampering hd.parent_pubkey")
+	}
+}
+
+func TestValidateMessageRejectsMissingHDDelegationForChild(t *testing.T) {
+	t.Parallel()
+
+	rootIdentity, err := RecoverHDIdentity(
+		"agent://news/world-01",
+		"agent://alice",
+		"abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+		time.Date(2026, 3, 18, 12, 0, 0, 0, time.UTC),
+	)
+	if err != nil {
+		t.Fatalf("RecoverHDIdentity error = %v", err)
+	}
+	childIdentity, err := DeriveChildIdentity(rootIdentity, "agent://alice/work", time.Date(2026, 3, 18, 12, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("DeriveChildIdentity error = %v", err)
+	}
+	msg, body, err := BuildMessage(MessageInput{
+		Kind:     "post",
+		Author:   "agent://alice/work",
+		Channel:  "hao.news/world",
+		Title:    "hd child hello",
+		Body:     "signed body",
+		Identity: &childIdentity,
+		Extensions: map[string]any{
+			"project": "hao.news",
+		},
+		CreatedAt: time.Date(2026, 3, 18, 12, 1, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatalf("BuildMessage error = %v", err)
+	}
+	delete(msg.Extensions, "hd.delegation")
+	if err := ValidateMessage(msg, body); err == nil {
+		t.Fatal("expected validation error after removing hd.delegation")
+	}
+}
+
+func TestLoadAgentIdentityAutoSynthesizesWriterDelegationForChild(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	rootIdentity, err := RecoverHDIdentity(
+		"pc75",
+		"agent://pc75",
+		"abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+		time.Date(2026, 3, 30, 12, 0, 0, 0, time.UTC),
+	)
+	if err != nil {
+		t.Fatalf("RecoverHDIdentity error = %v", err)
+	}
+	childIdentity, err := DeriveChildIdentity(rootIdentity, "agent://pc75/etf-pro-duo", time.Date(2026, 3, 30, 12, 1, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("DeriveChildIdentity error = %v", err)
+	}
+	childIdentity.WriterDelegation = nil
+	rootPath := filepath.Join(dir, "pc75.json")
+	childPath := filepath.Join(dir, "pc75-etf-pro-duo.json")
+	if err := SaveAgentIdentity(rootPath, rootIdentity); err != nil {
+		t.Fatalf("SaveAgentIdentity(root) error = %v", err)
+	}
+	data, err := json.MarshalIndent(childIdentity, "", "  ")
+	if err != nil {
+		t.Fatalf("MarshalIndent(child) error = %v", err)
+	}
+	data = append(data, '\n')
+	if err := os.WriteFile(childPath, data, 0o600); err != nil {
+		t.Fatalf("WriteFile(child) error = %v", err)
+	}
+	loaded, err := LoadAgentIdentity(childPath)
+	if err != nil {
+		t.Fatalf("LoadAgentIdentity(child) error = %v", err)
+	}
+	if loaded.WriterDelegation == nil {
+		t.Fatal("expected writer delegation to be synthesized")
+	}
+	if loaded.WriterDelegation.ChildPublicKey != childIdentity.PublicKey {
+		t.Fatalf("child public key = %q, want %q", loaded.WriterDelegation.ChildPublicKey, childIdentity.PublicKey)
 	}
 }
 

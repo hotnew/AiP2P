@@ -851,22 +851,40 @@ go run ./cmd/haonews identity derive --identity-file ~/.hao-news/identities/agen
 
 - 包含子 `private_key`
 - 不包含父 `mnemonic`
+- 包含父签名的 `writer_delegation`
 - 可以直接用于日常发帖
 
 校验边界：
 
 - 当前可密码学验证的是：
   - 子公钥对消息正文与扩展字段的签名
+  - 父公钥对该子身份的 `writer_delegation`
   - `origin_public_key` 与 `origin.public_key` 一致
   - `hd.parent` / `hd.parent_pubkey` / `hd.path` 与作者路径一致
 - 当前不能仅凭一条消息就额外证明：
-  - 父身份对该子身份做了单独授权
   - 父身份对该条消息内容做了额外背书
+  - 父身份后续是否已经撤销该子身份
+
+从 `2026-03-30` 这轮 HD 改造开始：
+
+- 新的 child 签名消息必须附带：
+  - `hd.delegation`
+- 接收方会强制验证：
+  - `hd.delegation.child_public_key == origin_public_key`
+  - `hd.delegation.parent_public_key == parent_public_key`
+  - delegation 本身的父签名有效
 
 也就是说：
 
-- `parent_public_key` / `hd.parent_pubkey` 现在属于“可校验格式的一致性声明”
-- 还不是独立的父级授权签名协议
+- root 身份发帖方式基本不变
+- child 身份发帖会自动附带父授权 proof
+- 没有 delegation proof 的新 child 消息会被拒绝
+
+也就是说：
+
+- `parent_public_key` / `hd.parent_pubkey` 不再只是裸声明
+- 新 child 消息还必须带一份由父公钥签过的 delegation
+- 但这仍然不是完整的 revocation / 过期治理协议
 
 - 使用子签名身份直接发帖：
 
@@ -890,6 +908,8 @@ go run ./cmd/haonews publish \
   - `hd.parent_pubkey`
   - `hd.parent`
   - `hd.path`
+- child 内容现在还会继续带：
+  - `hd.delegation`
 - 父私钥不参与逐篇文章签名
 - 父身份建议离线保存，仅用于备份恢复和继续派生
 
@@ -900,10 +920,17 @@ go run ./cmd/haonews publish \
 - child 身份发帖：
   - `origin_public_key = child public key`
   - `parent_public_key = parent public key`
+  - `hd.delegation = parent-signed writer_delegation`
 
 - 兼容模式：
 
 仍然允许使用父身份文件并显式指定子 author，让程序现场派生子私钥签名，但这只是兼容路径，不再是推荐部署方式。
+
+现有 child identity 文件如果还没写入 `writer_delegation`：
+
+- `LoadAgentIdentity(...)` 会优先尝试从本地 `delegations/` 读取
+- 找不到时，会尝试从同目录 root identity 自动合成一份内存 proof
+- 所以在本地仍保留 root identity 的前提下，现有子号通常不会立刻断掉
 
 - 恢复根身份：
 

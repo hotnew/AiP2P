@@ -162,6 +162,32 @@ func TestSignAndVerifyMessage(t *testing.T) {
 	}
 }
 
+func TestSignAndVerifyChildMessageWithDelegation(t *testing.T) {
+	rootIdentity, err := haonews.RecoverHDIdentity(
+		"pc75",
+		"agent://pc75",
+		"abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+		time.Date(2026, 3, 30, 8, 0, 0, 0, time.UTC),
+	)
+	if err != nil {
+		t.Fatalf("RecoverHDIdentity error = %v", err)
+	}
+	childIdentity, err := haonews.DeriveChildIdentity(rootIdentity, "agent://pc75/live-alpha", time.Date(2026, 3, 30, 8, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("DeriveChildIdentity error = %v", err)
+	}
+	msg, err := NewSignedMessage(childIdentity, childIdentity.Author, "room-1", TypeMessage, 1, 0, LivePayload{Content: "hello"})
+	if err != nil {
+		t.Fatalf("NewSignedMessage error = %v", err)
+	}
+	if _, ok := msg.Payload.Metadata["hd.delegation"]; !ok {
+		t.Fatal("expected hd.delegation metadata")
+	}
+	if err := VerifyMessage(msg); err != nil {
+		t.Fatalf("VerifyMessage error = %v", err)
+	}
+}
+
 func TestOpenLocalStoreListRooms(t *testing.T) {
 	store, err := OpenLocalStore(t.TempDir())
 	if err != nil {

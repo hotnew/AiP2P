@@ -102,6 +102,13 @@ func ensureSignedMetadata(payload *LivePayload, identity haonews.AgentIdentity) 
 			payload.Metadata["parent_public_key"] = parentKey
 		}
 	}
+	if identity.WriterDelegation != nil {
+		if _, ok := payload.Metadata["hd.delegation"]; !ok {
+			if value, err := haonews.WriterDelegationToMap(*identity.WriterDelegation); err == nil {
+				payload.Metadata["hd.delegation"] = value
+			}
+		}
+	}
 }
 
 func VerifyMessage(msg LiveMessage) error {
@@ -138,6 +145,9 @@ func VerifyMessage(msg LiveMessage) error {
 	}
 	if !ed25519.Verify(ed25519.PublicKey(publicKey), body, signature) {
 		return fmt.Errorf("live signature verification failed")
+	}
+	if err := haonews.ValidateSignedMetadata(strings.TrimSpace(msg.Sender), strings.TrimSpace(msg.SenderPubKey), msg.Payload.Metadata); err != nil {
+		return err
 	}
 	return nil
 }

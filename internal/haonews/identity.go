@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -27,6 +28,7 @@ type AgentIdentity struct {
 	DerivationPath  string `json:"derivation_path,omitempty"`
 	Parent          string `json:"parent,omitempty"`
 	ParentPublicKey string `json:"parent_public_key,omitempty"`
+	WriterDelegation *WriterDelegation `json:"writer_delegation,omitempty"`
 }
 
 type signedOriginPayload struct {
@@ -152,7 +154,7 @@ func DeriveChildIdentity(identity AgentIdentity, author string, createdAt time.T
 	if createdAt.IsZero() {
 		createdAt = time.Now().UTC()
 	}
-	return AgentIdentity{
+	childIdentity := AgentIdentity{
 		AgentID:         identity.AgentID,
 		Author:          strings.TrimSpace(author),
 		KeyType:         KeyTypeEd25519,
@@ -164,7 +166,13 @@ func DeriveChildIdentity(identity AgentIdentity, author string, createdAt time.T
 		DerivationPath:  path,
 		Parent:          identity.Author,
 		ParentPublicKey: identity.PublicKey,
-	}, nil
+	}
+	delegation, err := BuildChildWriterDelegation(identity, childIdentity, createdAt)
+	if err != nil {
+		return AgentIdentity{}, err
+	}
+	childIdentity.WriterDelegation = &delegation
+	return childIdentity, nil
 }
 
 func SaveAgentIdentity(path string, identity AgentIdentity) error {
@@ -188,10 +196,81 @@ func LoadAgentIdentity(path string) (AgentIdentity, error) {
 	if err := json.Unmarshal(data, &identity); err != nil {
 		return AgentIdentity{}, err
 	}
+	identity, err = enrichIdentityDelegation(path, identity)
+	if err != nil {
+		return AgentIdentity{}, err
+	}
 	if err := identity.Validate(); err != nil {
 		return AgentIdentity{}, err
 	}
 	return identity, nil
+}
+
+func enrichIdentityDelegation(path string, identity AgentIdentity) (AgentIdentity, error) {
+	if identity.WriterDelegation != nil || !requiresDelegationForIdentity(identity) {
+		return identity, nil
+	}
+	if delegation, ok, err := LoadDelegationProofForChild(path, identity); err != nil {
+		return AgentIdentity{}, err
+	} else if ok {
+		identity.WriterDelegation = delegation
+		return identity, nil
+	}
+	rootIdentity, ok, err := findLocalHDParentIdentity(path, identity)
+	if err != nil {
+		return AgentIdentity{}, err
+	}
+	if !ok {
+		return identity, nil
+	}
+	createdAt, _ := time.Parse(time.RFC3339, strings.TrimSpace(identity.CreatedAt))
+	delegation, err := BuildChildWriterDelegation(rootIdentity, identity, createdAt)
+	if err != nil {
+		return AgentIdentity{}, err
+	}
+	identity.WriterDelegation = &delegation
+	return identity, nil
+}
+
+func findLocalHDParentIdentity(path string, child AgentIdentity) (AgentIdentity, bool, error) {
+	identityDir := filepath.Dir(path)
+	entries, err := os.ReadDir(identityDir)
+	if err != nil {
+		return AgentIdentity{}, false, err
+	}
+	selfPath, _ := filepath.Abs(path)
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+			continue
+		}
+		candidatePath := filepath.Join(identityDir, entry.Name())
+		absCandidate, _ := filepath.Abs(candidatePath)
+		if absCandidate == selfPath {
+			continue
+		}
+		data, err := os.ReadFile(candidatePath)
+		if err != nil {
+			continue
+		}
+		var candidate AgentIdentity
+		if err := json.Unmarshal(data, &candidate); err != nil {
+			continue
+		}
+		if err := candidate.Validate(); err != nil {
+			continue
+		}
+		if !candidate.HDEnabled || strings.TrimSpace(candidate.Mnemonic) == "" {
+			continue
+		}
+		if strings.TrimSpace(candidate.Author) != strings.TrimSpace(child.Parent) {
+			continue
+		}
+		if strings.ToLower(strings.TrimSpace(candidate.PublicKey)) != strings.ToLower(strings.TrimSpace(child.ParentPublicKey)) {
+			continue
+		}
+		return candidate, true, nil
+	}
+	return AgentIdentity{}, false, nil
 }
 
 func (id AgentIdentity) Validate() error {
@@ -307,10 +386,24 @@ func ValidateMessageOrigin(msg Message) error {
 	if !ed25519.Verify(ed25519.PublicKey(publicKey), payload, signature) {
 		return errors.New("origin signature verification failed")
 	}
-	if err := validateSignedKeyMetadata(msg, origin.PublicKey); err != nil {
+	if err := ValidateSignedMetadata(strings.TrimSpace(msg.Author), origin.PublicKey, msg.Extensions); err != nil {
+		return err
+	}
+	return nil
+}
+
+func ValidateSignedMetadata(author, originPublicKey string, extensions map[string]any) error {
+	msg := Message{
+		Author:     strings.TrimSpace(author),
+		Extensions: cloneMap(extensions),
+	}
+	if err := validateSignedKeyMetadata(msg, originPublicKey); err != nil {
 		return err
 	}
 	if err := validateHDOriginMetadata(msg); err != nil {
+		return err
+	}
+	if err := validateHDDelegationMetadata(msg, originPublicKey); err != nil {
 		return err
 	}
 	return nil
@@ -371,6 +464,19 @@ func (id AgentIdentity) validateHD() error {
 			return err
 		}
 	}
+	if id.WriterDelegation != nil {
+		delegation := *id.WriterDelegation
+		if err := ValidateWriterDelegation(delegation); err != nil {
+			return fmt.Errorf("writer_delegation: %w", err)
+		}
+		if strings.ToLower(strings.TrimSpace(delegation.ChildPublicKey)) != strings.ToLower(strings.TrimSpace(id.PublicKey)) {
+			return errors.New("writer_delegation.child_public_key must match identity public_key")
+		}
+		if strings.TrimSpace(id.ParentPublicKey) != "" &&
+			strings.ToLower(strings.TrimSpace(delegation.ParentPublicKey)) != strings.ToLower(strings.TrimSpace(id.ParentPublicKey)) {
+			return errors.New("writer_delegation.parent_public_key must match identity parent_public_key")
+		}
+	}
 	return nil
 }
 
@@ -385,6 +491,9 @@ func resolveSigningIdentity(identity AgentIdentity, author string, extensions ma
 		}
 		result := cloneMap(extensions)
 		applySignedKeyMetadata(result, identity.PublicKey, identity.PublicKey)
+		if err := applyDelegationMetadata(result, identity); err != nil {
+			return AgentIdentity{}, nil, err
+		}
 		return identity, result, nil
 	}
 	if strings.TrimSpace(identity.Mnemonic) != "" {
@@ -406,6 +515,9 @@ func resolveSigningIdentity(identity AgentIdentity, author string, extensions ma
 		parentPublicKey = identity.PublicKey
 	}
 	applySignedKeyMetadata(result, identity.PublicKey, parentPublicKey)
+	if err := applyDelegationMetadata(result, identity); err != nil {
+		return AgentIdentity{}, nil, err
+	}
 	return identity, result, nil
 }
 
@@ -440,7 +552,7 @@ func deriveSigningIdentity(identity AgentIdentity, author string, extensions map
 		result["hd.path"] = path
 	}
 	applySignedKeyMetadata(result, publicKey, identity.PublicKey)
-	return AgentIdentity{
+	signingIdentity := AgentIdentity{
 		AgentID:         identity.AgentID,
 		Author:          author,
 		KeyType:         KeyTypeEd25519,
@@ -452,7 +564,19 @@ func deriveSigningIdentity(identity AgentIdentity, author string, extensions map
 		DerivationPath:  path,
 		Parent:          identity.Author,
 		ParentPublicKey: identity.PublicKey,
-	}, result, nil
+	}
+		if author != identity.Author {
+			createdAt, _ := time.Parse(time.RFC3339, strings.TrimSpace(identity.CreatedAt))
+			delegation, err := BuildChildWriterDelegation(identity, signingIdentity, createdAt)
+			if err != nil {
+				return AgentIdentity{}, nil, err
+			}
+		signingIdentity.WriterDelegation = &delegation
+	}
+	if err := applyDelegationMetadata(result, signingIdentity); err != nil {
+		return AgentIdentity{}, nil, err
+	}
+	return signingIdentity, result, nil
 }
 
 func applySignedKeyMetadata(extensions map[string]any, originPublicKey, parentPublicKey string) {
@@ -465,6 +589,35 @@ func applySignedKeyMetadata(extensions map[string]any, originPublicKey, parentPu
 	if parentPublicKey = strings.ToLower(strings.TrimSpace(parentPublicKey)); parentPublicKey != "" {
 		extensions["parent_public_key"] = parentPublicKey
 	}
+}
+
+func applyDelegationMetadata(extensions map[string]any, identity AgentIdentity) error {
+	if extensions == nil {
+		return nil
+	}
+	if !requiresDelegationForIdentity(identity) {
+		delete(extensions, "hd.delegation")
+		return nil
+	}
+	if identity.WriterDelegation == nil {
+		return errors.New("child signing identities must include writer_delegation")
+	}
+	delegation := *identity.WriterDelegation
+	if err := ValidateWriterDelegation(delegation); err != nil {
+		return fmt.Errorf("writer_delegation: %w", err)
+	}
+		value, err := WriterDelegationToMap(delegation)
+		if err != nil {
+			return fmt.Errorf("writer_delegation: %w", err)
+		}
+		extensions["hd.delegation"] = value
+		return nil
+	}
+
+func requiresDelegationForIdentity(identity AgentIdentity) bool {
+	return strings.TrimSpace(identity.Parent) != "" &&
+		strings.TrimSpace(identity.ParentPublicKey) != "" &&
+		strings.ToLower(strings.TrimSpace(identity.ParentPublicKey)) != strings.ToLower(strings.TrimSpace(identity.PublicKey))
 }
 
 func validateSignedKeyMetadata(msg Message, originPublicKey string) error {
@@ -549,6 +702,53 @@ func validateHDOriginMetadata(msg Message) error {
 		return errors.New("hd.path must match the child author derivation path")
 	}
 	return nil
+}
+
+func validateHDDelegationMetadata(msg Message, originPublicKey string) error {
+	if !signedMessageRequiresDelegation(msg, originPublicKey) {
+		return nil
+	}
+	parentPublicKey, ok := stringFromMap(msg.Extensions, "parent_public_key")
+	if !ok {
+		return errors.New("child signed messages must include parent_public_key")
+	}
+	value, ok := msg.Extensions["hd.delegation"]
+	if !ok {
+		return errors.New("child signed messages must include hd.delegation")
+	}
+	delegation, present, err := WriterDelegationFromAny(value)
+	if err != nil {
+		return err
+	}
+	if !present || delegation == nil {
+		return errors.New("child signed messages must include hd.delegation")
+	}
+	if err := ValidateWriterDelegation(*delegation); err != nil {
+		return err
+	}
+	if strings.ToLower(strings.TrimSpace(delegation.ChildPublicKey)) != strings.ToLower(strings.TrimSpace(originPublicKey)) {
+		return errors.New("hd.delegation.child_public_key must match origin_public_key")
+	}
+	if strings.ToLower(strings.TrimSpace(delegation.ParentPublicKey)) != strings.ToLower(strings.TrimSpace(parentPublicKey)) {
+		return errors.New("hd.delegation.parent_public_key must match parent_public_key")
+	}
+	if parentPubKey, ok := stringFromMap(msg.Extensions, "hd.parent_pubkey"); ok {
+		if strings.ToLower(strings.TrimSpace(parentPubKey)) != strings.ToLower(strings.TrimSpace(delegation.ParentPublicKey)) {
+			return errors.New("hd.delegation.parent_public_key must match hd.parent_pubkey")
+		}
+	}
+	return nil
+}
+
+func signedMessageRequiresDelegation(msg Message, originPublicKey string) bool {
+	parentPublicKey, hasParent := stringFromMap(msg.Extensions, "parent_public_key")
+	if hasParent && strings.ToLower(strings.TrimSpace(parentPublicKey)) != strings.ToLower(strings.TrimSpace(originPublicKey)) {
+		return true
+	}
+	_, okParent := stringFromMap(msg.Extensions, "hd.parent")
+	_, okParentPubKey := stringFromMap(msg.Extensions, "hd.parent_pubkey")
+	_, okPath := stringFromMap(msg.Extensions, "hd.path")
+	return okParent || okParentPubKey || okPath
 }
 
 func signedMessagePayloadBytes(msg Message, origin MessageOrigin) ([]byte, error) {

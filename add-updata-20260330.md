@@ -209,18 +209,43 @@ Live 页面里的房间时间和消息时间统一改成本地时区显示：
 
 - 当前可验证的是：
   - 子公钥签名
+  - 父公钥对该子身份的 `writer_delegation`
   - `origin_public_key`
   - `parent_public_key`
   - `hd.parent` / `hd.parent_pubkey` / `hd.path`
     与作者路径和消息元数据的一致性
 - 当前还不是：
-  - 父身份对每条子消息单独背书的密码学授权协议
+  - 父身份对每条子消息内容逐篇单独背书
+  - 父身份后续撤销子身份的完整协议
 
 目的：
 
 - 防止 Live 房间越跑越肥
 - 减少页面和 API 压力
 - 避免机器人房间长期膨胀
+
+### 4.1.2 HD 父子授权 proof 接入
+
+本轮已把最小可用的父子授权 proof 接入写入链和验收链：
+
+- 新 child identity 会自动带：
+  - `writer_delegation`
+- 新 child 消息会自动带：
+  - `hd.delegation`
+- 接收方会强制验证：
+  - `hd.delegation.child_public_key == origin_public_key`
+  - `hd.delegation.parent_public_key == parent_public_key`
+  - 父公钥签名有效
+
+这条改造的直接收益是：
+
+- 别人不能再只靠伪造 `parent_public_key` 挂靠到你的父身份下面
+
+当前仍然暂不处理：
+
+- revocation
+- 过期强制
+- 老文章兼容
 
 ### 4.2 房间 owner 元数据稳定
 
