@@ -29,6 +29,10 @@ func ajaxFragmentRequest(r *http.Request) bool {
 	return strings.TrimSpace(r.Header.Get("X-HaoNews-Ajax")) == "1"
 }
 
+func setAjaxVariantHeaders(w http.ResponseWriter) {
+	w.Header().Add("Vary", "X-HaoNews-Ajax")
+}
+
 func forceColdStartForTests(r *http.Request) bool {
 	if !strings.HasSuffix(filepath.Base(os.Args[0]), ".test") {
 		return false
@@ -73,6 +77,7 @@ func renderCachedPageOrFragment(
 	build func(fragment bool) (any, error),
 ) error {
 	fragment := ajaxFragmentRequest(r)
+	setAjaxVariantHeaders(w)
 	entry, err := app.FetchHTTPResponseVariant(cacheKey, indexSig, func() (newsplugin.CachedHTTPResponse, error) {
 		data, err := build(fragment)
 		if err != nil {
@@ -86,10 +91,14 @@ func renderCachedPageOrFragment(
 		if err != nil {
 			return newsplugin.CachedHTTPResponse{}, err
 		}
+		cacheControl := "private, max-age=5, stale-while-revalidate=25"
+		if fragment {
+			cacheControl = "no-store, no-cache, must-revalidate"
+		}
 		return newsplugin.NewCachedHTTPResponse(
 			http.StatusOK,
 			"text/html; charset=utf-8",
-			"private, max-age=5, stale-while-revalidate=25",
+			cacheControl,
 			"",
 			time.Time{},
 			time.Now().Add(5*time.Second),
@@ -104,7 +113,11 @@ func renderCachedPageOrFragment(
 }
 
 func renderPageOrFragment(app *newsplugin.App, w http.ResponseWriter, r *http.Request, pageTemplate, fragmentTemplate, title string, data any) {
+	setAjaxVariantHeaders(w)
 	if ajaxFragmentRequest(r) {
+		w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
+		w.Header().Set("Pragma", "no-cache")
+		w.Header().Set("Expires", "0")
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		if err := app.Templates().ExecuteTemplate(w, fragmentTemplate, data); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
