@@ -25,7 +25,7 @@ func newHandler(app *newsplugin.App, staticFS fs.FS) http.Handler {
 	mux.HandleFunc("/api/history/manifest", func(w http.ResponseWriter, r *http.Request) {
 		handleAPIHistoryList(app, w, r)
 	})
-	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
+	mux.Handle("/static/", newsplugin.NoStoreStaticHandler(staticFS))
 	return mux
 }
 

@@ -43,7 +43,7 @@ func newHandler(app *newsplugin.App, staticFS fs.FS) http.Handler {
 	mux.HandleFunc("/writer-policy", func(w http.ResponseWriter, r *http.Request) {
 		handleWriterPolicy(app, w, r)
 	})
-	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
+	mux.Handle("/static/", newsplugin.NoStoreStaticHandler(staticFS))
 	return mux
 }
 

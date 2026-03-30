@@ -191,7 +191,7 @@ func newHandler(app *newsplugin.App, staticFS fs.FS) http.Handler {
 	mux.HandleFunc("/api/moderation/reviewers", func(w http.ResponseWriter, r *http.Request) {
 		handleAPIModerationReviewers(app, w, r)
 	})
-	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
+	mux.Handle("/static/", newsplugin.NoStoreStaticHandler(staticFS))
 	return mux
 }
 
@@ -1030,26 +1030,26 @@ func handleTopic(app *newsplugin.App, w http.ResponseWriter, r *http.Request) {
 	opts.Topic = name
 	if app.ColdStartPending() || forceColdStartForTests(r) {
 		data := newsplugin.CollectionPageData{
-			Project:        app.ProjectName(),
-			Version:        app.VersionString(),
-			StartupPending: true,
-			StartupMessage: coldStartMessage(app),
-			Kind:           "Topic",
-			Name:           name,
-			Path:           newsplugin.TopicPath(name),
-			RequestURI:     r.URL.RequestURI(),
-			DirectoryURL:   "/topics",
-			APIPath:        "/api" + newsplugin.TopicPath(name),
-			Now:            time.Now(),
-			Options:        opts,
-			PageNav:        app.PageNav("/topics"),
-			TabOptions:     newsplugin.BuildTabOptions(opts, newsplugin.TopicPath(name), "topic"),
-			SortOptions:    newsplugin.BuildSortOptions(opts, newsplugin.TopicPath(name), "topic"),
-			WindowOptions:  newsplugin.BuildWindowOptions(opts, newsplugin.TopicPath(name), "topic"),
+			Project:         app.ProjectName(),
+			Version:         app.VersionString(),
+			StartupPending:  true,
+			StartupMessage:  coldStartMessage(app),
+			Kind:            "Topic",
+			Name:            name,
+			Path:            newsplugin.TopicPath(name),
+			RequestURI:      r.URL.RequestURI(),
+			DirectoryURL:    "/topics",
+			APIPath:         "/api" + newsplugin.TopicPath(name),
+			Now:             time.Now(),
+			Options:         opts,
+			PageNav:         app.PageNav("/topics"),
+			TabOptions:      newsplugin.BuildTabOptions(opts, newsplugin.TopicPath(name), "topic"),
+			SortOptions:     newsplugin.BuildSortOptions(opts, newsplugin.TopicPath(name), "topic"),
+			WindowOptions:   newsplugin.BuildWindowOptions(opts, newsplugin.TopicPath(name), "topic"),
 			PageSizeOptions: newsplugin.BuildPageSizeOptions(opts, newsplugin.TopicPath(name), "topic"),
-			SideLabel:      "Sources covering this topic",
-			ActiveFilters:  newsplugin.BuildActiveFilters(opts, newsplugin.TopicPath(name), "topic"),
-			NodeStatus:     app.ColdStartNodeStatus(),
+			SideLabel:       "Sources covering this topic",
+			ActiveFilters:   newsplugin.BuildActiveFilters(opts, newsplugin.TopicPath(name), "topic"),
+			NodeStatus:      app.ColdStartNodeStatus(),
 		}
 		renderPageOrFragment(app, w, r, "collection.html", "collection.feedRoot", "好牛Ai Topic: "+name, data)
 		return

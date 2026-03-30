@@ -204,6 +204,6 @@ func newHandler(app *newsplugin.App, store *live.LocalStore, staticFS fs.FS) htt
 		}
 		handleAPILiveRoom(app, store, roomID, w, r)
 	})
-	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
+	mux.Handle("/static/", newsplugin.NoStoreStaticHandler(staticFS))
 	return mux
 }

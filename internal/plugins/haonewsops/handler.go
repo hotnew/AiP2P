@@ -56,7 +56,7 @@ func newHandler(app *newsplugin.App, staticFS fs.FS) http.Handler {
 	mux.HandleFunc("/api/network/bootstrap", func(w http.ResponseWriter, r *http.Request) {
 		handleAPINetworkBootstrap(app, w, r)
 	})
-	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
+	mux.Handle("/static/", newsplugin.NoStoreStaticHandler(staticFS))
 	return mux
 }
 
