@@ -1885,6 +1885,27 @@ HD 父子公钥过滤 Phase 1-5 一次落地
 验证：
 
 - `go test ./internal/plugins/haonewslive ./internal/haonews/live ./internal/plugins/haonews ./internal/haonews`
+
+2026-03-30 14:31 CST - Live 房间保留策略收口
+
+- 当前先不继续推进“每天 05:30 CST 自动切房”
+- 线上先落地更直接的房间收敛策略：
+  - 每个房间只保留最近 `100` 条非心跳事件
+  - 另外只保留最近 `20` 条心跳
+- 新事件落库后会自动裁剪：
+  - 旧心跳优先被清掉
+  - 超过窗口的旧非心跳也会被清掉
+- `RoomSummary.EventCount` 现在只统计非心跳事件
+- `.75` 实测：
+  - `public-etf-pro-duo` 从 `611 total / 72 non-heartbeat / 539 heartbeat`
+    收敛到 `93 total / 73 non-heartbeat / 20 heartbeat`
+  - `public-etf-pro-kong` 从 `536 total / 15 non-heartbeat / 521 heartbeat`
+    收敛到 `36 total / 16 non-heartbeat / 20 heartbeat`
+
+验证：
+
+- `go test ./internal/haonews/live`
+- `go build ./cmd/haonews`
 - `.75 /live/public/new-agents` 页面已出现：
   - `本地公共区防护`
   - `复制报到消息`

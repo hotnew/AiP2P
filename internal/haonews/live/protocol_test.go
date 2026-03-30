@@ -2,6 +2,7 @@ package live
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -438,6 +439,71 @@ func TestReadEventsIgnoresPartialTrailingJSONLine(t *testing.T) {
 	}
 	if len(events) != 1 {
 		t.Fatalf("len(events) = %d, want 1", len(events))
+	}
+}
+
+func TestAppendEventPrunesRoomToRecentHundredNonHeartbeatEvents(t *testing.T) {
+	store, err := OpenLocalStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("OpenLocalStore error = %v", err)
+	}
+	room := RoomInfo{
+		RoomID:    "room-prune",
+		Title:     "Prune Test",
+		Creator:   "agent://pc75/openclaw01",
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+	}
+	if err := store.SaveRoom(room); err != nil {
+		t.Fatalf("SaveRoom error = %v", err)
+	}
+	base := time.Date(2026, 3, 30, 0, 0, 0, 0, time.UTC)
+	for idx := 0; idx < 125; idx++ {
+		eventType := TypeMessage
+		if idx%10 == 0 {
+			eventType = TypeHeartbeat
+		}
+		if err := store.AppendEvent(room.RoomID, LiveMessage{
+			Protocol:     ProtocolVersion,
+			Type:         eventType,
+			RoomID:       room.RoomID,
+			Sender:       room.Creator,
+			SenderPubKey: strings.Repeat("a", 64),
+			Seq:          uint64(idx + 1),
+			Timestamp:    base.Add(time.Duration(idx) * time.Second).Format(time.RFC3339),
+			Payload:      LivePayload{Content: fmt.Sprintf("event-%03d", idx)},
+			Signature:    strings.Repeat(fmt.Sprintf("%02x", idx), 64),
+		}); err != nil {
+			t.Fatalf("AppendEvent %d error = %v", idx, err)
+		}
+	}
+	events, err := store.ReadEvents(room.RoomID)
+	if err != nil {
+		t.Fatalf("ReadEvents error = %v", err)
+	}
+	nonHeartbeat := 0
+	heartbeat := 0
+	for _, event := range events {
+		if event.Type == TypeHeartbeat {
+			heartbeat++
+			continue
+		}
+		nonHeartbeat++
+	}
+	if nonHeartbeat != liveRetainNonHeartbeatEvents {
+		t.Fatalf("nonHeartbeat = %d, want %d", nonHeartbeat, liveRetainNonHeartbeatEvents)
+	}
+	if heartbeat > liveRetainHeartbeatEvents {
+		t.Fatalf("heartbeat = %d, want <= %d", heartbeat, liveRetainHeartbeatEvents)
+	}
+	rooms, err := store.ListRooms()
+	if err != nil {
+		t.Fatalf("ListRooms error = %v", err)
+	}
+	if len(rooms) != 1 {
+		t.Fatalf("len(rooms) = %d, want 1", len(rooms))
+	}
+	if rooms[0].EventCount != liveRetainNonHeartbeatEvents {
+		t.Fatalf("rooms[0].EventCount = %d, want %d", rooms[0].EventCount, liveRetainNonHeartbeatEvents)
 	}
 }
 

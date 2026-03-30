@@ -782,6 +782,31 @@ haonews publish \
   --body "Signed from child author"
 ```
 
+## Live 房间保留策略
+
+当前 `Live` 房间不再无限累加事件。
+
+现在的本地存储规则是：
+
+- 每个房间只保留最近 `100` 条非心跳事件
+- `heartbeat` 不计入这 `100` 条
+- 另外只保留最近 `20` 条心跳，用于在线状态和最近活跃判断
+
+这意味着：
+
+- 长期开着的 bot 房间不会因为心跳把 `events.jsonl` 冲到几百上千条
+- `/live/<room>` 和 `/api/live/...` 的读取成本会稳定很多
+- 房间统计里的 `EventCount` 现在只统计非心跳事件
+
+当前这个规则同样适用于：
+
+- `Live Public`
+- `public/live-time`
+- `public/etf-pro-duo`
+- `public/etf-pro-kong`
+
+后续如果要继续做“每天 05:30 CST 自动切房并归档”，会在这条保留策略之上再扩，不影响当前固定入口。
+
 ## 已接入的核心能力
 
 ### 1. 签名发布

@@ -20,6 +20,11 @@ type LocalStore struct {
 	Root string
 }
 
+const (
+	liveRetainNonHeartbeatEvents = 100
+	liveRetainHeartbeatEvents    = 20
+)
+
 type RoomSummary struct {
 	RoomID             string         `json:"room_id"`
 	Title              string         `json:"title"`
@@ -176,7 +181,10 @@ func (s *LocalStore) AppendEvent(roomID string, msg LiveMessage) error {
 		if _, err := file.Write(append(body, '\n')); err != nil {
 			return err
 		}
-		return s.updateRoomIndex(roomID, msg)
+		if err := s.pruneRoomEvents(roomID); err != nil {
+			return err
+		}
+		return s.refreshRoomIndex(roomID)
 	})
 }
 
@@ -340,7 +348,7 @@ func (s *LocalStore) ListRooms() ([]RoomSummary, error) {
 	return rooms, nil
 }
 
-func (s *LocalStore) updateRoomIndex(roomID string, msg LiveMessage) error {
+func (s *LocalStore) refreshRoomIndex(roomID string) error {
 	path := filepath.Join(s.RoomDir(roomID), "room.json")
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -350,14 +358,91 @@ func (s *LocalStore) updateRoomIndex(roomID string, msg LiveMessage) error {
 	if err := json.Unmarshal(data, &record); err != nil {
 		return err
 	}
-	record.EventCount++
-	record.LastEventAt = msg.Timestamp
+	events, err := s.ReadEvents(roomID)
+	if err != nil {
+		return err
+	}
+	record.EventCount = countIndexedLiveEvents(events)
+	record.LastEventAt = latestEventTimestamp(events)
 	body, err := json.MarshalIndent(record, "", "  ")
 	if err != nil {
 		return err
 	}
 	body = append(body, '\n')
 	return writeFileAtomic(path, body, 0o644)
+}
+
+func (s *LocalStore) pruneRoomEvents(roomID string) error {
+	path := filepath.Join(s.RoomDir(roomID), "events.jsonl")
+	events, err := s.ReadEvents(roomID)
+	if err != nil {
+		return err
+	}
+	pruned := retainRecentLiveEvents(events, liveRetainNonHeartbeatEvents, liveRetainHeartbeatEvents)
+	if len(pruned) == len(events) {
+		return nil
+	}
+	var body []byte
+	for _, event := range pruned {
+		line, err := json.Marshal(event)
+		if err != nil {
+			return err
+		}
+		body = append(body, line...)
+		body = append(body, '\n')
+	}
+	return writeFileAtomic(path, body, 0o644)
+}
+
+func retainRecentLiveEvents(events []LiveMessage, keepNonHeartbeat, keepHeartbeat int) []LiveMessage {
+	if len(events) == 0 {
+		return nil
+	}
+	keep := make([]bool, len(events))
+	nonHeartbeatCount := 0
+	heartbeatCount := 0
+	for index := len(events) - 1; index >= 0; index-- {
+		event := events[index]
+		if strings.TrimSpace(event.Type) == TypeHeartbeat {
+			if keepHeartbeat > 0 && heartbeatCount < keepHeartbeat {
+				keep[index] = true
+				heartbeatCount++
+			}
+			continue
+		}
+		if keepNonHeartbeat <= 0 || nonHeartbeatCount < keepNonHeartbeat {
+			keep[index] = true
+			nonHeartbeatCount++
+		}
+	}
+	out := make([]LiveMessage, 0, nonHeartbeatCount+heartbeatCount)
+	for index, event := range events {
+		if keep[index] {
+			out = append(out, event)
+		}
+	}
+	return out
+}
+
+func countIndexedLiveEvents(events []LiveMessage) int {
+	count := 0
+	for _, event := range events {
+		if strings.TrimSpace(event.Type) == TypeHeartbeat {
+			continue
+		}
+		count++
+	}
+	return count
+}
+
+func latestEventTimestamp(events []LiveMessage) string {
+	for index := len(events) - 1; index >= 0; index-- {
+		ts := strings.TrimSpace(events[index].Timestamp)
+		if ts != "" {
+			return ts
+		}
+	}
+	return ""
 }
 
 func (s *LocalStore) SaveArchiveResult(roomID string, result ArchiveResult) error {
