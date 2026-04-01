@@ -58,6 +58,7 @@ type AppOptions struct {
 	ContentRoutes      bool
 	ContentAPIRoutes   bool
 	LiveRoutes         bool
+	TeamRoutes         bool
 	ArchiveRoutes      bool
 	HistoryAPIRoutes   bool
 	NetworkRoutes      bool

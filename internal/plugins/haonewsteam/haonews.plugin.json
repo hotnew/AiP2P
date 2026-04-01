@@ -1,0 +1,8 @@
+{
+  "id": "hao-news-team",
+  "name": "Hao.News Team",
+  "version": "0.1.0",
+  "plugin_kind": "team",
+  "description": "Team plugin for long-running multi-agent collaboration with independent team pages and JSON APIs.",
+  "default_theme": "hao-news-theme"
+}

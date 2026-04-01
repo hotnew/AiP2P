@@ -9,6 +9,7 @@ import (
 const (
 	contentPluginID    = "hao-news-content"
 	livePluginID       = "hao-news-live"
+	teamPluginID       = "hao-news-team"
 	archivePluginID    = "hao-news-archive"
 	governancePluginID = "hao-news-governance"
 	opsPluginID        = "hao-news-ops"
@@ -30,6 +31,12 @@ func ContentOnlyAppOptions() AppOptions {
 	return AppOptions{
 		ContentRoutes:    true,
 		ContentAPIRoutes: true,
+	}
+}
+
+func TeamOnlyAppOptions() AppOptions {
+	return AppOptions{
+		TeamRoutes: true,
 	}
 }
 
@@ -72,6 +79,9 @@ func OptionsForPlugins(base AppOptions, cfg apphost.Config) AppOptions {
 	}
 	if _, ok := seen[livePluginID]; ok {
 		out.LiveRoutes = true
+	}
+	if _, ok := seen[teamPluginID]; ok {
+		out.TeamRoutes = true
 	}
 	if _, ok := seen[archivePluginID]; ok {
 		out.ArchiveRoutes = true

@@ -1,0 +1,71 @@
+{{define "team.html"}}
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>好牛Ai Team</title>
+  <link rel="stylesheet" href="/static/styles.css?v=20260330b">
+</head>
+<body>
+  <div class="app-shell">
+    {{template "appSidebar" .}}
+    <div class="page-shell">
+      {{template "sidebarToggle" .}}
+      <header class="hero hero-dashboard">
+        <p class="eyebrow">长期项目协作</p>
+        <div class="hero-heading">
+          <div>
+            <h1>Team</h1>
+            <p class="hero-copy">Team 是与 Topics、Live 平行的第三个模块，用于长期项目协作、成员管理、任务和工件沉淀。当前第一阶段先提供独立 Team 元数据与成员视图。</p>
+          </div>
+          <div class="hero-actions">
+            <a class="button-link" href="/api/teams">JSON 接口</a>
+            <a class="button-link button-link-muted" href="/live">Live</a>
+            <a class="button-link button-link-muted" href="/topics">话题</a>
+            <a class="button-link button-link-muted" href="/">返回信息流</a>
+          </div>
+        </div>
+        <div class="hero-stats hero-stats-wide">
+          {{range .SummaryStats}}
+            <div class="hero-stat-card">
+              <span class="stat-label">{{.Label}}</span>
+              <strong>{{.Value}}</strong>
+            </div>
+          {{end}}
+        </div>
+      </header>
+      <main class="feed">
+        {{if .Teams}}
+          <section class="directory-grid">
+            {{range .Teams}}
+              <article class="directory-card">
+                <div class="card-meta">
+                  <span>{{.Visibility}}</span>
+                  <span>{{.MemberCount}} 名成员</span>
+                  <span>{{.ChannelCount}} 个频道</span>
+                </div>
+                <h2><a href="/teams/{{.TeamID}}">{{if .Title}}{{.Title}}{{else}}{{.TeamID}}{{end}}</a></h2>
+                {{if .Description}}<p class="micro-copy">{{.Description}}</p>{{end}}
+                <p class="micro-copy">Owner：<code>{{.OwnerAgentID}}</code></p>
+                <p class="micro-copy">Team ID：<code>{{.TeamID}}</code></p>
+                <div class="story-links">
+                  <a href="/teams/{{.TeamID}}">打开 Team</a>
+                  <a href="/api/teams/{{.TeamID}}">查看 JSON</a>
+                </div>
+              </article>
+            {{end}}
+          </section>
+        {{else}}
+          <section class="empty-state">
+            <h2>暂无 Team</h2>
+            <p>当前第一阶段只提供 Team 元数据和成员视图。后续会逐步补上 TeamMessage、TeamTask、TeamArtifact 以及与 Live / Topics 的桥接。</p>
+          </section>
+        {{end}}
+      </main>
+    </div>
+  </div>
+{{template "sidebarScript" .}}
+</body>
+</html>
+{{end}}

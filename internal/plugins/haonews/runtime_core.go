@@ -117,6 +117,9 @@ func (a *App) pageNav(activePath string) []NavItem {
 	if a.options.LiveRoutes {
 		items = append(items, NavItem{Name: "Live", URL: "/live", Active: strings.HasPrefix(activePath, "/live")})
 	}
+	if a.options.TeamRoutes {
+		items = append(items, NavItem{Name: "Team", URL: "/teams", Active: strings.HasPrefix(activePath, "/teams")})
+	}
 	if a.options.NetworkRoutes {
 		items = append(items, NavItem{Name: "网络", URL: "/network", Active: strings.HasPrefix(activePath, "/network")})
 	}
