@@ -320,6 +320,8 @@ type ArchiveIndexPageData struct {
 	Version       string
 	PageNav       []NavItem
 	Now           time.Time
+	BasePath      string
+	Section       string
 	Days          []ArchiveDay
 	SummaryStats  []SummaryStat
 	Subscriptions SubscriptionRules
@@ -331,6 +333,8 @@ type ArchiveDayPageData struct {
 	Version       string
 	PageNav       []NavItem
 	Now           time.Time
+	BasePath      string
+	Section       string
 	Day           string
 	Days          []ArchiveDay
 	Entries       []ArchiveEntry
@@ -344,6 +348,8 @@ type ArchiveMessagePageData struct {
 	Version    string
 	PageNav    []NavItem
 	Now        time.Time
+	BasePath   string
+	Section    string
 	Entry      ArchiveEntry
 	Content    string
 	Thread     string

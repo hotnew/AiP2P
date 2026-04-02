@@ -21,6 +21,7 @@
           </div>
           <div class="hero-actions hero-actions-compact">
             <a class="button-link" href="/api/teams">JSON 接口</a>
+            <a class="button-link button-link-muted" href="/archive/team">Team 归档</a>
             <a class="button-link button-link-muted" href="#module-boundary">边界说明</a>
             <a class="button-link button-link-muted" href="#team-suggestion">建议入口</a>
             <a class="button-link button-link-muted" href="#team-directory">Team 目录</a>
@@ -43,6 +44,7 @@
           </div>
           <div class="team-page-nav">
             <span class="filter-chip is-active">Team</span>
+            <a class="filter-chip" href="/archive/team">Team 归档</a>
             <a class="filter-chip" href="#team-suggestion">建议入口</a>
             <a class="filter-chip" href="#team-directory">Team 目录</a>
           </div>
@@ -60,6 +62,7 @@
               <p class="team-empty-note">先从 Team 目录进入一个长期项目空间，再继续成员、频道、任务和产物。</p>
               <div class="team-card-links">
                 <a href="#team-directory">打开 Team 目录</a>
+                <a href="/archive/team">查看 Team 归档</a>
                 <a href="#module-boundary">看模块边界</a>
               </div>
             </article>
@@ -116,10 +119,11 @@
                   <a href="/teams/{{.TeamID}}/members">成员治理</a>
                   <a href="/teams/{{.TeamID}}/channels/main">主频道</a>
                   <a href="/teams/{{.TeamID}}/tasks">任务</a>
-                  <a href="/teams/{{.TeamID}}/artifacts">产物</a>
-                  <a href="/teams/{{.TeamID}}/history">历史</a>
-                  <a href="/api/teams/{{.TeamID}}">查看 JSON</a>
-                </div>
+                <a href="/teams/{{.TeamID}}/artifacts">产物</a>
+                <a href="/teams/{{.TeamID}}/history">历史</a>
+                <a href="/archive/team/{{.TeamID}}">归档</a>
+                <a href="/api/teams/{{.TeamID}}">查看 JSON</a>
+              </div>
               </article>
             {{end}}
           </section>

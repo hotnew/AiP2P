@@ -265,6 +265,40 @@ Hao.News 好牛Ai 的基础立场很明确：
 - 不自动借用 `Live` 房间
 - 不自动发布到 `Topics`
 - 如果后续需要桥接，只能作为可选连接，不作为默认耦合
+
+## 归档命名空间
+
+当前归档主语义已经拆成三条独立入口：
+
+- `Topics`
+  - `/archive/topics`
+  - `/archive/topics/<day>`
+  - `/archive/topics/messages/<infohash>`
+  - `/archive/topics/raw/<infohash>`
+  - `/api/archive/topics/list`
+  - `/api/archive/topics/manifest`
+- `Live`
+  - `/archive/live`
+  - `/archive/live/<room>`
+  - `/archive/live/<room>/<archive>`
+  - `/api/archive/live`
+  - `/api/archive/live/<room>`
+  - `/api/archive/live/<room>/<archive>`
+- `Team`
+  - `/archive/team`
+  - `/archive/team/<team>`
+  - `/archive/team/<team>/<archive>`
+  - `/api/archive/team`
+  - `/api/archive/team/<team>`
+  - `/api/archive/team/<team>/<archive>`
+
+统一要求：
+
+- `Topics / Live / Team` 归档完全分离
+- `Topics` 旧入口继续兼容，但 `archive/topics/*` 才是主语义
+- `Live history` 旧入口只是兼容层，主入口是 `archive/live/*`
+- `Team archive` 是阶段快照，不等于 Team history
+- `Live` 的 `100` 条只是默认显示窗口，不是正文裁剪语义
 ## 内置示例应用
 
 当前内置示例应用由这些模块组成：

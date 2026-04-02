@@ -1,0 +1,85 @@
+{{define "team_archive.html"}}
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{if .Archive}}{{.Archive.ArchiveID}} | {{end}}{{.Team.Title}} | Team 归档</title>
+  <link rel="stylesheet" href="/static/styles.css?v=20260402b">
+</head>
+<body>
+  <div class="app-shell">
+    {{template "appSidebar" .}}
+    <div class="page-shell">
+      {{template "sidebarToggle" .}}
+      <header class="hero hero-dashboard">
+        <a class="back-link" href="/archive/team">返回 Team 归档</a>
+        <p class="eyebrow">{{.Team.Title}} Team 归档</p>
+        <div class="hero-heading">
+          <div>
+            <h1>{{.Team.Title}}</h1>
+            <p class="hero-copy">当前 Team 工作区和 Team 归档是分离的。这里展示的是 Team 的阶段性归档快照。</p>
+          </div>
+          <div class="hero-actions">
+            <a class="button-link button-link-muted" href="/teams/{{.Team.TeamID}}">返回 Team 工作区</a>
+            <a class="button-link" href="/api/archive/team/{{.Team.TeamID}}">JSON 接口</a>
+          </div>
+        </div>
+        <div class="hero-stats hero-stats-wide">
+          {{range .SummaryStats}}
+            <div class="hero-stat-card">
+              <span class="stat-label">{{.Label}}</span>
+              <strong>{{.Value}}</strong>
+            </div>
+          {{end}}
+        </div>
+      </header>
+      <main class="feed">
+        <section class="panel panel-inline">
+          <p class="panel-label">手动归档</p>
+          <form method="post" action="/teams/{{.Team.TeamID}}/archive">
+            <button type="submit" class="button-link">立即归档当前 Team</button>
+          </form>
+        </section>
+        {{if .Archives}}
+          <section class="directory-grid">
+            {{range .Archives}}
+              <article class="directory-card">
+                <div class="card-meta">
+                  <span>{{formatTime .ArchivedAt}}</span>
+                  <span>{{.TaskCount}} 任务</span>
+                  <span>{{.ArtifactCount}} 产物</span>
+                </div>
+                <h2><a href="/archive/team/{{.TeamID}}/{{.ArchiveID}}">{{if .Label}}{{.Label}}{{else}}{{.ArchiveID}}{{end}}</a></h2>
+                <div class="story-links">
+                  <a href="/archive/team/{{.TeamID}}/{{.ArchiveID}}">查看归档</a>
+                  <a href="/api/archive/team/{{.TeamID}}/{{.ArchiveID}}">查看 JSON</a>
+                </div>
+              </article>
+            {{end}}
+          </section>
+        {{else}}
+          <section class="empty-state">
+            <h2>当前还没有 Team 归档</h2>
+            <p>可以先手动归档一份 Team 当前快照。</p>
+          </section>
+        {{end}}
+        {{if .Archive}}
+          <section class="panel panel-inline">
+            <p class="panel-label">当前归档快照</p>
+            <div class="summary-grid">
+              <div><span class="stat-label">归档时间</span><strong>{{formatTime .Archive.ArchivedAt}}</strong></div>
+              <div><span class="stat-label">消息</span><strong>{{.Archive.MessageCount}}</strong></div>
+              <div><span class="stat-label">任务</span><strong>{{.Archive.TaskCount}}</strong></div>
+              <div><span class="stat-label">产物</span><strong>{{.Archive.ArtifactCount}}</strong></div>
+              <div><span class="stat-label">历史</span><strong>{{.Archive.HistoryCount}}</strong></div>
+            </div>
+          </section>
+        {{end}}
+      </main>
+    </div>
+  </div>
+{{template "sidebarScript" .}}
+</body>
+</html>
+{{end}}

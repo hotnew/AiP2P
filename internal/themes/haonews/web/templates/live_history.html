@@ -15,7 +15,7 @@
       <header class="hero hero-dashboard live-room-hero">
         <div class="live-room-topline">
           <a class="back-link" href="{{.RoomLinks.RoomURL}}">返回房间</a>
-          <p class="eyebrow">Live 历史归档</p>
+          <p class="eyebrow">Live 归档</p>
         </div>
         <div class="hero-heading">
           <div class="live-room-heading-main">
@@ -27,7 +27,7 @@
             </div>
           </div>
           <div class="hero-actions live-room-actions">
-            <a class="button-link" href="/api/live/history/{{.Room.RoomID}}">JSON 接口</a>
+            <a class="button-link" href="{{.RoomLinks.APIHistoryURL}}">JSON 接口</a>
             <a class="button-link button-link-muted" href="{{.RoomLinks.RoomURL}}">返回聊天</a>
           </div>
         </div>
@@ -45,7 +45,7 @@
                       <span>{{.ArchivedAt}}</span>
                       <span>{{.EventCount}} 条</span>
                     </div>
-                    <h2><a href="/live/history/{{$.Room.RoomID}}/{{.ArchiveID}}">{{if .StartAt}}{{.StartAt}}{{else}}历史批次{{end}}{{if .EndAt}} 至 {{.EndAt}}{{end}}</a></h2>
+                    <h2><a href="{{$.RoomLinks.HistoryURL}}/{{.ArchiveID}}">{{if .Label}}{{.Label}}{{else if .StartAt}}{{.StartAt}}{{else}}历史批次{{end}}{{if and (not .Label) .EndAt}} 至 {{.EndAt}}{{end}}</a></h2>
                   </div>
                 </article>
               {{end}}
@@ -62,8 +62,8 @@
 
         {{if and (not .Archive) (not .ArchiveNotFound) (eq (len .Archives) 0)}}
           <section class="panel panel-inline">
-            <p class="panel-label">当前还没有本地历史归档</p>
-            <p class="micro-copy">这个房间暂时还没有生成本地历史归档。当前版本默认只限制页面显示窗口，不会因为超过 100 条正文消息而自动删正文。</p>
+            <p class="panel-label">当前还没有 Live 归档</p>
+            <p class="micro-copy">这个房间暂时还没有生成 Live 归档。系统会在每天 05:30 CST 自动生成日归档，你也可以从房间页手动归档。</p>
           </section>
         {{end}}
 

@@ -177,10 +177,10 @@ func handleTeamMembers(app *newsplugin.App, store *teamcore.Store, teamID string
 			labeledTeamFilter("角色", filterRole),
 			labeledTeamFilter("Agent", filterAgent),
 		),
-		Statuses:       memberStatuses(members),
-		Roles:          memberRoles(members),
-		StatusCounts:   statusCounts,
-		RoleCounts:     roleCounts,
+		Statuses:     memberStatuses(members),
+		Roles:        memberRoles(members),
+		StatusCounts: statusCounts,
+		RoleCounts:   roleCounts,
 		SummaryStats: []newsplugin.SummaryStat{
 			{Label: "成员", Value: formatTeamCount(len(filtered))},
 			{Label: "active", Value: formatTeamCount(statusCounts["active"])},
@@ -300,18 +300,18 @@ func handleTeamChannel(app *newsplugin.App, store *teamcore.Store, teamID, chann
 		return
 	}
 	data := teamChannelPageData{
-		Project:    app.ProjectName(),
-		Version:    app.VersionString(),
-		PageNav:    app.PageNav("/teams"),
-		NodeStatus: app.NodeStatus(index),
-		Now:        time.Now(),
-		Team:       info,
-		Channel:    current,
-		ChannelID:  channelID,
-		Channels:   channels,
-		Messages:   messages,
-		Tasks:      relatedTasksByChannel(tasks, channelID, 12),
-		Artifacts:  relatedArtifactsByChannel(artifacts, channelID, 12),
+		Project:        app.ProjectName(),
+		Version:        app.VersionString(),
+		PageNav:        app.PageNav("/teams"),
+		NodeStatus:     app.NodeStatus(index),
+		Now:            time.Now(),
+		Team:           info,
+		Channel:        current,
+		ChannelID:      channelID,
+		Channels:       channels,
+		Messages:       messages,
+		Tasks:          relatedTasksByChannel(tasks, channelID, 12),
+		Artifacts:      relatedArtifactsByChannel(artifacts, channelID, 12),
 		RelatedHistory: channelHistory(history, channelID, 12),
 		SummaryStats: []newsplugin.SummaryStat{
 			{Label: "频道", Value: current.Title},
@@ -459,10 +459,10 @@ func handleTeamTasks(app *newsplugin.App, store *teamcore.Store, teamID string, 
 			labeledTeamFilter("标签", filterLabel),
 			labeledTeamFilter("频道", filterChannel),
 		),
-		Statuses:       statuses,
-		Assignees:      assignees,
-		Labels:         labels,
-		Channels:       channels,
+		Statuses:  statuses,
+		Assignees: assignees,
+		Labels:    labels,
+		Channels:  channels,
 		SummaryStats: []newsplugin.SummaryStat{
 			{Label: "任务", Value: formatTeamCount(len(tasks))},
 			{Label: "进行中", Value: formatTeamCount(countTasksByStatus(tasks, "doing"))},
@@ -796,9 +796,9 @@ func handleTeamArtifacts(app *newsplugin.App, store *teamcore.Store, teamID stri
 			labeledTeamFilter("频道", filterChannel),
 			labeledTeamFilter("任务", filterTask),
 		),
-		Kinds:         kinds,
-		Channels:      channels,
-		Tasks:         artifactFilterTasks(tasks, artifacts),
+		Kinds:    kinds,
+		Channels: channels,
+		Tasks:    artifactFilterTasks(tasks, artifacts),
 		SummaryStats: []newsplugin.SummaryStat{
 			{Label: "产物", Value: formatTeamCount(len(filtered))},
 			{Label: "Markdown", Value: formatTeamCount(countArtifactsByKind(filtered, "markdown"))},
@@ -3115,6 +3115,198 @@ func normalizeMemberAction(value string) (string, string, error) {
 	default:
 		return "", "", errors.New("unknown team member action")
 	}
+}
+
+func handleTeamArchiveIndex(app *newsplugin.App, store *teamcore.Store, w http.ResponseWriter, r *http.Request) {
+	teams, err := store.ListTeams()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	index, err := app.Index()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	archivedTeams := 0
+	for _, item := range teams {
+		archives, err := store.ListArchives(item.TeamID)
+		if err == nil && len(archives) > 0 {
+			archivedTeams++
+		}
+	}
+	data := teamArchiveIndexPageData{
+		Project:    app.ProjectName(),
+		Version:    app.VersionString(),
+		PageNav:    app.PageNav("/archive"),
+		NodeStatus: app.NodeStatus(index),
+		Now:        time.Now(),
+		Teams:      teams,
+		SummaryStats: []newsplugin.SummaryStat{
+			{Label: "团队", Value: formatTeamCount(len(teams))},
+			{Label: "已归档团队", Value: formatTeamCount(archivedTeams)},
+			{Label: "最近更新", Value: latestTeamValue(teams)},
+		},
+	}
+	if err := app.Templates().ExecuteTemplate(w, "team_archive_index.html", data); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func handleTeamArchive(app *newsplugin.App, store *teamcore.Store, teamID, archiveID string, w http.ResponseWriter, r *http.Request) {
+	info, err := store.LoadTeam(teamID)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	archives, err := store.ListArchives(teamID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	var selected *teamcore.ArchiveSnapshot
+	if archiveID != "" {
+		item, err := store.LoadArchive(teamID, archiveID)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		selected = &item
+	}
+	index, err := app.Index()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	data := teamArchivePageData{
+		Project:    app.ProjectName(),
+		Version:    app.VersionString(),
+		PageNav:    app.PageNav("/archive"),
+		NodeStatus: app.NodeStatus(index),
+		Now:        time.Now(),
+		Team:       info,
+		Archives:   archives,
+		Archive:    selected,
+		SummaryStats: []newsplugin.SummaryStat{
+			{Label: "归档批次", Value: formatTeamCount(len(archives))},
+			{Label: "任务", Value: archiveTaskValue(selected)},
+			{Label: "产物", Value: archiveArtifactValue(selected)},
+		},
+	}
+	if err := app.Templates().ExecuteTemplate(w, "team_archive.html", data); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func handleTeamArchiveCreate(store *teamcore.Store, teamID string, w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !teamRequestTrusted(r) {
+		http.Error(w, "team archive writes are limited to local or LAN requests", http.StatusForbidden)
+		return
+	}
+	record, err := store.CreateManualArchive(teamID, time.Now())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/archive/team/"+teamID+"/"+record.ArchiveID, http.StatusSeeOther)
+}
+
+func handleAPITeamArchiveIndex(store *teamcore.Store, w http.ResponseWriter, r *http.Request) {
+	teams, err := store.ListTeams()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	items := make([]map[string]any, 0, len(teams))
+	for _, item := range teams {
+		archives, err := store.ListArchives(item.TeamID)
+		if err != nil {
+			continue
+		}
+		summary := map[string]any{
+			"team_id":       item.TeamID,
+			"title":         item.Title,
+			"archive_count": len(archives),
+		}
+		if len(archives) > 0 {
+			summary["last_archive_id"] = archives[0].ArchiveID
+			summary["last_archived_at"] = archives[0].ArchivedAt
+		}
+		items = append(items, summary)
+	}
+	newsplugin.WriteJSON(w, http.StatusOK, map[string]any{
+		"scope": "team-archive-index",
+		"teams": items,
+	})
+}
+
+func handleAPITeamArchive(store *teamcore.Store, teamID, archiveID string, w http.ResponseWriter, r *http.Request) {
+	if archiveID == "" {
+		archives, err := store.ListArchives(teamID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		newsplugin.WriteJSON(w, http.StatusOK, map[string]any{
+			"scope":    "team-archive-list",
+			"team_id":  teamID,
+			"archives": archives,
+		})
+		return
+	}
+	record, err := store.LoadArchive(teamID, archiveID)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			http.NotFound(w, r)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	newsplugin.WriteJSON(w, http.StatusOK, map[string]any{
+		"scope":   "team-archive-detail",
+		"team_id": teamID,
+		"archive": record,
+	})
+}
+
+func handleAPITeamArchiveCreate(store *teamcore.Store, teamID string, w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !teamRequestTrusted(r) {
+		http.Error(w, "team archive writes are limited to local or LAN requests", http.StatusForbidden)
+		return
+	}
+	record, err := store.CreateManualArchive(teamID, time.Now())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	newsplugin.WriteJSON(w, http.StatusOK, map[string]any{
+		"scope":   "team-archive-create",
+		"team_id": teamID,
+		"archive": record,
+	})
+}
+
+func archiveTaskValue(item *teamcore.ArchiveSnapshot) string {
+	if item == nil {
+		return "0"
+	}
+	return formatTeamCount(item.TaskCount)
+}
+
+func archiveArtifactValue(item *teamcore.ArchiveSnapshot) string {
+	if item == nil {
+		return "0"
+	}
+	return formatTeamCount(item.ArtifactCount)
 }
 
 type historyActor struct {

@@ -1,0 +1,67 @@
+{{define "live_archive_index.html"}}
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>好牛Ai Live 归档</title>
+  <link rel="stylesheet" href="/static/styles.css?v=20260330b">
+</head>
+<body>
+  <div class="app-shell">
+    {{template "appSidebar" .}}
+    <div class="page-shell">
+      {{template "sidebarToggle" .}}
+      <header class="hero hero-dashboard">
+        <p class="eyebrow">{{.Project}} Live 归档</p>
+        <div class="hero-heading">
+          <div>
+            <h1>Live 归档</h1>
+            <p class="hero-copy">这里单独展示 Live 房间的日归档和手动归档，不和 Topics、Team 归档混用。</p>
+          </div>
+          <div class="hero-actions">
+            <a class="button-link" href="/archive">返回归档总览</a>
+            <a class="button-link" href="/api/archive/live">JSON 接口</a>
+            <a class="button-link button-link-muted" href="/live">返回 Live 列表</a>
+          </div>
+        </div>
+        <div class="hero-stats hero-stats-wide">
+          {{range .SummaryStats}}
+            <div class="hero-stat-card">
+              <span class="stat-label">{{.Label}}</span>
+              <strong>{{.Value}}</strong>
+            </div>
+          {{end}}
+        </div>
+      </header>
+
+      <main class="feed">
+        {{if .Rooms}}
+          <section class="directory-grid">
+            {{range .Rooms}}
+              <article class="directory-card">
+                <div class="card-meta">
+                  <span>{{.ArchiveCount}} 个归档批次</span>
+                  {{if .LastArchived}}<span>{{.LastArchived}}</span>{{end}}
+                </div>
+                <h2><a href="{{.RoomLinks.HistoryURL}}">{{if .Room.Title}}{{.Room.Title}}{{else}}{{.Room.RoomID}}{{end}}</a></h2>
+                <p class="micro-copy">{{.Room.RoomID}}</p>
+                <div class="story-links">
+                  <a href="{{.RoomLinks.HistoryURL}}">查看 Live 归档</a>
+                  <a href="{{.RoomLinks.RoomURL}}">返回房间</a>
+                </div>
+              </article>
+            {{end}}
+          </section>
+        {{else}}
+          <section class="empty-state">
+            <h2>当前还没有 Live 归档</h2>
+            <p>每天 05:30 CST 的日归档，或从房间页手动归档后，这里会出现对应房间。</p>
+          </section>
+        {{end}}
+      </main>
+    </div>
+  </div>
+</body>
+</html>
+{{end}}

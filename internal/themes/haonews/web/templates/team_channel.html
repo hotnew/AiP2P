@@ -31,6 +31,7 @@
           </div>
           <div class="hero-actions hero-actions-compact live-room-actions">
             <a class="button-link" href="/api/teams/{{.Team.TeamID}}/channels/{{.ChannelID}}/messages">频道 JSON</a>
+            <a class="button-link button-link-muted" href="/archive/team/{{.Team.TeamID}}">Team 归档</a>
             <a class="button-link button-link-muted" href="/teams/{{.Team.TeamID}}">Team 详情</a>
             <a class="button-link button-link-muted" href="/teams/{{.Team.TeamID}}/tasks">任务</a>
             <a class="button-link button-link-muted" href="/teams/{{.Team.TeamID}}/artifacts">产物</a>
@@ -48,6 +49,7 @@
           </div>
           <div class="team-page-nav">
             <a class="filter-chip" href="/teams/{{.Team.TeamID}}">概览</a>
+            <a class="filter-chip" href="/archive/team/{{.Team.TeamID}}">归档</a>
             <a class="filter-chip" href="/teams/{{.Team.TeamID}}/members">成员</a>
             <a class="filter-chip{{if eq .ChannelID "main"}} is-active{{end}}" href="/teams/{{.Team.TeamID}}/channels/main">主频道</a>
             <a class="filter-chip is-active" href="/teams/{{.Team.TeamID}}/channels/{{urlquery .ChannelID}}">{{if .Channel.Title}}{{.Channel.Title}}{{else}}{{.ChannelID}}{{end}}</a>
@@ -71,6 +73,10 @@
             <span class="filter-chip">历史：{{len .RelatedHistory}}</span>
           </div>
           <p class="team-page-note">当前上下文只作用于 Team Channel 本身。这里的任务、产物和历史都是 Team 内部对象。</p>
+          <div class="team-section-actions">
+            <a class="filter-chip" href="/archive/team/{{.Team.TeamID}}">查看 Team 归档</a>
+            <a class="filter-chip" href="/teams/{{.Team.TeamID}}">返回 Team 工作区</a>
+          </div>
         </section>
         <section class="panel panel-inline">
           <div class="panel-head">

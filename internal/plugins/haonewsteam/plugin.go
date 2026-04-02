@@ -54,6 +54,35 @@ func (Plugin) Build(_ context.Context, cfg apphost.Config, theme apphost.WebThem
 
 func newHandler(app *newsplugin.App, store *teamcore.Store, staticFS fs.FS) http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("/archive/team", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/archive/team" {
+			http.NotFound(w, r)
+			return
+		}
+		handleTeamArchiveIndex(app, store, w, r)
+	})
+	mux.HandleFunc("/archive/team/", func(w http.ResponseWriter, r *http.Request) {
+		trimmed := strings.Trim(strings.TrimPrefix(r.URL.Path, "/archive/team/"), "/")
+		if trimmed == "" {
+			http.NotFound(w, r)
+			return
+		}
+		parts := strings.Split(trimmed, "/")
+		teamID := teamcore.NormalizeTeamID(parts[0])
+		if teamID == "" {
+			http.NotFound(w, r)
+			return
+		}
+		if len(parts) == 1 {
+			handleTeamArchive(app, store, teamID, "", w, r)
+			return
+		}
+		if len(parts) == 2 {
+			handleTeamArchive(app, store, teamID, parts[1], w, r)
+			return
+		}
+		http.NotFound(w, r)
+	})
 	mux.HandleFunc("/teams", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/teams" {
 			http.NotFound(w, r)
@@ -87,6 +116,10 @@ func newHandler(app *newsplugin.App, store *teamcore.Store, staticFS fs.FS) http
 		}
 		if len(parts) == 2 && parts[1] == "history" {
 			handleTeamHistory(app, store, teamID, w, r)
+			return
+		}
+		if len(parts) == 2 && parts[1] == "archive" && r.Method == http.MethodPost {
+			handleTeamArchiveCreate(store, teamID, w, r)
 			return
 		}
 		if len(parts) == 3 && parts[1] == "tasks" && parts[2] == "create" && r.Method == http.MethodPost {
@@ -239,6 +272,10 @@ func newHandler(app *newsplugin.App, store *teamcore.Store, staticFS fs.FS) http
 			handleAPITeamHistory(store, teamID, w, r)
 			return
 		}
+		if len(parts) == 2 && parts[1] == "archive" {
+			handleAPITeamArchiveCreate(store, teamID, w, r)
+			return
+		}
 		if len(parts) == 2 && parts[1] == "members" {
 			handleAPITeamMembers(store, teamID, w, r)
 			return
@@ -286,6 +323,35 @@ func newHandler(app *newsplugin.App, store *teamcore.Store, staticFS fs.FS) http
 				return
 			}
 			handleAPITeamChannelMessages(store, teamID, channelID, w, r)
+			return
+		}
+		http.NotFound(w, r)
+	})
+	mux.HandleFunc("/api/archive/team", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/archive/team" {
+			http.NotFound(w, r)
+			return
+		}
+		handleAPITeamArchiveIndex(store, w, r)
+	})
+	mux.HandleFunc("/api/archive/team/", func(w http.ResponseWriter, r *http.Request) {
+		trimmed := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/archive/team/"), "/")
+		if trimmed == "" {
+			http.NotFound(w, r)
+			return
+		}
+		parts := strings.Split(trimmed, "/")
+		teamID := teamcore.NormalizeTeamID(parts[0])
+		if teamID == "" {
+			http.NotFound(w, r)
+			return
+		}
+		if len(parts) == 1 {
+			handleAPITeamArchive(store, teamID, "", w, r)
+			return
+		}
+		if len(parts) == 2 {
+			handleAPITeamArchive(store, teamID, parts[1], w, r)
 			return
 		}
 		http.NotFound(w, r)

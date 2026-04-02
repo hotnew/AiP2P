@@ -27,6 +27,21 @@ func TestPluginBuildServesArchiveIndex(t *testing.T) {
 	}
 }
 
+func TestPluginBuildServesTopicsArchiveIndexAlias(t *testing.T) {
+	t.Parallel()
+
+	site := buildArchiveSite(t)
+	req := httptest.NewRequest(http.MethodGet, "/archive/topics", nil)
+	rec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "Topics 归档") {
+		t.Fatalf("expected topics archive page, got %q", rec.Body.String())
+	}
+}
+
 func TestPluginBuildHistoryListNotFoundOnEmptyStore(t *testing.T) {
 	t.Parallel()
 
@@ -36,6 +51,20 @@ func TestPluginBuildHistoryListNotFoundOnEmptyStore(t *testing.T) {
 	site.Handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestPluginBuildTopicsArchiveAPIAliasesNotFoundOnEmptyStore(t *testing.T) {
+	t.Parallel()
+
+	site := buildArchiveSite(t)
+	for _, path := range []string{"/api/archive/topics/list", "/api/archive/topics/manifest"} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		rec := httptest.NewRecorder()
+		site.Handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("%s status = %d, body = %s", path, rec.Code, rec.Body.String())
+		}
 	}
 }
 

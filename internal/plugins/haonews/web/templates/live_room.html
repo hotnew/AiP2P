@@ -232,6 +232,19 @@
 
         <section class="panel panel-inline">
           <p class="panel-label">本地历史归档</p>
+          <div class="facet-list-inline">
+            <a class="facet-chip" href="{{.RoomLinks.HistoryURL}}">打开归档列表</a>
+            <a class="facet-chip" href="{{.RoomLinks.APIHistoryURL}}">查看归档 JSON</a>
+          </div>
+          <form method="post" action="{{.RoomLinks.ArchiveNowURL}}">
+            <button class="button-link button-link-muted" type="submit">立即归档当前房间</button>
+          </form>
+          {{if .ArchiveCreated}}
+            <p class="micro-copy">手动归档已创建，可在归档列表中查看。</p>
+          {{end}}
+          {{if .ArchiveError}}
+            <p class="micro-copy">手动归档失败：{{.ArchiveError}}</p>
+          {{end}}
           {{if .HistoryArchives}}
             <div class="story-list">
               {{range .HistoryArchives}}
@@ -239,19 +252,20 @@
                   <div class="story-card-main">
                     <div class="card-meta">
                       <span>{{.ArchivedAt}}</span>
+                      {{if .Kind}}<span>{{.Kind}}</span>{{end}}
                       <span>{{.EventCount}} 条</span>
                     </div>
-                    <h2><a href="/live/history/{{$.Room.RoomID}}/{{.ArchiveID}}">{{if .StartAt}}{{.StartAt}}{{else}}历史批次{{end}}{{if .EndAt}} 至 {{.EndAt}}{{end}}</a></h2>
+                    <h2><a href="{{$.RoomLinks.HistoryURL}}/{{.ArchiveID}}">{{if .Label}}{{.Label}}{{else if .StartAt}}{{.StartAt}}{{else}}历史批次{{end}}{{if and (not .Label) .EndAt}} 至 {{.EndAt}}{{end}}</a></h2>
                     <div class="story-links">
-                      <a href="/live/history/{{$.Room.RoomID}}/{{.ArchiveID}}">查看历史</a>
-                      <a href="/api/live/history/{{$.Room.RoomID}}/{{.ArchiveID}}">查看 JSON</a>
+                      <a href="{{$.RoomLinks.HistoryURL}}/{{.ArchiveID}}">查看历史</a>
+                      <a href="{{$.RoomLinks.APIHistoryURL}}/{{.ArchiveID}}">查看 JSON</a>
                     </div>
                   </div>
                 </article>
               {{end}}
             </div>
           {{else}}
-            <p class="micro-copy">当前还没有本地历史归档。房间手动归档或后续按日归档启用后，会在这里显示。</p>
+            <p class="micro-copy">当前还没有本地历史归档。每天 05:30 CST 的日归档，或手动归档后，会在这里显示。</p>
           {{end}}
         </section>
 

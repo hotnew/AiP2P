@@ -518,7 +518,7 @@ func fetchLANHistoryManifest(ctx context.Context, value, cursor, expectedNetwork
 }
 
 func lanHistoryManifestEndpoint(value, cursor string) (string, error) {
-	return peerAPIEndpoint(value, "/api/history/list", cursor)
+	return peerAPIEndpoint(value, "/api/archive/topics/list", cursor)
 }
 
 func peerAPIEndpoint(value, path, cursor string) (string, error) {

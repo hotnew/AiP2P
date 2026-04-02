@@ -1,0 +1,73 @@
+{{define "team_archive_index.html"}}
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>好牛Ai Team 归档</title>
+  <link rel="stylesheet" href="/static/styles.css?v=20260402b">
+</head>
+<body>
+  <div class="app-shell">
+    {{template "appSidebar" .}}
+    <div class="page-shell">
+      {{template "sidebarToggle" .}}
+      <header class="hero hero-dashboard">
+        <a class="back-link" href="/archive">返回归档总览</a>
+        <p class="eyebrow">{{.Project}} Team 归档</p>
+        <div class="hero-heading">
+          <div>
+            <h1>Team 归档</h1>
+            <p class="hero-copy">Team 归档是阶段性项目快照，和 Team 当前工作区、Live 房间、Topics 文章完全分离。</p>
+          </div>
+          <div class="hero-actions">
+            <a class="button-link" href="/api/archive/team">JSON 接口</a>
+          </div>
+        </div>
+        <div class="hero-stats hero-stats-wide">
+          {{range .SummaryStats}}
+            <div class="hero-stat-card">
+              <span class="stat-label">{{.Label}}</span>
+              <strong>{{.Value}}</strong>
+            </div>
+          {{end}}
+        </div>
+      </header>
+
+      <main class="feed">
+        <section class="panel panel-inline">
+          <p class="panel-label">归档分区</p>
+          <div class="facet-list-inline">
+            <a class="facet-chip" href="/archive/topics">Topics 归档</a>
+            <a class="facet-chip" href="/archive/live">Live 归档</a>
+            <a class="facet-chip" href="/archive/team">Team 归档</a>
+          </div>
+        </section>
+        {{if .Teams}}
+          <section class="directory-grid">
+            {{range .Teams}}
+              <article class="directory-card">
+                <div class="card-meta">
+                  <span>{{.MemberCount}} 成员</span>
+                  <span>{{.ChannelCount}} 频道</span>
+                </div>
+                <h2><a href="/archive/team/{{.TeamID}}">{{if .Title}}{{.Title}}{{else}}{{.TeamID}}{{end}}</a></h2>
+                <div class="story-links">
+                  <a href="/archive/team/{{.TeamID}}">查看 Team 归档</a>
+                  <a href="/api/archive/team/{{.TeamID}}">查看 JSON</a>
+                </div>
+              </article>
+            {{end}}
+          </section>
+        {{else}}
+          <section class="empty-state">
+            <h2>当前还没有 Team</h2>
+          </section>
+        {{end}}
+      </main>
+    </div>
+  </div>
+{{template "sidebarScript" .}}
+</body>
+</html>
+{{end}}

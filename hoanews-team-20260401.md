@@ -1169,3 +1169,8 @@
 - `Team` 已经进入可用收尾阶段
 - `Team / Live / Topics` 边界已经稳定
 - 后续再做，只建议围绕细节优化，不再建议回到结构级重写
+- `Team archive` 已独立成：
+  - `/archive/team`
+  - `/archive/team/<team>`
+  - `/archive/team/<team>/<archive>`
+  Team 工作区各页也已补齐归档入口

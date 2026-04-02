@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"hao.news/internal/apphost"
 	corehaonews "hao.news/internal/haonews"
@@ -18,6 +19,7 @@ import (
 type Plugin struct{}
 
 var liveAnnouncementWatcherDisabledForTests bool
+var liveArchiveLoopDisabledForTests bool
 
 //go:embed haonews.plugin.json
 var pluginManifestJSON []byte
@@ -74,6 +76,9 @@ func (Plugin) Build(ctx context.Context, cfg apphost.Config, theme apphost.WebTh
 			watcherMu.Unlock()
 		}()
 	}
+	if !disableLiveArchiveLoop() {
+		go startLiveArchiveLoop(ctx, store, logf)
+	}
 	staticFS, err := theme.StaticFS()
 	if err != nil {
 		cancelWatch()
@@ -106,6 +111,14 @@ func disableLiveAnnouncementWatcher() bool {
 	}
 	return strings.EqualFold(strings.TrimSpace(os.Getenv("HAONEWS_DISABLE_LIVE_ANNOUNCEMENT_WATCHER")), "1") ||
 		strings.EqualFold(strings.TrimSpace(os.Getenv("HAONEWS_DISABLE_LIVE_ANNOUNCEMENT_WATCHER")), "true")
+}
+
+func disableLiveArchiveLoop() bool {
+	if liveArchiveLoopDisabledForTests {
+		return true
+	}
+	return strings.EqualFold(strings.TrimSpace(os.Getenv("HAONEWS_DISABLE_LIVE_ARCHIVE_LOOP")), "1") ||
+		strings.EqualFold(strings.TrimSpace(os.Getenv("HAONEWS_DISABLE_LIVE_ARCHIVE_LOOP")), "true")
 }
 
 func newHandler(app *newsplugin.App, store *live.LocalStore, staticFS fs.FS) http.Handler {
@@ -176,6 +189,18 @@ func newHandler(app *newsplugin.App, store *live.LocalStore, staticFS fs.FS) htt
 			archiveID = strings.TrimSpace(parts[1])
 		}
 		handleLiveRoomHistory(app, store, roomID, archiveID, w, r)
+	})
+	mux.HandleFunc("/live/archive/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.NotFound(w, r)
+			return
+		}
+		roomID := strings.TrimSpace(newsplugin.PathValue("/live/archive/", r.URL.Path))
+		if roomID == "" {
+			http.NotFound(w, r)
+			return
+		}
+		handleLiveArchiveNow(app, store, roomID, w, r)
 	})
 	mux.HandleFunc("/live/", func(w http.ResponseWriter, r *http.Request) {
 		roomID := strings.TrimSpace(newsplugin.PathValue("/live/", r.URL.Path))
@@ -252,6 +277,76 @@ func newHandler(app *newsplugin.App, store *live.LocalStore, staticFS fs.FS) htt
 		}
 		handleAPILiveRoomHistory(store, roomID, archiveID, w, r)
 	})
+	mux.HandleFunc("/api/live/archive/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.NotFound(w, r)
+			return
+		}
+		roomID := strings.TrimSpace(newsplugin.PathValue("/api/live/archive/", r.URL.Path))
+		if roomID == "" {
+			http.NotFound(w, r)
+			return
+		}
+		handleAPILiveArchiveNow(store, roomID, w, r)
+	})
+	mux.HandleFunc("/archive/live", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/archive/live" {
+			http.NotFound(w, r)
+			return
+		}
+		handleLiveArchiveIndex(app, store, w, r)
+	})
+	mux.HandleFunc("/api/archive/live", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/archive/live" {
+			http.NotFound(w, r)
+			return
+		}
+		handleAPILiveArchiveIndex(store, w, r)
+	})
+	mux.HandleFunc("/archive/live/", func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasPrefix(r.URL.Path, "/archive/live/") {
+			http.NotFound(w, r)
+			return
+		}
+		rest := strings.TrimSpace(strings.TrimPrefix(r.URL.Path, "/archive/live/"))
+		if rest == "" {
+			http.NotFound(w, r)
+			return
+		}
+		parts := strings.Split(rest, "/")
+		roomID := strings.TrimSpace(parts[0])
+		if roomID == "" {
+			http.NotFound(w, r)
+			return
+		}
+		archiveID := ""
+		if len(parts) > 1 {
+			archiveID = strings.TrimSpace(parts[1])
+		}
+		handleLiveRoomHistory(app, store, roomID, archiveID, w, r)
+	})
+	mux.HandleFunc("/api/archive/live/", func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasPrefix(r.URL.Path, "/api/archive/live/") {
+			http.NotFound(w, r)
+			return
+		}
+		rest := strings.TrimSpace(strings.TrimPrefix(r.URL.Path, "/api/archive/live/"))
+		if rest == "" {
+			http.NotFound(w, r)
+			return
+		}
+		parts := strings.Split(rest, "/")
+		roomID := strings.TrimSpace(parts[0])
+		if roomID == "" {
+			http.NotFound(w, r)
+			return
+		}
+		archiveID := ""
+		if len(parts) > 1 {
+			archiveID = strings.TrimSpace(parts[1])
+		}
+		handleAPILiveRoomHistory(store, roomID, archiveID, w, r)
+	})
 	mux.HandleFunc("/api/live/rooms/", func(w http.ResponseWriter, r *http.Request) {
 		roomID := strings.TrimSpace(newsplugin.PathValue("/api/live/rooms/", r.URL.Path))
 		if roomID == "" {
@@ -262,4 +357,30 @@ func newHandler(app *newsplugin.App, store *live.LocalStore, staticFS fs.FS) htt
 	})
 	mux.Handle("/static/", newsplugin.NoStoreStaticHandler(staticFS))
 	return mux
+}
+
+func startLiveArchiveLoop(ctx context.Context, store *live.LocalStore, logf func(string, ...any)) {
+	run := func(now time.Time) {
+		rooms, err := store.ListRooms()
+		if err != nil {
+			logf("haonews live: list rooms for archive loop: %v", err)
+			return
+		}
+		for _, room := range rooms {
+			if _, err := store.EnsureDailyHistoryArchives(room.RoomID, now); err != nil {
+				logf("haonews live: ensure daily archive for %s: %v", room.RoomID, err)
+			}
+		}
+	}
+	run(time.Now())
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case now := <-ticker.C:
+			run(now)
+		}
+	}
 }

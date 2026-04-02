@@ -600,6 +600,92 @@ func TestSaveRoomAuthoritativeOverridesPlaceholderOwner(t *testing.T) {
 	}
 }
 
+func TestCreateManualAndDailyHistoryArchives(t *testing.T) {
+	store, err := OpenLocalStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("OpenLocalStore error = %v", err)
+	}
+	room := RoomInfo{
+		RoomID:    "room-archive-daily",
+		Title:     "Archive Daily",
+		Creator:   "agent://pc75/openclaw01",
+		CreatedAt: "2026-04-01T00:00:00Z",
+		Channel:   "hao.news/live",
+	}
+	if err := store.SaveRoom(room); err != nil {
+		t.Fatalf("SaveRoom error = %v", err)
+	}
+	events := []LiveMessage{
+		{
+			Protocol:     ProtocolVersion,
+			Type:         TypeMessage,
+			RoomID:       room.RoomID,
+			Sender:       room.Creator,
+			SenderPubKey: strings.Repeat("a", 64),
+			Seq:          1,
+			Timestamp:    "2026-04-01T21:40:00Z", // 2026-04-02 05:40 CST
+			Payload:      LivePayload{Content: "daily-window-a"},
+			Signature:    strings.Repeat("1", 128),
+		},
+		{
+			Protocol:     ProtocolVersion,
+			Type:         TypeTaskUpdate,
+			RoomID:       room.RoomID,
+			Sender:       room.Creator,
+			SenderPubKey: strings.Repeat("a", 64),
+			Seq:          2,
+			Timestamp:    "2026-04-02T05:00:00Z", // 2026-04-02 13:00 CST
+			Payload: LivePayload{Metadata: map[string]any{
+				"task_id": "task-daily",
+				"status":  "doing",
+			}},
+			Signature: strings.Repeat("2", 128),
+		},
+		{
+			Protocol:     ProtocolVersion,
+			Type:         TypeHeartbeat,
+			RoomID:       room.RoomID,
+			Sender:       room.Creator,
+			SenderPubKey: strings.Repeat("a", 64),
+			Seq:          3,
+			Timestamp:    "2026-04-02T05:05:00Z",
+			Signature:    strings.Repeat("3", 128),
+		},
+	}
+	for _, event := range events {
+		if err := store.AppendEvent(room.RoomID, event); err != nil {
+			t.Fatalf("AppendEvent error = %v", err)
+		}
+	}
+	manual, err := store.CreateManualHistoryArchive(room.RoomID, time.Date(2026, 4, 2, 13, 6, 0, 0, time.FixedZone("CST", 8*60*60)))
+	if err != nil {
+		t.Fatalf("CreateManualHistoryArchive error = %v", err)
+	}
+	if manual == nil || manual.Kind != "manual" || manual.EventCount != 2 || manual.MessageCount != 1 || manual.TaskUpdateCount != 1 {
+		t.Fatalf("manual archive = %#v", manual)
+	}
+	created, err := store.EnsureDailyHistoryArchives(room.RoomID, time.Date(2026, 4, 3, 6, 0, 0, 0, time.FixedZone("CST", 8*60*60)))
+	if err != nil {
+		t.Fatalf("EnsureDailyHistoryArchives error = %v", err)
+	}
+	if len(created) != 1 {
+		t.Fatalf("len(created) = %d, want 1", len(created))
+	}
+	if created[0].Kind != "daily" || created[0].ArchiveID != "daily-20260403-0530" {
+		t.Fatalf("daily archive = %#v", created[0])
+	}
+	if created[0].EventCount != 2 || created[0].MessageCount != 1 || created[0].TaskUpdateCount != 1 {
+		t.Fatalf("daily counters = %#v", created[0])
+	}
+	again, err := store.EnsureDailyHistoryArchives(room.RoomID, time.Date(2026, 4, 3, 6, 10, 0, 0, time.FixedZone("CST", 8*60*60)))
+	if err != nil {
+		t.Fatalf("EnsureDailyHistoryArchives again error = %v", err)
+	}
+	if len(again) != 0 {
+		t.Fatalf("len(again) = %d, want 0", len(again))
+	}
+}
+
 func TestAnnouncementWatcherHandleArchiveNotice(t *testing.T) {
 	root := t.TempDir()
 	store, err := OpenLocalStore(root)

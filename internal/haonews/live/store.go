@@ -55,13 +55,18 @@ type ArchiveRecord struct {
 }
 
 type RoomHistoryArchive struct {
-	ArchiveID  string        `json:"archive_id"`
-	RoomID     string        `json:"room_id"`
-	ArchivedAt string        `json:"archived_at"`
-	StartAt    string        `json:"start_at,omitempty"`
-	EndAt      string        `json:"end_at,omitempty"`
-	EventCount int           `json:"event_count"`
-	Events     []LiveMessage `json:"events,omitempty"`
+	ArchiveID       string        `json:"archive_id"`
+	RoomID          string        `json:"room_id"`
+	Kind            string        `json:"kind,omitempty"`
+	Label           string        `json:"label,omitempty"`
+	ArchivedAt      string        `json:"archived_at"`
+	StartAt         string        `json:"start_at,omitempty"`
+	EndAt           string        `json:"end_at,omitempty"`
+	EventCount      int           `json:"event_count"`
+	MessageCount    int           `json:"message_count,omitempty"`
+	TaskUpdateCount int           `json:"task_update_count,omitempty"`
+	Participants    []string      `json:"participants,omitempty"`
+	Events          []LiveMessage `json:"events,omitempty"`
 }
 
 type roomRecord struct {
@@ -658,26 +663,155 @@ func (s *LocalStore) savePrunedHistory(roomID string, dropped []LiveMessage) err
 	if len(visible) == 0 {
 		return nil
 	}
-	if err := os.MkdirAll(s.historyDir(roomID), 0o755); err != nil {
-		return err
+	_, err := s.saveHistoryArchiveRecord(strings.TrimSpace(roomID), RoomHistoryArchive{
+		ArchiveID: time.Now().UTC().Format("legacy-20060102T150405.000000000Z0700"),
+		Kind:      "legacy-window",
+		Label:     "旧窗口裁剪",
+		Events:    visible,
+	}, time.Now().UTC())
+	return err
+}
+
+func (s *LocalStore) CreateManualHistoryArchive(roomID string, now time.Time) (*RoomHistoryArchive, error) {
+	if s == nil {
+		return nil, fmt.Errorf("local store is required")
 	}
-	archiveID := time.Now().UTC().Format("20060102T150405.000000000Z0700")
-	startAt, endAt := archiveEventRange(visible)
-	record := RoomHistoryArchive{
-		ArchiveID:  archiveID,
-		RoomID:     strings.TrimSpace(roomID),
-		ArchivedAt: time.Now().UTC().Format(time.RFC3339),
-		StartAt:    startAt,
-		EndAt:      endAt,
-		EventCount: len(visible),
-		Events:     visible,
+	if now.IsZero() {
+		now = time.Now().UTC()
 	}
-	body, err := json.MarshalIndent(record, "", "  ")
+	return s.withHistoryArchive(roomID, "manual-"+sanitizeArchiveID(now.UTC().Format("20060102T150405Z0700")), "manual", "手动归档", time.Time{}, time.Time{}, now)
+}
+
+func (s *LocalStore) EnsureDailyHistoryArchives(roomID string, now time.Time) ([]RoomHistoryArchive, error) {
+	if s == nil {
+		return nil, fmt.Errorf("local store is required")
+	}
+	loc := liveArchiveLocation()
+	if now.IsZero() {
+		now = time.Now().In(loc)
+	} else {
+		now = now.In(loc)
+	}
+	events, err := s.ReadEvents(roomID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	body = append(body, '\n')
-	return writeFileAtomic(s.historyPath(roomID, archiveID), body, 0o644)
+	visible := archiveDisplayEvents(events)
+	if len(visible) == 0 {
+		return nil, nil
+	}
+	firstEventAt, err := parseLiveTimestamp(strings.TrimSpace(visible[0].Timestamp))
+	if err != nil {
+		return nil, nil
+	}
+	firstEventAt = firstEventAt.In(loc)
+	latestCutoff := liveArchiveWindowEnd(now)
+	if latestCutoff.IsZero() || latestCutoff.Before(firstEventAt) {
+		return nil, nil
+	}
+	firstWindowEnd := liveArchiveWindowEnd(firstEventAt)
+	if firstWindowEnd.Before(firstEventAt) {
+		firstWindowEnd = firstWindowEnd.Add(24 * time.Hour)
+	}
+	if firstWindowEnd.After(latestCutoff) {
+		return nil, nil
+	}
+	created := make([]RoomHistoryArchive, 0)
+	for windowEnd := firstWindowEnd; !windowEnd.After(latestCutoff); windowEnd = windowEnd.Add(24 * time.Hour) {
+		windowStart := windowEnd.Add(-24 * time.Hour)
+		archiveID := liveDailyArchiveID(windowEnd)
+		record, err := s.withHistoryArchive(roomID, archiveID, "daily", liveDailyArchiveLabel(windowStart, windowEnd), windowStart, windowEnd, windowEnd)
+		if err != nil {
+			return created, err
+		}
+		if record != nil {
+			created = append(created, *record)
+		}
+	}
+	return created, nil
+}
+
+func (s *LocalStore) withHistoryArchive(roomID, archiveID, kind, label string, start, end, archivedAt time.Time) (*RoomHistoryArchive, error) {
+	if s == nil {
+		return nil, fmt.Errorf("local store is required")
+	}
+	events, err := s.ReadEvents(roomID)
+	if err != nil {
+		return nil, err
+	}
+	visible := archiveDisplayEvents(events)
+	if !start.IsZero() || !end.IsZero() {
+		visible = filterArchiveEventsByWindow(visible, start, end)
+	}
+	if len(visible) == 0 {
+		return nil, nil
+	}
+	if _, err := os.Stat(s.historyPath(roomID, archiveID)); err == nil {
+		return nil, nil
+	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, err
+	}
+	record := RoomHistoryArchive{
+		ArchiveID: archiveID,
+		RoomID:    strings.TrimSpace(roomID),
+		Kind:      strings.TrimSpace(kind),
+		Label:     strings.TrimSpace(label),
+		Events:    visible,
+	}
+	return s.saveHistoryArchiveRecord(roomID, record, archivedAt)
+}
+
+func (s *LocalStore) saveHistoryArchiveRecord(roomID string, record RoomHistoryArchive, archivedAt time.Time) (*RoomHistoryArchive, error) {
+	if s == nil {
+		return nil, fmt.Errorf("local store is required")
+	}
+	roomID = strings.TrimSpace(roomID)
+	record.RoomID = roomID
+	record.ArchiveID = sanitizeArchiveID(record.ArchiveID)
+	if record.ArchiveID == "" {
+		record.ArchiveID = sanitizeArchiveID(archivedAt.UTC().Format("20060102T150405.000000000Z0700"))
+	}
+	if archivedAt.IsZero() {
+		archivedAt = time.Now().UTC()
+	}
+	returnRecord := record
+	err := s.withRoomLock(roomID, func() error {
+		if err := os.MkdirAll(s.historyDir(roomID), 0o755); err != nil {
+			return err
+		}
+		path := s.historyPath(roomID, record.ArchiveID)
+		if body, err := os.ReadFile(path); err == nil {
+			var existing RoomHistoryArchive
+			if err := json.Unmarshal(body, &existing); err == nil {
+				returnRecord = existing
+				return nil
+			}
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		startAt, endAt := archiveEventRange(record.Events)
+		record.ArchivedAt = archivedAt.UTC().Format(time.RFC3339)
+		record.StartAt = firstNonEmpty(record.StartAt, startAt)
+		record.EndAt = firstNonEmpty(record.EndAt, endAt)
+		record.EventCount = len(record.Events)
+		record.MessageCount = archiveCountByType(record.Events, TypeMessage)
+		record.TaskUpdateCount = archiveCountByType(record.Events, TypeTaskUpdate)
+		record.Participants = archiveParticipants(record.Events)
+		body, err := json.MarshalIndent(record, "", "  ")
+		if err != nil {
+			return err
+		}
+		body = append(body, '\n')
+		if err := writeFileAtomic(path, body, 0o644); err != nil {
+			return err
+		}
+		returnRecord = record
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &returnRecord, nil
 }
 
 func (s *LocalStore) ListHistoryArchives(roomID string) ([]RoomHistoryArchive, error) {
@@ -726,6 +860,71 @@ func (s *LocalStore) LoadHistoryArchive(roomID, archiveID string) (*RoomHistoryA
 		return nil, err
 	}
 	return &record, nil
+}
+
+func filterArchiveEventsByWindow(events []LiveMessage, start, end time.Time) []LiveMessage {
+	if len(events) == 0 {
+		return nil
+	}
+	out := make([]LiveMessage, 0, len(events))
+	for _, event := range events {
+		ts, err := parseLiveTimestamp(strings.TrimSpace(event.Timestamp))
+		if err != nil {
+			continue
+		}
+		if !start.IsZero() && ts.Before(start) {
+			continue
+		}
+		if !end.IsZero() && !ts.Before(end) {
+			continue
+		}
+		out = append(out, event)
+	}
+	return out
+}
+
+func parseLiveTimestamp(raw string) (time.Time, error) {
+	return time.Parse(time.RFC3339, strings.TrimSpace(raw))
+}
+
+func liveArchiveLocation() *time.Location {
+	loc, err := time.LoadLocation("Asia/Shanghai")
+	if err != nil {
+		return time.FixedZone("CST", 8*60*60)
+	}
+	return loc
+}
+
+func liveArchiveWindowEnd(now time.Time) time.Time {
+	loc := liveArchiveLocation()
+	now = now.In(loc)
+	cutoff := time.Date(now.Year(), now.Month(), now.Day(), 5, 30, 0, 0, loc)
+	if now.Before(cutoff) {
+		return cutoff.Add(-24 * time.Hour)
+	}
+	return cutoff
+}
+
+func liveDailyArchiveID(windowEnd time.Time) string {
+	windowEnd = windowEnd.In(liveArchiveLocation())
+	return fmt.Sprintf("daily-%s-0530", windowEnd.Format("20060102"))
+}
+
+func liveDailyArchiveLabel(windowStart, windowEnd time.Time) string {
+	windowStart = windowStart.In(liveArchiveLocation())
+	windowEnd = windowEnd.In(liveArchiveLocation())
+	return fmt.Sprintf("%s 至 %s", windowStart.Format("2006-01-02 05:30 MST"), windowEnd.Format("2006-01-02 05:30 MST"))
+}
+
+func sanitizeArchiveID(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	replacer := strings.NewReplacer("/", "-", "\\", "-", ":", "", "+", "", " ", "-", ".", "")
+	value = replacer.Replace(value)
+	value = strings.Trim(value, "-")
+	return value
 }
 
 func mergeRoomInfo(existing, incoming RoomInfo) RoomInfo {

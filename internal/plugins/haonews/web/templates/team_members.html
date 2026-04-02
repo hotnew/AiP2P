@@ -29,6 +29,7 @@
           </div>
           <div class="hero-actions hero-actions-compact live-room-actions">
             <a class="button-link" href="/api/teams/{{.Team.TeamID}}/members">成员 JSON</a>
+            <a class="button-link button-link-muted" href="/archive/team/{{.Team.TeamID}}">Team 归档</a>
             <a class="button-link button-link-muted" href="/teams/{{.Team.TeamID}}">Team 详情</a>
             <a class="button-link button-link-muted" href="/teams/{{.Team.TeamID}}/history?scope=member">成员历史</a>
             <a class="button-link button-link-muted" href="/teams/{{.Team.TeamID}}/history?scope=policy">Policy 历史</a>
@@ -46,6 +47,7 @@
           </div>
           <div class="team-page-nav">
             <a class="filter-chip" href="/teams/{{.Team.TeamID}}">概览</a>
+            <a class="filter-chip" href="/archive/team/{{.Team.TeamID}}">归档</a>
             <a class="filter-chip is-active" href="/teams/{{.Team.TeamID}}/members">成员</a>
             <a class="filter-chip" href="/teams/{{.Team.TeamID}}/channels/main">主频道</a>
             <a class="filter-chip" href="/teams/{{.Team.TeamID}}/tasks">任务</a>
@@ -94,6 +96,7 @@
           {{end}}
           <div class="team-section-actions">
             <a class="filter-chip" href="#team-bulk-actions">批量治理</a>
+            <a class="filter-chip" href="/archive/team/{{.Team.TeamID}}">查看 Team 归档</a>
             <a class="filter-chip" href="/teams/{{.Team.TeamID}}/history?scope=member">成员历史</a>
             <a class="filter-chip" href="/teams/{{.Team.TeamID}}/history?scope=policy">Policy 历史</a>
             <a class="filter-chip" href="/teams/{{.Team.TeamID}}">返回 Team 概览</a>

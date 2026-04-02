@@ -19,6 +19,16 @@ type liveIndexPageData struct {
 	SummaryStats []newsplugin.SummaryStat
 }
 
+type liveArchiveIndexPageData struct {
+	Project      string
+	Version      string
+	PageNav      []newsplugin.NavItem
+	NodeStatus   newsplugin.NodeStatus
+	Now          time.Time
+	Rooms        []liveArchiveRoomSummary
+	SummaryStats []newsplugin.SummaryStat
+}
+
 type livePublicModerationPageData struct {
 	Project                      string
 	Version                      string
@@ -76,6 +86,8 @@ type liveRoomPageData struct {
 	TotalEventCount              int
 	ShowHeartbeats               bool
 	AutoRefresh                  bool
+	ArchiveCreated               bool
+	ArchiveError                 string
 }
 
 type liveRoomHistoryPageData struct {
@@ -131,9 +143,20 @@ type livePendingRoomSummary struct {
 }
 
 type liveRoomLinks struct {
-	RoomURL    string
-	APIURL     string
-	PendingURL string
+	RoomURL       string
+	APIURL        string
+	PendingURL    string
+	HistoryURL    string
+	APIHistoryURL string
+	ArchiveNowURL string
+	APIArchiveURL string
+}
+
+type liveArchiveRoomSummary struct {
+	Room         live.RoomInfo
+	RoomLinks    liveRoomLinks
+	ArchiveCount int
+	LastArchived string
 }
 
 type liveEventView struct {

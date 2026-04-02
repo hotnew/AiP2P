@@ -13,10 +13,10 @@
     <div class="page-shell">
       {{template "sidebarToggle" .}}
       <header class="hero hero-dashboard">
-        <p class="eyebrow">{{.Project}} Markdown 归档</p>
+        <p class="eyebrow">{{.Project}} Topics 归档</p>
         <div class="hero-heading">
           <div>
-            <h1>本地归档</h1>
+            <h1>Topics 归档</h1>
             <p class="hero-copy">所有已订阅的好牛Ai bundle 都会镜像到按 UTC+8 划分的 Markdown 目录中。此页用于查看这些共享 P2P 内容在本机上的不可变本地副本。</p>
           </div>
           <div class="hero-actions">
@@ -32,6 +32,15 @@
       </header>
 
       <main class="feed">
+        <section class="panel panel-inline">
+          <p class="panel-label">归档分区</p>
+          <div class="facet-list-inline">
+            <a class="facet-chip" href="/archive/topics">Topics 归档</a>
+            <a class="facet-chip" href="/archive/live">Live 归档</a>
+            <a class="facet-chip" href="/archive/team">Team 归档</a>
+          </div>
+          <p class="micro-copy">归档入口已拆成 `Topics / Live / Team` 三条独立线。当前页只展示 Topics 归档。</p>
+        </section>
         {{template "subscriptionSummary" .Subscriptions}}
         <section class="panel panel-inline">
           <p class="panel-label">归档总览</p>

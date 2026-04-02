@@ -653,7 +653,7 @@ func TestPluginBuildServesLiveRoomHistoryAfterPrune(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("history status = %d, body = %s", rec.Code, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), "当前还没有本地历史归档") {
+	if !strings.Contains(rec.Body.String(), "当前还没有 Live 归档") {
 		t.Fatalf("expected history page body, got %q", rec.Body.String())
 	}
 
@@ -722,6 +722,80 @@ func TestPluginBuildServesLiveRoomAPIIncludesTaskSummaries(t *testing.T) {
 	}
 	if !strings.Contains(body, "\"task_by_status\"") || !strings.Contains(body, "\"task_by_assignee\"") {
 		t.Fatalf("expected grouped task fields in API body, got %q", body)
+	}
+}
+
+func TestPluginBuildCreatesManualArchiveAndServesArchiveLiveRoutes(t *testing.T) {
+	t.Parallel()
+
+	site, root := buildLiveSite(t)
+	store, err := live.OpenLocalStore(filepath.Join(root, "store"))
+	if err != nil {
+		t.Fatalf("OpenLocalStore error = %v", err)
+	}
+	room := live.RoomInfo{
+		RoomID:    "room-archive-ui",
+		Title:     "Archive UI",
+		Creator:   "agent://pc75/openclaw01",
+		CreatedAt: "2026-04-02T00:00:00Z",
+		Channel:   "hao.news/live",
+	}
+	if err := store.SaveRoom(room); err != nil {
+		t.Fatalf("SaveRoom error = %v", err)
+	}
+	if err := store.AppendEvent(room.RoomID, live.LiveMessage{
+		Protocol:     live.ProtocolVersion,
+		Type:         live.TypeMessage,
+		RoomID:       room.RoomID,
+		Sender:       room.Creator,
+		SenderPubKey: strings.Repeat("a", 64),
+		Seq:          1,
+		Timestamp:    "2026-04-02T01:00:00Z",
+		Payload:      live.LivePayload{Content: "archive me"},
+		Signature:    strings.Repeat("4", 128),
+	}); err != nil {
+		t.Fatalf("AppendEvent error = %v", err)
+	}
+
+	createReq := httptest.NewRequest(http.MethodPost, "/api/live/archive/"+room.RoomID, nil)
+	createReq.RemoteAddr = "127.0.0.1:12345"
+	createRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(createRec, createReq)
+	if createRec.Code != http.StatusOK {
+		t.Fatalf("archive create status = %d, body = %s", createRec.Code, createRec.Body.String())
+	}
+	if !strings.Contains(createRec.Body.String(), "\"scope\": \"live-room-archive-create\"") || !strings.Contains(createRec.Body.String(), "\"kind\": \"manual\"") {
+		t.Fatalf("expected archive create payload, got %q", createRec.Body.String())
+	}
+
+	indexReq := httptest.NewRequest(http.MethodGet, "/archive/live", nil)
+	indexRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(indexRec, indexReq)
+	if indexRec.Code != http.StatusOK {
+		t.Fatalf("archive live index status = %d, body = %s", indexRec.Code, indexRec.Body.String())
+	}
+	if !strings.Contains(indexRec.Body.String(), "Live 归档") || !strings.Contains(indexRec.Body.String(), room.Title) {
+		t.Fatalf("expected archive live index body, got %q", indexRec.Body.String())
+	}
+
+	historyListReq := httptest.NewRequest(http.MethodGet, "/archive/live/"+room.RoomID, nil)
+	historyListRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(historyListRec, historyListReq)
+	if historyListRec.Code != http.StatusOK {
+		t.Fatalf("archive live room status = %d, body = %s", historyListRec.Code, historyListRec.Body.String())
+	}
+	if !strings.Contains(historyListRec.Body.String(), "手动归档") {
+		t.Fatalf("expected manual archive label in history page, got %q", historyListRec.Body.String())
+	}
+
+	compatReq := httptest.NewRequest(http.MethodGet, "/live/history/"+room.RoomID, nil)
+	compatRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(compatRec, compatReq)
+	if compatRec.Code != http.StatusOK {
+		t.Fatalf("compat history status = %d, body = %s", compatRec.Code, compatRec.Body.String())
+	}
+	if !strings.Contains(compatRec.Body.String(), "archive me") {
+		t.Fatalf("expected compat history body, got %q", compatRec.Body.String())
 	}
 }
 
@@ -1131,6 +1205,7 @@ func TestPluginBuildServesLiveRoomAPIIncludesPendingBlockedEvents(t *testing.T) 
 func buildLiveSite(t *testing.T) (*apphost.Site, string) {
 	t.Helper()
 	liveAnnouncementWatcherDisabledForTests = true
+	liveArchiveLoopDisabledForTests = true
 
 	root := t.TempDir()
 	cfg := apphost.Config{

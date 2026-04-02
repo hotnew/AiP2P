@@ -131,7 +131,7 @@ func (a *App) pageNav(activePath string) []NavItem {
 		items = append(items, NavItem{Name: "策略", URL: "/writer-policy", Active: strings.HasPrefix(activePath, "/writer-policy")})
 	}
 	if a.options.ArchiveRoutes {
-		items = append(items, NavItem{Name: "归档", URL: "/archive", Active: strings.HasPrefix(activePath, "/archive")})
+		items = append(items, NavItem{Name: "归档", URL: "/archive/topics", Active: strings.HasPrefix(activePath, "/archive")})
 	}
 	if apiURL := a.primaryAPIURL(); apiURL != "" {
 		items = append(items, NavItem{Name: "接口", URL: apiURL, Active: strings.HasPrefix(activePath, "/api")})
@@ -144,7 +144,7 @@ func (a *App) primaryAPIURL() string {
 	case a.options.ContentAPIRoutes:
 		return "/api/feed"
 	case a.options.HistoryAPIRoutes:
-		return "/api/history/list"
+		return "/api/archive/topics/list"
 	case a.options.NetworkAPIRoutes:
 		return "/api/network/bootstrap"
 	default:

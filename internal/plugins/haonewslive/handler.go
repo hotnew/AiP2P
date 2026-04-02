@@ -51,6 +51,10 @@ func publicLiveSlug(roomID string) string {
 
 func liveRoomLinksFor(roomID string) liveRoomLinks {
 	roomID = strings.TrimSpace(roomID)
+	historyURL := "/archive/live/" + roomID
+	apiHistoryURL := "/api/archive/live/" + roomID
+	archiveNowURL := "/live/archive/" + roomID
+	apiArchiveURL := "/api/live/archive/" + roomID
 	if isPublicLiveRoomID(roomID) {
 		slug := publicLiveSlug(roomID)
 		roomURL := "/live/public"
@@ -59,12 +63,23 @@ func liveRoomLinksFor(roomID string) liveRoomLinks {
 			roomURL += "/" + slug
 			apiURL += "/" + slug
 		}
-		return liveRoomLinks{RoomURL: roomURL, APIURL: apiURL}
+		return liveRoomLinks{
+			RoomURL:       roomURL,
+			APIURL:        apiURL,
+			HistoryURL:    historyURL,
+			APIHistoryURL: apiHistoryURL,
+			ArchiveNowURL: archiveNowURL,
+			APIArchiveURL: apiArchiveURL,
+		}
 	}
 	return liveRoomLinks{
-		RoomURL:    "/live/" + roomID,
-		APIURL:     "/api/live/rooms/" + roomID,
-		PendingURL: "/live/pending/" + roomID,
+		RoomURL:       "/live/" + roomID,
+		APIURL:        "/api/live/rooms/" + roomID,
+		PendingURL:    "/live/pending/" + roomID,
+		HistoryURL:    historyURL,
+		APIHistoryURL: apiHistoryURL,
+		ArchiveNowURL: archiveNowURL,
+		APIArchiveURL: apiArchiveURL,
 	}
 }
 
@@ -203,6 +218,133 @@ func handleLiveIndex(app *newsplugin.App, store *live.LocalStore, w http.Respons
 	if err := app.Templates().ExecuteTemplate(w, "live.html", data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+func handleLiveArchiveIndex(app *newsplugin.App, store *live.LocalStore, w http.ResponseWriter, r *http.Request) {
+	rooms, err := store.ListRooms()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	items := make([]liveArchiveRoomSummary, 0, len(rooms))
+	totalArchives := 0
+	for _, summary := range rooms {
+		historyArchives, err := store.ListHistoryArchives(summary.RoomID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if len(historyArchives) == 0 {
+			continue
+		}
+		totalArchives += len(historyArchives)
+		room, err := loadLiveRoom(store, summary.RoomID)
+		if err != nil {
+			continue
+		}
+		lastArchived := ""
+		if len(historyArchives) > 0 {
+			lastArchived = formatLiveDisplayTime(historyArchives[0].ArchivedAt)
+		}
+		items = append(items, liveArchiveRoomSummary{
+			Room:         room,
+			RoomLinks:    liveRoomLinksFor(summary.RoomID),
+			ArchiveCount: len(historyArchives),
+			LastArchived: lastArchived,
+		})
+	}
+	sort.SliceStable(items, func(i, j int) bool {
+		return items[i].LastArchived > items[j].LastArchived
+	})
+	index, err := app.Index()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	data := liveArchiveIndexPageData{
+		Project:    app.ProjectName(),
+		Version:    app.VersionString(),
+		PageNav:    app.PageNav("/archive"),
+		NodeStatus: app.NodeStatus(index),
+		Now:        time.Now(),
+		Rooms:      items,
+		SummaryStats: []newsplugin.SummaryStat{
+			{Label: "房间数", Value: formatCount(len(items))},
+			{Label: "归档批次", Value: formatCount(totalArchives)},
+			{Label: "最近归档", Value: liveArchiveLatestValue(items)},
+		},
+	}
+	if err := app.Templates().ExecuteTemplate(w, "live_archive_index.html", data); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func handleLiveArchiveNow(app *newsplugin.App, store *live.LocalStore, roomID string, w http.ResponseWriter, r *http.Request) {
+	if !livePublicRequestTrusted(r) {
+		http.Redirect(w, r, liveRoomLinksFor(roomID).RoomURL+"?archive_error=untrusted", http.StatusSeeOther)
+		return
+	}
+	record, err := store.CreateManualHistoryArchive(roomID, time.Now())
+	if err != nil {
+		http.Redirect(w, r, liveRoomLinksFor(roomID).RoomURL+"?archive_error=save", http.StatusSeeOther)
+		return
+	}
+	if record == nil {
+		http.Redirect(w, r, liveRoomLinksFor(roomID).HistoryURL+"?empty=1", http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, liveRoomLinksFor(roomID).HistoryURL+"/"+record.ArchiveID+"?created=1", http.StatusSeeOther)
+}
+
+func handleAPILiveArchiveNow(store *live.LocalStore, roomID string, w http.ResponseWriter, r *http.Request) {
+	if !livePublicRequestTrusted(r) {
+		http.Error(w, "untrusted request", http.StatusForbidden)
+		return
+	}
+	record, err := store.CreateManualHistoryArchive(roomID, time.Now())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	newsplugin.WriteJSON(w, http.StatusOK, map[string]any{
+		"scope":   "live-room-archive-create",
+		"room_id": roomID,
+		"archive": formatHistoryArchive(record),
+	})
+}
+
+func handleAPILiveArchiveIndex(store *live.LocalStore, w http.ResponseWriter, r *http.Request) {
+	rooms, err := store.ListRooms()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	items := make([]map[string]any, 0, len(rooms))
+	for _, summary := range rooms {
+		historyArchives, err := store.ListHistoryArchives(summary.RoomID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if len(historyArchives) == 0 {
+			continue
+		}
+		room, err := loadLiveRoom(store, summary.RoomID)
+		if err != nil {
+			continue
+		}
+		items = append(items, map[string]any{
+			"room":            room,
+			"archive_count":   len(historyArchives),
+			"last_archived":   formatLiveDisplayTime(historyArchives[0].ArchivedAt),
+			"history_url":     liveRoomLinksFor(summary.RoomID).HistoryURL,
+			"api_history_url": liveRoomLinksFor(summary.RoomID).APIHistoryURL,
+		})
+	}
+	newsplugin.WriteJSON(w, http.StatusOK, map[string]any{
+		"scope": "live-archive-index",
+		"rooms": items,
+	})
 }
 
 func handleLivePublicModeration(app *newsplugin.App, w http.ResponseWriter, r *http.Request) {
@@ -402,6 +544,8 @@ func handleLiveRoom(app *newsplugin.App, store *live.LocalStore, roomID string, 
 		TotalEventCount:              len(filteredEvents),
 		ShowHeartbeats:               showHeartbeats,
 		AutoRefresh:                  autoRefresh,
+		ArchiveCreated:               queryBool(r, "archive_created", false),
+		ArchiveError:                 strings.TrimSpace(r.URL.Query().Get("archive_error")),
 	}
 	if err := app.Templates().ExecuteTemplate(w, "live_room.html", data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -450,10 +594,14 @@ func handleLiveRoomHistory(app *newsplugin.App, store *live.LocalStore, roomID, 
 	if selected != nil {
 		selected = formatHistoryArchive(selected)
 	}
+	pageNavPath := "/live"
+	if strings.HasPrefix(r.URL.Path, "/archive/live") {
+		pageNavPath = "/archive"
+	}
 	data := liveRoomHistoryPageData{
 		Project:         app.ProjectName(),
 		Version:         app.VersionString(),
-		PageNav:         app.PageNav("/live"),
+		PageNav:         app.PageNav(pageNavPath),
 		NodeStatus:      app.NodeStatus(index),
 		Now:             time.Now(),
 		Room:            room,
@@ -1095,6 +1243,16 @@ func latestPendingRoomValue(items []livePendingRoomSummary) string {
 	}
 	if !items[0].CreatedAt.IsZero() {
 		return items[0].CreatedAt.Local().Format("2006-01-02 15:04 MST")
+	}
+	return "暂无"
+}
+
+func liveArchiveLatestValue(items []liveArchiveRoomSummary) string {
+	if len(items) == 0 {
+		return "暂无"
+	}
+	if strings.TrimSpace(items[0].LastArchived) != "" {
+		return items[0].LastArchived
 	}
 	return "暂无"
 }

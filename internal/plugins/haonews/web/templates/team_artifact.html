@@ -30,6 +30,7 @@
           </div>
           <div class="hero-actions hero-actions-compact live-room-actions">
             <a class="button-link" href="/api/teams/{{.Team.TeamID}}/artifacts/{{urlquery .Artifact.ArtifactID}}">Artifact JSON</a>
+            <a class="button-link button-link-muted" href="/archive/team/{{.Team.TeamID}}">Team 归档</a>
             <a class="button-link button-link-muted" href="/teams/{{.Team.TeamID}}">Team 详情</a>
             <a class="button-link button-link-muted" href="/teams/{{.Team.TeamID}}/artifacts">全部产物</a>
             <a class="button-link button-link-muted" href="/teams/{{.Team.TeamID}}/tasks">任务</a>
@@ -47,6 +48,7 @@
           </div>
           <div class="team-page-nav">
             <a class="filter-chip" href="/teams/{{.Team.TeamID}}">概览</a>
+            <a class="filter-chip" href="/archive/team/{{.Team.TeamID}}">归档</a>
             <a class="filter-chip" href="/teams/{{.Team.TeamID}}/members">成员</a>
             <a class="filter-chip" href="/teams/{{.Team.TeamID}}/channels/main">主频道</a>
             <a class="filter-chip" href="/teams/{{.Team.TeamID}}/tasks">任务</a>
@@ -77,6 +79,7 @@
           <div class="team-card-links">
             {{if .Artifact.ChannelID}}<a href="/teams/{{.Team.TeamID}}/channels/{{urlquery .Artifact.ChannelID}}">继续在频道处理</a>{{end}}
             {{if .Artifact.TaskID}}<a href="/teams/{{.Team.TeamID}}/tasks/{{urlquery .Artifact.TaskID}}">继续在任务处理</a>{{end}}
+            <a href="/archive/team/{{.Team.TeamID}}">查看 Team 归档</a>
             <a href="/teams/{{.Team.TeamID}}/history?scope=artifact">查看产物历史</a>
           </div>
         </section>

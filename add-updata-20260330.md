@@ -19,6 +19,26 @@
 
 ---
 
+## 十一、2026-04-03 归档拆分收口
+
+- 归档主语义正式拆成三条线：
+  - `archive/topics/*`
+  - `archive/live/*`
+  - `archive/team/*`
+- `Topics` 页面和 API 统一收口到：
+  - `/archive/topics/*`
+  - `/api/archive/topics/*`
+  - 旧 `api/history/*` 继续兼容
+- `Live`
+  - 保留手动归档
+  - 接入 `05:30 CST` 日归档调度
+  - `live/history/*` 只做兼容层
+- `Team`
+  - 新增手动 Team 快照归档
+  - Team 工作区各页补齐 Team 归档入口
+
+---
+
 ## 一、GitHub 版本落点
 
 今天已完成并推送的版本包括：

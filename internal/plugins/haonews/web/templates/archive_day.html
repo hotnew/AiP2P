@@ -13,8 +13,8 @@
     <div class="page-shell">
       {{template "sidebarToggle" .}}
       <header class="hero hero-dashboard">
-        <a class="back-link" href="/archive">返回归档</a>
-        <p class="eyebrow">{{.Project}} 当日归档</p>
+        <a class="back-link" href="{{.BasePath}}">返回 Topics 归档</a>
+        <p class="eyebrow">{{.Project}} Topics 当日归档</p>
         <h1>{{.Day}}</h1>
         <p class="hero-copy">本地 Markdown 镜像按 UTC+8 切分的日视图。</p>
       </header>
@@ -26,7 +26,7 @@
             <p class="panel-label">归档日期</p>
             <div class="facet-list">
               {{range .Days}}
-                <a class="facet {{if .Active}}is-active{{end}}" href="{{.URL}}">
+                <a class="facet {{if .Active}}is-active{{end}}" href="{{$.BasePath}}/{{.Date}}">
                   <span>{{.Date}}</span>
                   <strong>{{.StoryCount}}</strong>
                 </a>
@@ -65,8 +65,8 @@
                   </div>
                   <aside class="story-card-side">
                     <div class="story-links story-links-column">
-                      <a href="{{.ViewerURL}}">查看归档</a>
-                      <a href="{{.RawURL}}">原始 Markdown</a>
+                      <a href="{{$.BasePath}}/messages/{{.InfoHash}}">查看归档</a>
+                      <a href="{{$.BasePath}}/raw/{{.InfoHash}}">原始 Markdown</a>
                       {{if .ThreadURL}}<a href="{{.ThreadURL}}">原讨论</a>{{end}}
                     </div>
                   </aside>

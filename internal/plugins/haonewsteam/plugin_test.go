@@ -55,6 +55,84 @@ func TestPluginBuildServesTeamIndex(t *testing.T) {
 	}
 }
 
+func TestPluginBuildServesTeamArchiveRoutes(t *testing.T) {
+	t.Parallel()
+
+	site, root := buildTeamSite(t)
+	store, err := teamcore.OpenStore(filepath.Join(root, "store"))
+	if err != nil {
+		t.Fatalf("OpenStore error = %v", err)
+	}
+	teamRoot := filepath.Join(root, "store", "team", "archive-project")
+	if err := os.MkdirAll(teamRoot, 0o755); err != nil {
+		t.Fatalf("MkdirAll error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(teamRoot, "team.json"), []byte(`{"team_id":"archive-project","title":"Archive Project"}`), 0o644); err != nil {
+		t.Fatalf("WriteFile(team.json) error = %v", err)
+	}
+	record, err := store.CreateManualArchive("archive-project", time.Date(2026, 4, 2, 12, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("CreateManualArchive error = %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/archive/team", nil)
+	rec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "Team 归档") {
+		t.Fatalf("index status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/archive/team/archive-project/"+record.ArchiveID, nil)
+	rec = httptest.NewRecorder()
+	site.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), record.ArchiveID) {
+		t.Fatalf("detail status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/archive/team/archive-project", nil)
+	rec = httptest.NewRecorder()
+	site.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), record.ArchiveID) {
+		t.Fatalf("api status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestPluginBuildCreatesTeamArchiveFromWorkspaceRoutes(t *testing.T) {
+	t.Parallel()
+
+	site, root := buildTeamSite(t)
+	teamRoot := filepath.Join(root, "store", "team", "archive-create-project")
+	if err := os.MkdirAll(teamRoot, 0o755); err != nil {
+		t.Fatalf("MkdirAll error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(teamRoot, "team.json"), []byte(`{"team_id":"archive-create-project","title":"Archive Create Project"}`), 0o644); err != nil {
+		t.Fatalf("WriteFile(team.json) error = %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/teams/archive-create-project/archive", nil)
+	req.RemoteAddr = "127.0.0.1:12345"
+	rec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("page archive create status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if location := rec.Header().Get("Location"); !strings.HasPrefix(location, "/archive/team/archive-create-project/manual-") {
+		t.Fatalf("page archive location = %q", location)
+	}
+
+	apiReq := httptest.NewRequest(http.MethodPost, "/api/teams/archive-create-project/archive", nil)
+	apiReq.RemoteAddr = "127.0.0.1:12345"
+	apiRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(apiRec, apiReq)
+	if apiRec.Code != http.StatusOK {
+		t.Fatalf("api archive create status = %d, body = %s", apiRec.Code, apiRec.Body.String())
+	}
+	body := apiRec.Body.String()
+	if !strings.Contains(body, `"scope": "team-archive-create"`) || !strings.Contains(body, `"team_id": "archive-create-project"`) || !strings.Contains(body, `"archive_id": "manual-`) {
+		t.Fatalf("api archive create body = %s", body)
+	}
+}
+
 func TestPluginBuildServesEmptyTeamIndex(t *testing.T) {
 	t.Parallel()
 

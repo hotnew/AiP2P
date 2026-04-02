@@ -30,6 +30,7 @@
           </div>
           <div class="hero-actions hero-actions-compact live-room-actions">
             <a class="button-link" href="/teams/{{.Team.TeamID}}/channels/main">主频道</a>
+            <a class="button-link button-link-muted" href="/archive/team/{{.Team.TeamID}}">Team 归档</a>
             <a class="button-link button-link-muted" href="/teams/{{.Team.TeamID}}/members">成员</a>
             <a class="button-link button-link-muted" href="/teams/{{.Team.TeamID}}/tasks">任务</a>
             <a class="button-link button-link-muted" href="/teams/{{.Team.TeamID}}/artifacts">产物</a>
@@ -49,6 +50,7 @@
           </div>
           <div class="team-page-nav">
             <a class="filter-chip is-active" href="/teams/{{.Team.TeamID}}">概览</a>
+            <a class="filter-chip" href="/archive/team/{{.Team.TeamID}}">归档</a>
             <a class="filter-chip" href="/teams/{{.Team.TeamID}}/members">成员</a>
             <a class="filter-chip" href="/teams/{{.Team.TeamID}}/channels/main">主频道</a>
             <a class="filter-chip" href="/teams/{{.Team.TeamID}}/tasks">任务</a>
@@ -72,11 +74,15 @@
           </div>
           <div class="team-section-actions">
             <a class="filter-chip" href="/teams/{{.Team.TeamID}}/members">成员治理</a>
+            <a class="filter-chip" href="/archive/team/{{.Team.TeamID}}">查看 Team 归档</a>
             <a class="filter-chip" href="/teams/{{.Team.TeamID}}/channels/main">主频道</a>
             <a class="filter-chip" href="/teams/{{.Team.TeamID}}/tasks">任务列表</a>
             <a class="filter-chip" href="/teams/{{.Team.TeamID}}/artifacts">产物列表</a>
             <a class="filter-chip" href="/teams/{{.Team.TeamID}}/history">全部历史</a>
           </div>
+          <form method="post" action="/teams/{{.Team.TeamID}}/archive" class="team-form-actions">
+            <button class="button-link" type="submit">立即归档当前 Team</button>
+          </form>
         </section>
         <section class="panel panel-inline">
           <div class="panel-head">

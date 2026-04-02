@@ -31,6 +31,7 @@
           </div>
           <div class="hero-actions hero-actions-compact live-room-actions">
             <a class="button-link" href="/api/teams/{{.Team.TeamID}}/tasks/{{urlquery .Task.TaskID}}">Task JSON</a>
+            <a class="button-link button-link-muted" href="/archive/team/{{.Team.TeamID}}">Team 归档</a>
             <a class="button-link button-link-muted" href="/teams/{{.Team.TeamID}}">Team 详情</a>
             <a class="button-link button-link-muted" href="/teams/{{.Team.TeamID}}/channels/{{if .Task.ChannelID}}{{urlquery .Task.ChannelID}}{{else}}main{{end}}">{{if .RelatedChannel}}{{if .RelatedChannel.Title}}{{.RelatedChannel.Title}}{{else}}{{.RelatedChannel.ChannelID}}{{end}}{{else}}主频道{{end}}</a>
             <a class="button-link button-link-muted" href="/teams/{{.Team.TeamID}}/artifacts">产物</a>
@@ -48,6 +49,7 @@
           </div>
           <div class="team-page-nav">
             <a class="filter-chip" href="/teams/{{.Team.TeamID}}">概览</a>
+            <a class="filter-chip" href="/archive/team/{{.Team.TeamID}}">归档</a>
             <a class="filter-chip" href="/teams/{{.Team.TeamID}}/members">成员</a>
             <a class="filter-chip" href="/teams/{{.Team.TeamID}}/channels/{{if .Task.ChannelID}}{{urlquery .Task.ChannelID}}{{else}}main{{end}}">{{if .RelatedChannel}}{{if .RelatedChannel.Title}}{{.RelatedChannel.Title}}{{else}}{{.RelatedChannel.ChannelID}}{{end}}{{else}}主频道{{end}}</a>
             <a class="filter-chip is-active" href="/teams/{{.Team.TeamID}}/tasks">任务</a>
@@ -109,6 +111,7 @@
               <div class="team-card-links">
                 <a href="#task-comments">查看评论</a>
                 <a href="/teams/{{.Team.TeamID}}/channels/{{if .Task.ChannelID}}{{urlquery .Task.ChannelID}}{{else}}main{{end}}">{{if .RelatedChannel}}去任务频道{{else}}任务频道{{end}}</a>
+                <a href="/archive/team/{{.Team.TeamID}}">查看 Team 归档</a>
               </div>
             </article>
             <article class="team-workbench-card">

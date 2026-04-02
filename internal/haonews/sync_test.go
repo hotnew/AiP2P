@@ -366,7 +366,7 @@ func TestLANHistoryManifestEndpointDefaultsToLatestPort(t *testing.T) {
 	if err != nil {
 		t.Fatalf("lanHistoryManifestEndpoint error = %v", err)
 	}
-	if value != "http://192.168.102.74:51818/api/history/list" {
+	if value != "http://192.168.102.74:51818/api/archive/topics/list" {
 		t.Fatalf("endpoint = %q", value)
 	}
 }
@@ -378,7 +378,7 @@ func TestLANHistoryManifestEndpointIncludesCursor(t *testing.T) {
 	if err != nil {
 		t.Fatalf("lanHistoryManifestEndpoint error = %v", err)
 	}
-	if value != "http://192.168.102.74:51818/api/history/list?cursor=2" {
+	if value != "http://192.168.102.74:51818/api/archive/topics/list?cursor=2" {
 		t.Fatalf("endpoint = %q", value)
 	}
 }
@@ -402,7 +402,7 @@ func TestPublicHistoryManifestEndpointDefaultsToHTTPS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("lanHistoryManifestEndpoint error = %v", err)
 	}
-	if value != "https://ai.jie.news/api/history/list?cursor=2" {
+	if value != "https://ai.jie.news/api/archive/topics/list?cursor=2" {
 		t.Fatalf("endpoint = %q", value)
 	}
 }
@@ -930,7 +930,7 @@ func TestEnqueueHistoryFromLANPeersUsesConfiguredPublicPeers(t *testing.T) {
 		LibP2PPeerID: sourcePeerID,
 	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/history/list" {
+		if r.URL.Path != "/api/archive/topics/list" {
 			http.NotFound(w, r)
 			return
 		}

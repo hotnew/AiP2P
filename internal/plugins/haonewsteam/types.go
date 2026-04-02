@@ -44,60 +44,60 @@ type teamPageData struct {
 }
 
 type teamMembersPageData struct {
-	Project       string
-	Version       string
-	PageNav       []newsplugin.NavItem
-	NodeStatus    newsplugin.NodeStatus
-	Now           time.Time
-	Team          teamcore.Info
-	Policy        teamcore.Policy
-	Members       []teamcore.Member
+	Project        string
+	Version        string
+	PageNav        []newsplugin.NavItem
+	NodeStatus     newsplugin.NodeStatus
+	Now            time.Time
+	Team           teamcore.Info
+	Policy         teamcore.Policy
+	Members        []teamcore.Member
 	PendingMembers []teamcore.Member
-	FilterStatus  string
-	FilterRole    string
-	FilterAgent   string
+	FilterStatus   string
+	FilterRole     string
+	FilterAgent    string
 	AppliedFilters []string
-	Statuses      []string
-	Roles         []string
-	StatusCounts  map[string]int
-	RoleCounts    map[string]int
-	SummaryStats  []newsplugin.SummaryStat
+	Statuses       []string
+	Roles          []string
+	StatusCounts   map[string]int
+	RoleCounts     map[string]int
+	SummaryStats   []newsplugin.SummaryStat
 }
 
 type teamHistoryPageData struct {
-	Project      string
-	Version      string
-	PageNav      []newsplugin.NavItem
-	NodeStatus   newsplugin.NodeStatus
-	Now          time.Time
-	Team         teamcore.Info
-	History      []teamcore.ChangeEvent
-	FilterScope  string
-	FilterSource string
-	FilterActor  string
+	Project        string
+	Version        string
+	PageNav        []newsplugin.NavItem
+	NodeStatus     newsplugin.NodeStatus
+	Now            time.Time
+	Team           teamcore.Info
+	History        []teamcore.ChangeEvent
+	FilterScope    string
+	FilterSource   string
+	FilterActor    string
 	AppliedFilters []string
-	Scopes       []string
-	Sources      []string
-	ScopeCounts  map[string]int
-	SourceCounts map[string]int
-	SummaryStats []newsplugin.SummaryStat
+	Scopes         []string
+	Sources        []string
+	ScopeCounts    map[string]int
+	SourceCounts   map[string]int
+	SummaryStats   []newsplugin.SummaryStat
 }
 
 type teamChannelPageData struct {
-	Project      string
-	Version      string
-	PageNav      []newsplugin.NavItem
-	NodeStatus   newsplugin.NodeStatus
-	Now          time.Time
-	Team         teamcore.Info
-	Channel      teamcore.ChannelSummary
-	ChannelID    string
-	Channels     []teamcore.ChannelSummary
-	Messages     []teamcore.Message
-	Tasks        []teamcore.Task
-	Artifacts    []teamcore.Artifact
+	Project        string
+	Version        string
+	PageNav        []newsplugin.NavItem
+	NodeStatus     newsplugin.NodeStatus
+	Now            time.Time
+	Team           teamcore.Info
+	Channel        teamcore.ChannelSummary
+	ChannelID      string
+	Channels       []teamcore.ChannelSummary
+	Messages       []teamcore.Message
+	Tasks          []teamcore.Task
+	Artifacts      []teamcore.Artifact
 	RelatedHistory []teamcore.ChangeEvent
-	SummaryStats []newsplugin.SummaryStat
+	SummaryStats   []newsplugin.SummaryStat
 }
 
 type teamTasksPageData struct {
@@ -142,21 +142,21 @@ type teamTaskPageData struct {
 }
 
 type teamArtifactsPageData struct {
-	Project       string
-	Version       string
-	PageNav       []newsplugin.NavItem
-	NodeStatus    newsplugin.NodeStatus
-	Now           time.Time
-	Team          teamcore.Info
-	Artifacts     []teamcore.Artifact
-	FilterKind    string
-	FilterChannel string
-	FilterTask    string
+	Project        string
+	Version        string
+	PageNav        []newsplugin.NavItem
+	NodeStatus     newsplugin.NodeStatus
+	Now            time.Time
+	Team           teamcore.Info
+	Artifacts      []teamcore.Artifact
+	FilterKind     string
+	FilterChannel  string
+	FilterTask     string
 	AppliedFilters []string
-	Kinds         []string
-	Channels      []teamcore.ChannelSummary
-	Tasks         []teamcore.Task
-	SummaryStats  []newsplugin.SummaryStat
+	Kinds          []string
+	Channels       []teamcore.ChannelSummary
+	Tasks          []teamcore.Task
+	SummaryStats   []newsplugin.SummaryStat
 }
 
 type teamArtifactPageData struct {
@@ -172,4 +172,26 @@ type teamArtifactPageData struct {
 	RelatedChannel *teamcore.ChannelSummary
 	RelatedHistory []teamcore.ChangeEvent
 	SummaryStats   []newsplugin.SummaryStat
+}
+
+type teamArchiveIndexPageData struct {
+	Project      string
+	Version      string
+	PageNav      []newsplugin.NavItem
+	NodeStatus   newsplugin.NodeStatus
+	Now          time.Time
+	Teams        []teamcore.Summary
+	SummaryStats []newsplugin.SummaryStat
+}
+
+type teamArchivePageData struct {
+	Project      string
+	Version      string
+	PageNav      []newsplugin.NavItem
+	NodeStatus   newsplugin.NodeStatus
+	Now          time.Time
+	Team         teamcore.Info
+	Archives     []teamcore.ArchiveSnapshot
+	Archive      *teamcore.ArchiveSnapshot
+	SummaryStats []newsplugin.SummaryStat
 }

@@ -213,6 +213,62 @@ func TestStoreAppendAndLoadMessages(t *testing.T) {
 	}
 }
 
+func TestStoreCreateManualArchive(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	teamRoot := filepath.Join(root, "team", "archive-team")
+	if err := os.MkdirAll(teamRoot, 0o755); err != nil {
+		t.Fatalf("MkdirAll error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(teamRoot, "team.json"), []byte(`{"team_id":"archive-team","title":"Archive Team"}`), 0o644); err != nil {
+		t.Fatalf("WriteFile(team.json) error = %v", err)
+	}
+	store, err := OpenStore(root)
+	if err != nil {
+		t.Fatalf("OpenStore error = %v", err)
+	}
+	if err := store.AppendMessage("archive-team", Message{
+		ChannelID:     "main",
+		AuthorAgentID: "agent://pc75/tester",
+		MessageType:   "chat",
+		Content:       "archived message",
+		CreatedAt:     time.Date(2026, 4, 2, 10, 0, 0, 0, time.UTC),
+	}); err != nil {
+		t.Fatalf("AppendMessage error = %v", err)
+	}
+	if err := store.AppendTask("archive-team", Task{
+		TaskID:    "task-a",
+		Title:     "Archive Task",
+		Status:    "doing",
+		CreatedAt: time.Date(2026, 4, 2, 10, 5, 0, 0, time.UTC),
+		UpdatedAt: time.Date(2026, 4, 2, 10, 5, 0, 0, time.UTC),
+	}); err != nil {
+		t.Fatalf("AppendTask error = %v", err)
+	}
+	record, err := store.CreateManualArchive("archive-team", time.Date(2026, 4, 2, 12, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("CreateManualArchive error = %v", err)
+	}
+	if record.Kind != "manual" || record.MessageCount != 1 || record.TaskCount != 1 {
+		t.Fatalf("unexpected archive record: %#v", record)
+	}
+	archives, err := store.ListArchives("archive-team")
+	if err != nil {
+		t.Fatalf("ListArchives error = %v", err)
+	}
+	if len(archives) != 1 {
+		t.Fatalf("expected 1 archive, got %d", len(archives))
+	}
+	loaded, err := store.LoadArchive("archive-team", record.ArchiveID)
+	if err != nil {
+		t.Fatalf("LoadArchive error = %v", err)
+	}
+	if loaded.ArchiveID != record.ArchiveID || loaded.MessageCount != 1 {
+		t.Fatalf("unexpected loaded archive: %#v", loaded)
+	}
+}
+
 func TestStoreListChannelsIncludesConfiguredAndDiskChannels(t *testing.T) {
 	t.Parallel()
 

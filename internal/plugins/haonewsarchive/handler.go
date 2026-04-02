@@ -16,6 +16,9 @@ func newHandler(app *newsplugin.App, staticFS fs.FS) http.Handler {
 	mux.HandleFunc("/archive", func(w http.ResponseWriter, r *http.Request) {
 		handleArchiveIndex(app, w, r)
 	})
+	mux.HandleFunc("/archive/topics", func(w http.ResponseWriter, r *http.Request) {
+		handleArchiveIndex(app, w, r)
+	})
 	mux.HandleFunc("/archive/", func(w http.ResponseWriter, r *http.Request) {
 		handleArchiveSubtree(app, w, r)
 	})
@@ -25,12 +28,18 @@ func newHandler(app *newsplugin.App, staticFS fs.FS) http.Handler {
 	mux.HandleFunc("/api/history/manifest", func(w http.ResponseWriter, r *http.Request) {
 		handleAPIHistoryList(app, w, r)
 	})
+	mux.HandleFunc("/api/archive/topics/list", func(w http.ResponseWriter, r *http.Request) {
+		handleAPIHistoryList(app, w, r)
+	})
+	mux.HandleFunc("/api/archive/topics/manifest", func(w http.ResponseWriter, r *http.Request) {
+		handleAPIHistoryList(app, w, r)
+	})
 	mux.Handle("/static/", newsplugin.NoStoreStaticHandler(staticFS))
 	return mux
 }
 
 func handleArchiveIndex(app *newsplugin.App, w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/archive" {
+	if r.URL.Path != "/archive" && r.URL.Path != "/archive/topics" {
 		http.NotFound(w, r)
 		return
 	}
@@ -48,8 +57,10 @@ func handleArchiveIndex(app *newsplugin.App, w http.ResponseWriter, r *http.Requ
 	data := newsplugin.ArchiveIndexPageData{
 		Project:       app.ProjectName(),
 		Version:       app.VersionString(),
-		PageNav:       app.PageNav("/archive"),
+		PageNav:       app.PageNav("/archive/topics"),
 		Now:           time.Now(),
+		BasePath:      "/archive/topics",
+		Section:       "topics",
 		Days:          days,
 		SummaryStats:  newsplugin.BuildArchiveSummaryStats(days, len(index.Bundles)),
 		Subscriptions: rules,
@@ -62,6 +73,12 @@ func handleArchiveIndex(app *newsplugin.App, w http.ResponseWriter, r *http.Requ
 
 func handleArchiveSubtree(app *newsplugin.App, w http.ResponseWriter, r *http.Request) {
 	switch {
+	case strings.HasPrefix(r.URL.Path, "/archive/topics/messages/"):
+		handleArchiveMessage(app, w, r)
+	case strings.HasPrefix(r.URL.Path, "/archive/topics/raw/"):
+		handleArchiveRaw(app, w, r)
+	case strings.HasPrefix(r.URL.Path, "/archive/topics/"):
+		handleArchiveDay(app, w, r)
 	case strings.HasPrefix(r.URL.Path, "/archive/messages/"):
 		handleArchiveMessage(app, w, r)
 	case strings.HasPrefix(r.URL.Path, "/archive/raw/"):
@@ -72,8 +89,13 @@ func handleArchiveSubtree(app *newsplugin.App, w http.ResponseWriter, r *http.Re
 }
 
 func handleArchiveDay(app *newsplugin.App, w http.ResponseWriter, r *http.Request) {
-	day := strings.TrimPrefix(r.URL.Path, "/archive/")
-	if day == "" || day == r.URL.Path {
+	basePath := "/archive/topics"
+	day := strings.TrimPrefix(r.URL.Path, "/archive/topics/")
+	if day == r.URL.Path {
+		basePath = "/archive"
+		day = strings.TrimPrefix(r.URL.Path, "/archive/")
+	}
+	if day == "" || day == r.URL.Path || strings.Contains(day, "/") {
 		http.NotFound(w, r)
 		return
 	}
@@ -96,8 +118,10 @@ func handleArchiveDay(app *newsplugin.App, w http.ResponseWriter, r *http.Reques
 	data := newsplugin.ArchiveDayPageData{
 		Project:       app.ProjectName(),
 		Version:       app.VersionString(),
-		PageNav:       app.PageNav("/archive"),
+		PageNav:       app.PageNav("/archive/topics"),
 		Now:           time.Now(),
+		BasePath:      basePath,
+		Section:       "topics",
 		Day:           day,
 		Days:          newsplugin.MarkArchiveDayActive(days, day),
 		Entries:       entries,
@@ -111,7 +135,12 @@ func handleArchiveDay(app *newsplugin.App, w http.ResponseWriter, r *http.Reques
 }
 
 func handleArchiveMessage(app *newsplugin.App, w http.ResponseWriter, r *http.Request) {
-	infoHash := strings.TrimPrefix(r.URL.Path, "/archive/messages/")
+	basePath := "/archive/topics"
+	infoHash := strings.TrimPrefix(r.URL.Path, "/archive/topics/messages/")
+	if infoHash == r.URL.Path {
+		basePath = "/archive"
+		infoHash = strings.TrimPrefix(r.URL.Path, "/archive/messages/")
+	}
 	if infoHash == "" || infoHash == r.URL.Path {
 		http.NotFound(w, r)
 		return
@@ -138,13 +167,15 @@ func handleArchiveMessage(app *newsplugin.App, w http.ResponseWriter, r *http.Re
 	data := newsplugin.ArchiveMessagePageData{
 		Project:    app.ProjectName(),
 		Version:    app.VersionString(),
-		PageNav:    app.PageNav("/archive"),
+		PageNav:    app.PageNav("/archive/topics"),
 		Now:        time.Now(),
+		BasePath:   basePath,
+		Section:    "topics",
 		Entry:      entry,
 		Content:    string(content),
 		Thread:     entry.ThreadURL,
-		RawURL:     entry.RawURL,
-		DayURL:     "/archive/" + entry.Day,
+		RawURL:     basePath + "/raw/" + entry.InfoHash,
+		DayURL:     basePath + "/" + entry.Day,
 		Archive:    entry.ArchiveMD,
 		NodeStatus: app.NodeStatus(index),
 	}
@@ -154,7 +185,10 @@ func handleArchiveMessage(app *newsplugin.App, w http.ResponseWriter, r *http.Re
 }
 
 func handleArchiveRaw(app *newsplugin.App, w http.ResponseWriter, r *http.Request) {
-	infoHash := strings.TrimPrefix(r.URL.Path, "/archive/raw/")
+	infoHash := strings.TrimPrefix(r.URL.Path, "/archive/topics/raw/")
+	if infoHash == r.URL.Path {
+		infoHash = strings.TrimPrefix(r.URL.Path, "/archive/raw/")
+	}
 	if infoHash == "" || infoHash == r.URL.Path {
 		http.NotFound(w, r)
 		return
@@ -178,7 +212,10 @@ func handleArchiveRaw(app *newsplugin.App, w http.ResponseWriter, r *http.Reques
 }
 
 func handleAPIHistoryList(app *newsplugin.App, w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/api/history/list" && r.URL.Path != "/api/history/manifest" {
+	if r.URL.Path != "/api/history/list" &&
+		r.URL.Path != "/api/history/manifest" &&
+		r.URL.Path != "/api/archive/topics/list" &&
+		r.URL.Path != "/api/archive/topics/manifest" {
 		http.NotFound(w, r)
 		return
 	}
