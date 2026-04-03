@@ -540,6 +540,40 @@ func TestStoreAppendAndLoadTasks(t *testing.T) {
 	}
 }
 
+func TestStoreLoadTasksLimitReadsLatestTasks(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	teamRoot := filepath.Join(root, "team", "project-task-limit")
+	if err := os.MkdirAll(teamRoot, 0o755); err != nil {
+		t.Fatalf("MkdirAll error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(teamRoot, "team.json"), []byte(`{"team_id":"project-task-limit","title":"Project Task Limit"}`), 0o644); err != nil {
+		t.Fatalf("WriteFile(team.json) error = %v", err)
+	}
+	store, err := OpenStore(root)
+	if err != nil {
+		t.Fatalf("OpenStore error = %v", err)
+	}
+	for i := 1; i <= 5; i++ {
+		if err := store.AppendTask("project-task-limit", Task{
+			Title:     fmt.Sprintf("task-%d", i),
+			Status:    "open",
+			CreatedAt: time.Date(2026, 4, 1, i, 0, 0, 0, time.UTC),
+			UpdatedAt: time.Date(2026, 4, 1, i, 0, 0, 0, time.UTC),
+		}); err != nil {
+			t.Fatalf("AppendTask(%d) error = %v", i, err)
+		}
+	}
+	tasks, err := store.LoadTasks("project-task-limit", 2)
+	if err != nil {
+		t.Fatalf("LoadTasks error = %v", err)
+	}
+	if len(tasks) != 2 || tasks[0].Title != "task-5" || tasks[1].Title != "task-4" {
+		t.Fatalf("unexpected limited tasks: %#v", tasks)
+	}
+}
+
 func TestStoreSaveAndDeleteTask(t *testing.T) {
 	t.Parallel()
 
@@ -836,6 +870,58 @@ func TestStoreSaveMembersAndLoadArtifacts(t *testing.T) {
 	}
 	if len(history) != 1 || history[0].SubjectID != "artifact-iota-1" || history[0].Action != "delete" {
 		t.Fatalf("unexpected history: %#v", history)
+	}
+}
+
+func TestStoreLoadArtifactsAndHistoryLimitReadLatestEntries(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	teamRoot := filepath.Join(root, "team", "project-limit-tail")
+	if err := os.MkdirAll(teamRoot, 0o755); err != nil {
+		t.Fatalf("MkdirAll error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(teamRoot, "team.json"), []byte(`{"team_id":"project-limit-tail","title":"Project Limit Tail"}`), 0o644); err != nil {
+		t.Fatalf("WriteFile(team.json) error = %v", err)
+	}
+	store, err := OpenStore(root)
+	if err != nil {
+		t.Fatalf("OpenStore error = %v", err)
+	}
+	for i := 1; i <= 5; i++ {
+		if err := store.AppendArtifact("project-limit-tail", Artifact{
+			Title:     fmt.Sprintf("artifact-%d", i),
+			Kind:      "markdown",
+			CreatedAt: time.Date(2026, 4, 1, i, 0, 0, 0, time.UTC),
+			UpdatedAt: time.Date(2026, 4, 1, i, 0, 0, 0, time.UTC),
+		}); err != nil {
+			t.Fatalf("AppendArtifact(%d) error = %v", i, err)
+		}
+		if err := store.AppendHistory("project-limit-tail", ChangeEvent{
+			Scope:     "artifact",
+			Action:    "create",
+			SubjectID: fmt.Sprintf("artifact-%d", i),
+			Summary:   fmt.Sprintf("history-%d", i),
+			CreatedAt: time.Date(2026, 4, 1, i, 30, 0, 0, time.UTC),
+		}); err != nil {
+			t.Fatalf("AppendHistory(%d) error = %v", i, err)
+		}
+	}
+
+	artifacts, err := store.LoadArtifacts("project-limit-tail", 2)
+	if err != nil {
+		t.Fatalf("LoadArtifacts error = %v", err)
+	}
+	if len(artifacts) != 2 || artifacts[0].Title != "artifact-5" || artifacts[1].Title != "artifact-4" {
+		t.Fatalf("unexpected limited artifacts: %#v", artifacts)
+	}
+
+	history, err := store.LoadHistory("project-limit-tail", 2)
+	if err != nil {
+		t.Fatalf("LoadHistory error = %v", err)
+	}
+	if len(history) != 2 || history[0].Summary != "history-5" || history[1].Summary != "history-4" {
+		t.Fatalf("unexpected limited history: %#v", history)
 	}
 }
 

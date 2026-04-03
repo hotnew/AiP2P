@@ -5,7 +5,9 @@ import (
 	_ "embed"
 	"io/fs"
 	"net/http"
+	"os"
 	"strings"
+	"time"
 
 	"hao.news/internal/apphost"
 	teamcore "hao.news/internal/haonews/team"
@@ -22,6 +24,7 @@ func (Plugin) Manifest() apphost.PluginManifest {
 }
 
 func (Plugin) Build(_ context.Context, cfg apphost.Config, theme apphost.WebTheme) (*apphost.Site, error) {
+	ctx := context.Background()
 	cfg = newsplugin.ApplyDefaultConfig(cfg)
 	app, err := newsplugin.NewWithThemeAndOptions(
 		cfg.StoreRoot,
@@ -45,11 +48,77 @@ func (Plugin) Build(_ context.Context, cfg apphost.Config, theme apphost.WebThem
 	if err != nil {
 		return nil, err
 	}
+	if !strings.HasSuffix(filepathBase(os.Args[0]), ".test") {
+		startTeamWorkspaceWarmup(ctx, app, store)
+	}
 	return &apphost.Site{
 		Manifest: Plugin{}.Manifest(),
 		Theme:    theme.Manifest(),
 		Handler:  newHandler(app, store, staticFS),
 	}, nil
+}
+
+func startTeamWorkspaceWarmup(ctx context.Context, app *newsplugin.App, store *teamcore.Store) {
+	const warmupInterval = 45 * time.Second
+	go func() {
+		ticker := time.NewTicker(warmupInterval)
+		defer ticker.Stop()
+		for {
+			warmTeamWorkspace(app, store)
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+			}
+		}
+	}()
+}
+
+func warmTeamWorkspace(app *newsplugin.App, store *teamcore.Store) {
+	if app == nil || store == nil {
+		return
+	}
+	index, err := app.Index()
+	if err == nil {
+		_ = app.NodeStatus(index)
+	}
+	teams, err := store.ListTeams()
+	if err != nil {
+		return
+	}
+	const warmTeamLimit = 8
+	for i, summary := range teams {
+		if i >= warmTeamLimit {
+			break
+		}
+		teamID := strings.TrimSpace(summary.TeamID)
+		if teamID == "" {
+			continue
+		}
+		_, _ = store.LoadTeam(teamID)
+		_, _ = store.LoadMembers(teamID)
+		_, _ = store.LoadPolicy(teamID)
+		_, _ = store.LoadMessages(teamID, "main", 20)
+		_, _ = store.LoadTasks(teamID, 20)
+		_, _ = store.LoadArtifacts(teamID, 20)
+		_, _ = store.LoadHistory(teamID, 20)
+		_, _ = store.ListChannels(teamID)
+		_, _ = store.ListArchives(teamID)
+	}
+}
+
+func filepathBase(path string) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return ""
+	}
+	for strings.Contains(path, "//") {
+		path = strings.ReplaceAll(path, "//", "/")
+	}
+	if idx := strings.LastIndex(path, "/"); idx >= 0 {
+		return path[idx+1:]
+	}
+	return path
 }
 
 func newHandler(app *newsplugin.App, store *teamcore.Store, staticFS fs.FS) http.Handler {

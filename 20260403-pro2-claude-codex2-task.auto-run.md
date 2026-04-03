@@ -411,6 +411,18 @@
   - [internal/haonews/live/store.go](/Users/haoniu/sh18/hao.news2/haonews/internal/haonews/live/store.go)
   - `ListHistoryArchives()` 增加 Redis 短 TTL 缓存。
   - 新归档写入时主动失效 `history list` 缓存，`archive/live` 列表页不再每次都全目录读历史批次。
+- `C2 Team 冷路径尾部读取优化`
+  - [internal/haonews/team/store.go](/Users/haoniu/sh18/hao.news2/haonews/internal/haonews/team/store.go)
+  - [internal/haonews/team/store_test.go](/Users/haoniu/sh18/hao.news2/haonews/internal/haonews/team/store_test.go)
+  - `LoadTasks(limit>0)`、`LoadArtifacts(limit>0)`、`LoadHistory(limit>0)` 改成扫描文件尾部最新 N 条。
+  - `saveTasks()`、`saveArtifacts()` 落盘前按 `UpdatedAt` 升序稳定排序，保证“文件尾部 = 最新记录”。
+- `E2 Team / Live 启动预热`
+  - [internal/plugins/haonewsteam/plugin.go](/Users/haoniu/sh18/hao.news2/haonews/internal/plugins/haonewsteam/plugin.go)
+  - [internal/plugins/haonewslive/plugin.go](/Users/haoniu/sh18/hao.news2/haonews/internal/plugins/haonewslive/plugin.go)
+  - 非测试进程启动后持续后台预热：
+    - Team 工作区所需的 team/members/policy/messages/tasks/artifacts/history/channels/archives
+    - Live archive 房间摘要和相关只读索引
+  - 目标是把 `archive/live` 与 Team 详情页的首轮冷构建从秒级压到可接受范围。
 
 ### 本轮验证
 
@@ -423,14 +435,35 @@
 - `go test -race ./internal/haonews -run 'TestPubSubRuntimeReserveSubscriptionRespectsLimit|TestPubSubRuntimeConnectDiscoveredPeersCapsConcurrency|TestPubSubRuntimeConnectDiscoveredPeersRecordsErrors|TestPubSubRuntimeConnectDiscoveredPeersSkipsExistingAndSelf|TestSubscribedAnnouncementTopics|TestMatchesAnnouncement'`
 - `go test ./internal/haonews/live -run 'TestListHistoryArchivesUsesRedisCache|TestCreateManualAndDailyHistoryArchives|TestHistoryArchivesKeepAllVisibleEventsBeyondDisplayWindow'`
 - `go test ./internal/plugins/haonewslive -run 'TestPluginBuildCreatesAndServesLiveHistoryArchive'`
+- `go test ./internal/haonews/team -run 'TestStoreAppendAndLoadMessages|TestStoreLoadMessagesLimitReadsLatestMessages|TestStoreAppendAndLoadTasks|TestStoreLoadTasksLimitReadsLatestTasks|TestStoreSaveMembersAndLoadArtifacts|TestStoreLoadArtifactsAndHistoryLimitReadLatestEntries|TestStoreAppendTaskConcurrentPreservesAllTasks|TestStoreSaveAndDeleteTask'`
+- `go test ./internal/plugins/haonewsteam -run 'TestPluginBuildServesTeamDetailAndAPI|TestPluginBuildTeamTaskAndArtifactWorkflows|TestPluginBuildCreatesTaskFromHTMLForm|TestPluginBuildServesTeamArchiveRoutes|TestPluginBuildCreatesTeamArchiveFromWorkspaceRoutes'`
+- `go test ./internal/plugins/haonewslive -run 'TestPluginBuildCreatesAndServesLiveHistoryArchive|TestPluginBuildLimitsVisibleLiveEventsButCanShowAll|TestPluginBuildServesLiveIndex'`
 - `go build ./cmd/haonews`
+
+### 最新运行态证据
+
+- `.75` 已切到包含启动预热的本地二进制，并确认：
+  - `http_ready=true`
+  - `index_ready=true`
+  - `warmup_ready=true`
+- 冷首轮实测：
+  - `/archive/live`
+    - 第一次：`~65.9ms`
+    - 第二次：`~3.3ms`
+  - `/teams/archive-demo`
+    - 第一次：`~42.4ms`
+    - 第二次：`~3.5ms`
+- 热态基线未退化：
+  - `/` p95 `~8.3ms`
+  - `/topics` p95 `~1.8ms`
+  - `/api/feed` p95 `~2.9ms`
+  - `/topics/futures/rss` p95 `~3.1ms`
 
 ### 恢复下一步
 
-- 当前低风险与中风险主线已收完。
-- 运行态补充证据：
-  - 现网 `archive/live` 冷首轮仍可见秒级长尾，因此本轮已补存储层缓存。
-  - 该条的运行态前后对比需在下次部署后再补，不在本轮单测结果里夸大。
-- 如果继续执行，先补新的 `bench / profile / race` 证据，再决定是否进入：
-  - `Phase D` 高风险项
-  - 或直接走 `main + tag + release`
+- 当前低风险与中风险主线已收完，并且 `archive/live` / `Team` 首轮冷访问已经被启动预热压到双位数毫秒。
+- 现阶段没有新的证据支持进入 `Phase D` 高风险项。
+- 如果继续执行，优先顺序是：
+  - 直接走 `main + tag + release`
+  - 然后在 `.75` 持续观察
+  - 只有当新的 bench / profile 明确指出仍有稳定瓶颈时，再重开 `Phase D`

@@ -757,23 +757,35 @@ func (s *Store) LoadTasks(teamID string, limit int) ([]Task, error) {
 	}
 	defer file.Close()
 	var out []Task
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" {
-			continue
+	if limit > 0 {
+		lines, err := readLastJSONLByScan(path, limit)
+		if err != nil {
+			return nil, err
 		}
-		var task Task
-		if err := json.Unmarshal([]byte(line), &task); err != nil {
-			continue
+		out = make([]Task, 0, len(lines))
+		for _, line := range lines {
+			var task Task
+			if err := json.Unmarshal([]byte(line), &task); err != nil {
+				continue
+			}
+			out = append(out, task)
 		}
-		out = append(out, task)
-	}
-	if err := scanner.Err(); err != nil {
-		return nil, err
-	}
-	if limit > 0 && len(out) > limit {
-		out = append([]Task(nil), out[len(out)-limit:]...)
+	} else {
+		scanner := bufio.NewScanner(file)
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if line == "" {
+				continue
+			}
+			var task Task
+			if err := json.Unmarshal([]byte(line), &task); err != nil {
+				continue
+			}
+			out = append(out, task)
+		}
+		if err := scanner.Err(); err != nil {
+			return nil, err
+		}
 	}
 	sort.SliceStable(out, func(i, j int) bool {
 		if !out[i].UpdatedAt.Equal(out[j].UpdatedAt) {
@@ -961,23 +973,35 @@ func (s *Store) LoadArtifacts(teamID string, limit int) ([]Artifact, error) {
 	}
 	defer file.Close()
 	var out []Artifact
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" {
-			continue
+	if limit > 0 {
+		lines, err := readLastJSONLByScan(path, limit)
+		if err != nil {
+			return nil, err
 		}
-		var artifact Artifact
-		if err := json.Unmarshal([]byte(line), &artifact); err != nil {
-			continue
+		out = make([]Artifact, 0, len(lines))
+		for _, line := range lines {
+			var artifact Artifact
+			if err := json.Unmarshal([]byte(line), &artifact); err != nil {
+				continue
+			}
+			out = append(out, artifact)
 		}
-		out = append(out, artifact)
-	}
-	if err := scanner.Err(); err != nil {
-		return nil, err
-	}
-	if limit > 0 && len(out) > limit {
-		out = append([]Artifact(nil), out[len(out)-limit:]...)
+	} else {
+		scanner := bufio.NewScanner(file)
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if line == "" {
+				continue
+			}
+			var artifact Artifact
+			if err := json.Unmarshal([]byte(line), &artifact); err != nil {
+				continue
+			}
+			out = append(out, artifact)
+		}
+		if err := scanner.Err(); err != nil {
+			return nil, err
+		}
 	}
 	sort.SliceStable(out, func(i, j int) bool {
 		if !out[i].UpdatedAt.Equal(out[j].UpdatedAt) {
@@ -1078,23 +1102,35 @@ func (s *Store) LoadHistory(teamID string, limit int) ([]ChangeEvent, error) {
 	}
 	defer file.Close()
 	var out []ChangeEvent
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" {
-			continue
+	if limit > 0 {
+		lines, err := readLastJSONLByScan(path, limit)
+		if err != nil {
+			return nil, err
 		}
-		var event ChangeEvent
-		if err := json.Unmarshal([]byte(line), &event); err != nil {
-			continue
+		out = make([]ChangeEvent, 0, len(lines))
+		for _, line := range lines {
+			var event ChangeEvent
+			if err := json.Unmarshal([]byte(line), &event); err != nil {
+				continue
+			}
+			out = append(out, event)
 		}
-		out = append(out, event)
-	}
-	if err := scanner.Err(); err != nil {
-		return nil, err
-	}
-	if limit > 0 && len(out) > limit {
-		out = append([]ChangeEvent(nil), out[len(out)-limit:]...)
+	} else {
+		scanner := bufio.NewScanner(file)
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if line == "" {
+				continue
+			}
+			var event ChangeEvent
+			if err := json.Unmarshal([]byte(line), &event); err != nil {
+				continue
+			}
+			out = append(out, event)
+		}
+		if err := scanner.Err(); err != nil {
+			return nil, err
+		}
 	}
 	sort.SliceStable(out, func(i, j int) bool {
 		if !out[i].CreatedAt.Equal(out[j].CreatedAt) {
@@ -1103,6 +1139,35 @@ func (s *Store) LoadHistory(teamID string, limit int) ([]ChangeEvent, error) {
 		return out[i].EventID > out[j].EventID
 	})
 	return out, nil
+}
+
+func readLastJSONLByScan(path string, limit int) ([]string, error) {
+	if limit <= 0 {
+		return nil, nil
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	lines := make([]string, 0, limit)
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+		if len(lines) < limit {
+			lines = append(lines, line)
+			continue
+		}
+		copy(lines, lines[1:])
+		lines[len(lines)-1] = line
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	return lines, nil
 }
 
 func (s *Store) SaveArtifact(teamID string, artifact Artifact) error {
@@ -1642,6 +1707,13 @@ func (s *Store) saveTasks(teamID string, tasks []Task) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
+	items := append([]Task(nil), tasks...)
+	sort.SliceStable(items, func(i, j int) bool {
+		if !items[i].UpdatedAt.Equal(items[j].UpdatedAt) {
+			return items[i].UpdatedAt.Before(items[j].UpdatedAt)
+		}
+		return items[i].TaskID < items[j].TaskID
+	})
 	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tmp-*")
 	if err != nil {
 		return err
@@ -1652,7 +1724,7 @@ func (s *Store) saveTasks(teamID string, tasks []Task) error {
 		_ = tmp.Close()
 		return err
 	}
-	for _, task := range tasks {
+	for _, task := range items {
 		body, err := json.Marshal(task)
 		if err != nil {
 			_ = tmp.Close()
@@ -1710,6 +1782,13 @@ func (s *Store) saveArtifacts(teamID string, artifacts []Artifact) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
+	items := append([]Artifact(nil), artifacts...)
+	sort.SliceStable(items, func(i, j int) bool {
+		if !items[i].UpdatedAt.Equal(items[j].UpdatedAt) {
+			return items[i].UpdatedAt.Before(items[j].UpdatedAt)
+		}
+		return items[i].ArtifactID < items[j].ArtifactID
+	})
 	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tmp-*")
 	if err != nil {
 		return err
@@ -1720,7 +1799,7 @@ func (s *Store) saveArtifacts(teamID string, artifacts []Artifact) error {
 		_ = tmp.Close()
 		return err
 	}
-	for _, artifact := range artifacts {
+	for _, artifact := range items {
 		body, err := json.Marshal(artifact)
 		if err != nil {
 			_ = tmp.Close()

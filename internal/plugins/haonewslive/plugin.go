@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -79,6 +80,9 @@ func (Plugin) Build(ctx context.Context, cfg apphost.Config, theme apphost.WebTh
 	if !disableLiveArchiveLoop() {
 		go startLiveArchiveLoop(ctx, store, logf)
 	}
+	if !strings.HasSuffix(filepath.Base(strings.TrimSpace(os.Args[0])), ".test") {
+		go startLiveArchiveWarmup(ctx, app, store)
+	}
 	staticFS, err := theme.StaticFS()
 	if err != nil {
 		cancelWatch()
@@ -103,6 +107,30 @@ func (Plugin) Build(ctx context.Context, cfg apphost.Config, theme apphost.WebTh
 			return storeErr
 		},
 	}, nil
+}
+
+func startLiveArchiveWarmup(ctx context.Context, app *newsplugin.App, store *live.LocalStore) {
+	const warmupInterval = 45 * time.Second
+	ticker := time.NewTicker(warmupInterval)
+	defer ticker.Stop()
+	for {
+		warmLiveArchive(app, store)
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
+func warmLiveArchive(app *newsplugin.App, store *live.LocalStore) {
+	if app == nil || store == nil {
+		return
+	}
+	if index, err := app.Index(); err == nil {
+		_ = app.NodeStatus(index)
+	}
+	_, _, _ = loadLiveArchiveRoomSummaries(store)
 }
 
 func disableLiveAnnouncementWatcher() bool {
