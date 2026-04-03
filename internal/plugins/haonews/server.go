@@ -20,44 +20,45 @@ import (
 var webFS embed.FS
 
 type App struct {
-	storeRoot       string
-	project         string
-	version         string
-	startedAt       time.Time
-	archive         string
-	rulesPath       string
-	writerPath      string
-	netPath         string
-	listenAddr      string
-	templates       *template.Template
-	staticFS        fs.FS
-	loadIndex       func(storeRoot, project string) (Index, error)
-	syncIndex       func(index *Index, archiveRoot string) error
-	loadRules       func(path string) (SubscriptionRules, error)
-	loadWriter      func(path string) (WriterPolicy, error)
-	loadNet         func(path string) (NetworkBootstrapConfig, error)
-	loadSync        func(storeRoot, netPath string) (SyncRuntimeStatus, error)
-	loadSuper       func(path string) (SyncSupervisorState, error)
-	options         AppOptions
-	warmupMu        sync.Mutex
-	warmupReady     bool
-	indexMu         sync.Mutex
-	indexCache      cachedIndexState
-	probeCache      cachedProbeState
-	indexBuildCh    chan struct{}
-	responseMu      sync.Mutex
-	responseCache   map[string]cachedHTTPResponse
-	responseBuilds  map[string]*responseBuildState
-	responseEpoch   uint64
-	filterMu        sync.Mutex
-	filterCache     map[string]cachedPostList
-	filterBuilds    map[string]*postListBuildState
-	filterEpoch     uint64
-	directoryCache  map[string]cachedDirectoryState
-	nodeStatusMu    sync.Mutex
-	nodeStatusCache cachedNodeStatusState
-	rulesMu         sync.Mutex
-	rulesCache      cachedSubscriptionRulesState
+	storeRoot         string
+	project           string
+	version           string
+	startedAt         time.Time
+	archive           string
+	rulesPath         string
+	writerPath        string
+	netPath           string
+	listenAddr        string
+	templates         *template.Template
+	staticFS          fs.FS
+	loadIndex         func(storeRoot, project string) (Index, error)
+	syncIndex         func(index *Index, archiveRoot string) error
+	loadRules         func(path string) (SubscriptionRules, error)
+	loadWriter        func(path string) (WriterPolicy, error)
+	loadNet           func(path string) (NetworkBootstrapConfig, error)
+	loadSync          func(storeRoot, netPath string) (SyncRuntimeStatus, error)
+	loadSuper         func(path string) (SyncSupervisorState, error)
+	buildNodeStatusFn func(Index) NodeStatus
+	options           AppOptions
+	warmupMu          sync.Mutex
+	warmupReady       bool
+	indexMu           sync.Mutex
+	indexCache        cachedIndexState
+	probeCache        cachedProbeState
+	indexBuildCh      chan struct{}
+	responseMu        sync.Mutex
+	responseCache     map[string]cachedHTTPResponse
+	responseBuilds    map[string]*responseBuildState
+	responseEpoch     uint64
+	filterMu          sync.Mutex
+	filterCache       map[string]cachedPostList
+	filterBuilds      map[string]*postListBuildState
+	filterEpoch       uint64
+	directoryCache    map[string]cachedDirectoryState
+	nodeStatusMu      sync.Mutex
+	nodeStatusCache   cachedNodeStatusState
+	rulesMu           sync.Mutex
+	rulesCache        cachedSubscriptionRulesState
 }
 
 type AppOptions struct {
@@ -125,9 +126,10 @@ type cachedDirectoryState struct {
 }
 
 type cachedNodeStatusState struct {
-	status    NodeStatus
-	expiresAt time.Time
-	ready     bool
+	status     NodeStatus
+	expiresAt  time.Time
+	ready      bool
+	refreshing bool
 }
 
 type cachedSubscriptionRulesState struct {
@@ -638,8 +640,19 @@ func (a *App) index() (Index, error) {
 	for {
 		now := time.Now()
 		a.indexMu.Lock()
-		if a.indexCache.ready && now.Before(a.indexCache.recheckAt) {
+		if a.indexCache.ready {
 			index := a.indexCache.index.Clone()
+			if now.Before(a.indexCache.recheckAt) {
+				a.indexMu.Unlock()
+				return index, nil
+			}
+			if a.indexBuildCh == nil {
+				ch := make(chan struct{})
+				a.indexBuildCh = ch
+				a.indexMu.Unlock()
+				go a.refreshIndex(ch)
+				return index, nil
+			}
 			a.indexMu.Unlock()
 			return index, nil
 		}
@@ -652,50 +665,59 @@ func (a *App) index() (Index, error) {
 		a.indexBuildCh = ch
 		a.indexMu.Unlock()
 
-		probeSignature, err := a.currentIndexSignature()
+		index, err := a.computeAndStoreIndex(now, ch)
 		if err != nil {
-			a.indexMu.Lock()
-			a.indexBuildCh = nil
-			close(ch)
-			a.indexMu.Unlock()
 			return Index{}, err
 		}
+		return index, nil
+	}
+}
 
+func (a *App) refreshIndex(ch chan struct{}) {
+	_, _ = a.computeAndStoreIndex(time.Now(), ch)
+}
+
+func (a *App) computeAndStoreIndex(now time.Time, ch chan struct{}) (Index, error) {
+	defer func() {
 		a.indexMu.Lock()
-		if a.indexCache.ready && a.indexCache.probeSignature == probeSignature {
-			a.indexCache.recheckAt = now.Add(indexCacheProbeInterval)
-			index := a.indexCache.index.Clone()
+		if a.indexBuildCh == ch {
 			a.indexBuildCh = nil
-			close(ch)
-			a.indexMu.Unlock()
-			return index, nil
 		}
-		a.indexMu.Unlock()
-
-		index, err := a.buildIndex()
-		if err != nil {
-			a.indexMu.Lock()
-			a.indexBuildCh = nil
-			close(ch)
-			a.indexMu.Unlock()
-			return Index{}, err
-		}
-
-		a.indexMu.Lock()
-		contentSignature := contentSignatureForIndex(index)
-		a.indexCache = cachedIndexState{
-			probeSignature:   probeSignature,
-			contentSignature: contentSignature,
-			index:            index,
-			recheckAt:        now.Add(indexCacheProbeInterval),
-			ready:            true,
-		}
-		index = a.indexCache.index.Clone()
-		a.indexBuildCh = nil
 		close(ch)
+		a.indexMu.Unlock()
+	}()
+
+	probeSignature, err := a.currentIndexSignature()
+	if err != nil {
+		return Index{}, err
+	}
+
+	a.indexMu.Lock()
+	if a.indexCache.ready && a.indexCache.probeSignature == probeSignature {
+		a.indexCache.recheckAt = now.Add(indexCacheProbeInterval)
+		index := a.indexCache.index.Clone()
 		a.indexMu.Unlock()
 		return index, nil
 	}
+	a.indexMu.Unlock()
+
+	index, err := a.buildIndex()
+	if err != nil {
+		return Index{}, err
+	}
+
+	a.indexMu.Lock()
+	contentSignature := contentSignatureForIndex(index)
+	a.indexCache = cachedIndexState{
+		probeSignature:   probeSignature,
+		contentSignature: contentSignature,
+		index:            index,
+		recheckAt:        now.Add(indexCacheProbeInterval),
+		ready:            true,
+	}
+	index = a.indexCache.index.Clone()
+	a.indexMu.Unlock()
+	return index, nil
 }
 
 func (a *App) subscriptionRules() (SubscriptionRules, error) {

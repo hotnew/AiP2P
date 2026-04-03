@@ -10,7 +10,7 @@ import (
 	corehaonews "hao.news/internal/haonews"
 )
 
-const nodeStatusCacheTTL = 3 * time.Second
+const nodeStatusCacheTTL = 15 * time.Second
 
 func (a *App) nodeStatus(index Index) NodeStatus {
 	now := time.Now()
@@ -20,18 +20,49 @@ func (a *App) nodeStatus(index Index) NodeStatus {
 		a.nodeStatusMu.Unlock()
 		return status
 	}
+	if a.nodeStatusCache.ready {
+		status := a.nodeStatusCache.status
+		if !a.nodeStatusCache.refreshing {
+			a.nodeStatusCache.refreshing = true
+			a.nodeStatusMu.Unlock()
+			go a.refreshNodeStatus(index)
+			return status
+		}
+		a.nodeStatusMu.Unlock()
+		return status
+	}
 	a.nodeStatusMu.Unlock()
 
-	status := a.buildNodeStatus(index)
+	status := a.buildNodeStatusCached(index)
 
 	a.nodeStatusMu.Lock()
 	a.nodeStatusCache = cachedNodeStatusState{
-		status:    status,
-		expiresAt: now.Add(nodeStatusCacheTTL),
-		ready:     true,
+		status:     status,
+		expiresAt:  now.Add(nodeStatusCacheTTL),
+		ready:      true,
+		refreshing: false,
 	}
 	a.nodeStatusMu.Unlock()
 	return status
+}
+
+func (a *App) refreshNodeStatus(index Index) {
+	status := a.buildNodeStatusCached(index)
+	a.nodeStatusMu.Lock()
+	a.nodeStatusCache = cachedNodeStatusState{
+		status:     status,
+		expiresAt:  time.Now().Add(nodeStatusCacheTTL),
+		ready:      true,
+		refreshing: false,
+	}
+	a.nodeStatusMu.Unlock()
+}
+
+func (a *App) buildNodeStatusCached(index Index) NodeStatus {
+	if a != nil && a.buildNodeStatusFn != nil {
+		return a.buildNodeStatusFn(index)
+	}
+	return a.buildNodeStatus(index)
 }
 
 func (a *App) coldStartNodeStatus() NodeStatus {

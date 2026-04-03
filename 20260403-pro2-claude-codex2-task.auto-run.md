@@ -423,6 +423,14 @@
     - Team 工作区所需的 team/members/policy/messages/tasks/artifacts/history/channels/archives
     - Live archive 房间摘要和相关只读索引
   - 目标是把 `archive/live` 与 Team 详情页的首轮冷构建从秒级压到可接受范围。
+- `E3 Index / NodeStatus stale-while-revalidate`
+  - [internal/plugins/haonews/server.go](/Users/haoniu/sh18/hao.news2/haonews/internal/plugins/haonews/server.go)
+  - [internal/plugins/haonews/ops_status.go](/Users/haoniu/sh18/hao.news2/haonews/internal/plugins/haonews/ops_status.go)
+  - [internal/plugins/haonews/index_cache_test.go](/Users/haoniu/sh18/hao.news2/haonews/internal/plugins/haonews/index_cache_test.go)
+  - [internal/plugins/haonews/ops_status_cache_test.go](/Users/haoniu/sh18/hao.news2/haonews/internal/plugins/haonews/ops_status_cache_test.go)
+  - `NodeStatus` 过期后先回旧值、后台刷新。
+  - `Index` 在已有缓存但超过 probe 复检窗口时，先回旧索引、后台做签名复检/重建。
+  - 目标是消除 `archive/live` / Team 主详情页“隔一会儿第一下又卡 3 秒”的周期性长尾。
 
 ### 本轮验证
 
@@ -438,6 +446,7 @@
 - `go test ./internal/haonews/team -run 'TestStoreAppendAndLoadMessages|TestStoreLoadMessagesLimitReadsLatestMessages|TestStoreAppendAndLoadTasks|TestStoreLoadTasksLimitReadsLatestTasks|TestStoreSaveMembersAndLoadArtifacts|TestStoreLoadArtifactsAndHistoryLimitReadLatestEntries|TestStoreAppendTaskConcurrentPreservesAllTasks|TestStoreSaveAndDeleteTask'`
 - `go test ./internal/plugins/haonewsteam -run 'TestPluginBuildServesTeamDetailAndAPI|TestPluginBuildTeamTaskAndArtifactWorkflows|TestPluginBuildCreatesTaskFromHTMLForm|TestPluginBuildServesTeamArchiveRoutes|TestPluginBuildCreatesTeamArchiveFromWorkspaceRoutes'`
 - `go test ./internal/plugins/haonewslive -run 'TestPluginBuildCreatesAndServesLiveHistoryArchive|TestPluginBuildLimitsVisibleLiveEventsButCanShowAll|TestPluginBuildServesLiveIndex'`
+- `go test ./internal/plugins/haonews -run 'TestAppIndexCachesUntilStoreSignatureChanges|TestCurrentIndexSignatureUsesQuickProbeCacheBetweenDeepChecks|TestAppIndexReturnsStaleWhileRefreshingAfterProbeExpiry|TestNodeStatusReturnsStaleWhileRefreshing'`
 - `go build ./cmd/haonews`
 
 ### 最新运行态证据
@@ -446,13 +455,16 @@
   - `http_ready=true`
   - `index_ready=true`
   - `warmup_ready=true`
-- 冷首轮实测：
-  - `/archive/live`
-    - 第一次：`~65.9ms`
-    - 第二次：`~3.3ms`
-  - `/teams/archive-demo`
-    - 第一次：`~42.4ms`
-    - 第二次：`~3.5ms`
+- 复测结论：
+  - 仅靠 `E2` 启动预热并不能消除周期性长尾。
+  - 根因是 `app.Index()` 的 `2s` probe 复检窗口过期后，会由首个请求同步承担签名检查链。
+- `E3` 落地后的关键实测：
+  - 超过 `indexCacheProbeInterval` 后再次访问：
+    - `/archive/live`
+      - `~54.5ms / 5.1ms / 8.4ms`
+    - `/teams/archive-demo`
+      - `~25.5ms / 2.9ms / 4.5ms`
+  - 说明这两个页面已经不再在 probe 复检点掉回 3 秒级。
 - 热态基线未退化：
   - `/` p95 `~8.3ms`
   - `/topics` p95 `~1.8ms`
@@ -461,7 +473,7 @@
 
 ### 恢复下一步
 
-- 当前低风险与中风险主线已收完，并且 `archive/live` / `Team` 首轮冷访问已经被启动预热压到双位数毫秒。
+- 当前低风险与中风险主线已收完；`archive/live` / `Team` 周期性首击长尾也已经通过 `Index stale-while-revalidate` 压下去。
 - 现阶段没有新的证据支持进入 `Phase D` 高风险项。
 - 如果继续执行，优先顺序是：
   - 直接走 `main + tag + release`
