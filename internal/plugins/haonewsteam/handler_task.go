@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -51,6 +52,8 @@ func handleTeamTasks(app *newsplugin.App, store *teamcore.Store, teamID string, 
 	assignees := taskAssignees(tasks)
 	labels := taskLabels(tasks)
 	tasks = filterTasks(tasks, filterStatus, filterAssignee, filterLabel, filterChannel)
+	defaultActor := teamDefaultActor(info, nil)
+	taskLanes := buildTeamTaskLanes(tasks)
 	data := teamTasksPageData{
 		Project:        app.ProjectName(),
 		Version:        app.VersionString(),
@@ -71,14 +74,21 @@ func handleTeamTasks(app *newsplugin.App, store *teamcore.Store, teamID string, 
 			labeledTeamFilter("标签", filterLabel),
 			labeledTeamFilter("频道", filterChannel),
 		),
-		Statuses:  statuses,
-		Assignees: assignees,
-		Labels:    labels,
-		Channels:  channels,
+		Statuses:            statuses,
+		Assignees:           assignees,
+		Labels:              labels,
+		Channels:            channels,
+		DefaultActorAgentID: defaultActor,
+		OverdueCount:        countOverdueTasks(tasks, time.Now()),
+		DueSoonCount:        countDueSoonTasks(tasks, time.Now(), 72*time.Hour),
+		MyOpenTaskCount:     countTasksAssignedTo(tasks, defaultActor),
+		TaskLanes:           taskLanes,
 		SummaryStats: []newsplugin.SummaryStat{
 			{Label: "任务", Value: formatTeamCount(len(tasks))},
 			{Label: "进行中", Value: formatTeamCount(countTasksByStatus(tasks, "doing"))},
 			{Label: "已完成", Value: formatTeamCount(countTasksByStatus(tasks, "done"))},
+			{Label: "即将到期", Value: formatTeamCount(countDueSoonTasks(tasks, time.Now(), 72*time.Hour))},
+			{Label: "已逾期", Value: formatTeamCount(countOverdueTasks(tasks, time.Now()))},
 		},
 	}
 	if err := app.Templates().ExecuteTemplate(w, "team_tasks.html", data); err != nil {
@@ -156,6 +166,7 @@ func handleTeamTask(app *newsplugin.App, store *teamcore.Store, teamID, taskID s
 		SummaryStats: []newsplugin.SummaryStat{
 			{Label: "状态", Value: task.Status},
 			{Label: "优先级", Value: blankDash(task.Priority)},
+			{Label: "截止时间", Value: formatTaskDue(task.DueAt)},
 			{Label: "评论", Value: formatTeamCount(len(messages))},
 			{Label: "产物", Value: formatTeamCount(countArtifactsByTask(artifacts, taskID))},
 		},
@@ -183,6 +194,7 @@ func handleTeamTaskCreate(store *teamcore.Store, teamID string, w http.ResponseW
 		Assignees:       parseCSVStrings(r.FormValue("assignees")),
 		Status:          strings.TrimSpace(r.FormValue("status")),
 		Priority:        strings.TrimSpace(r.FormValue("priority")),
+		DueAt:           parseTaskDueAt(r.FormValue("due_at")),
 		Labels:          parseCSVStrings(r.FormValue("labels")),
 		OriginPublicKey: strings.TrimSpace(r.FormValue("origin_public_key")),
 		ParentPublicKey: strings.TrimSpace(r.FormValue("parent_public_key")),
@@ -272,6 +284,7 @@ func handleTeamTaskUpdate(store *teamcore.Store, teamID, taskID string, w http.R
 	updated.Assignees = parseCSVStrings(r.FormValue("assignees"))
 	updated.Status = strings.TrimSpace(r.FormValue("status"))
 	updated.Priority = strings.TrimSpace(r.FormValue("priority"))
+	updated.DueAt = parseTaskDueAt(r.FormValue("due_at"))
 	updated.Labels = parseCSVStrings(r.FormValue("labels"))
 	updated.UpdatedAt = time.Now().UTC()
 	if err := requireTeamAction(store, teamID, strings.TrimSpace(r.FormValue("actor_agent_id")), "task.update"); err != nil {
@@ -594,6 +607,173 @@ func handleAPITeamTaskCreate(store *teamcore.Store, teamID string, w http.Respon
 		"team_id": teamID,
 		"task":    task,
 	})
+}
+
+func parseTaskDueAt(raw string) time.Time {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return time.Time{}
+	}
+	layouts := []string{
+		time.RFC3339,
+		"2006-01-02T15:04",
+		"2006-01-02",
+	}
+	for _, layout := range layouts {
+		if value, err := time.Parse(layout, raw); err == nil {
+			return value.UTC()
+		}
+	}
+	return time.Time{}
+}
+
+func formatTaskDue(value time.Time) string {
+	if value.IsZero() {
+		return "-"
+	}
+	return value.Local().Format("2006-01-02 15:04")
+}
+
+func countOverdueTasks(tasks []teamcore.Task, now time.Time) int {
+	count := 0
+	for _, task := range tasks {
+		if task.DueAt.IsZero() || teamcore.IsTerminalState(task.Status) {
+			continue
+		}
+		if task.DueAt.Before(now) {
+			count++
+		}
+	}
+	return count
+}
+
+func countDueSoonTasks(tasks []teamcore.Task, now time.Time, within time.Duration) int {
+	count := 0
+	limit := now.Add(within)
+	for _, task := range tasks {
+		if task.DueAt.IsZero() || teamcore.IsTerminalState(task.Status) {
+			continue
+		}
+		if (task.DueAt.Equal(now) || task.DueAt.After(now)) && task.DueAt.Before(limit) {
+			count++
+		}
+	}
+	return count
+}
+
+func countTasksAssignedTo(tasks []teamcore.Task, agentID string) int {
+	agentID = strings.TrimSpace(agentID)
+	if agentID == "" {
+		return 0
+	}
+	count := 0
+	for _, task := range tasks {
+		if teamcore.IsTerminalState(task.Status) {
+			continue
+		}
+		if containsFolded(task.Assignees, agentID) {
+			count++
+		}
+	}
+	return count
+}
+
+func buildTeamTaskLanes(tasks []teamcore.Task) []teamTaskLane {
+	copied := append([]teamcore.Task(nil), tasks...)
+	sort.SliceStable(copied, func(i, j int) bool {
+		return compareTeamTasks(copied[i], copied[j])
+	})
+	definitions := []struct {
+		key   string
+		title string
+		hint  string
+	}{
+		{key: "doing", title: "推进中", hint: "优先处理正在推进和被阻塞的任务。"},
+		{key: "review", title: "待确认", hint: "这些任务已接近完成，需要复核或确认。"},
+		{key: "open", title: "待开始", hint: "还没启动的任务，适合作为下一步入口。"},
+		{key: "done", title: "已完成", hint: "已完成任务保留在最后，便于回看结果。"},
+	}
+	lanes := make([]teamTaskLane, 0, len(definitions))
+	for _, definition := range definitions {
+		laneTasks := make([]teamcore.Task, 0)
+		for _, task := range copied {
+			if teamTaskLaneKey(task) != definition.key {
+				continue
+			}
+			laneTasks = append(laneTasks, task)
+		}
+		lanes = append(lanes, teamTaskLane{
+			Key:   definition.key,
+			Title: definition.title,
+			Hint:  definition.hint,
+			Count: len(laneTasks),
+			Tasks: laneTasks,
+		})
+	}
+	return lanes
+}
+
+func teamTaskLaneKey(task teamcore.Task) string {
+	switch strings.TrimSpace(task.Status) {
+	case "doing", "blocked":
+		return "doing"
+	case "review":
+		return "review"
+	case "done", "closed", "cancelled":
+		return "done"
+	default:
+		return "open"
+	}
+}
+
+func compareTeamTasks(left, right teamcore.Task) bool {
+	if dueScore(left) != dueScore(right) {
+		return dueScore(left) > dueScore(right)
+	}
+	if priorityScore(left.Priority) != priorityScore(right.Priority) {
+		return priorityScore(left.Priority) > priorityScore(right.Priority)
+	}
+	if !left.DueAt.Equal(right.DueAt) {
+		if left.DueAt.IsZero() {
+			return false
+		}
+		if right.DueAt.IsZero() {
+			return true
+		}
+		return left.DueAt.Before(right.DueAt)
+	}
+	if !left.UpdatedAt.Equal(right.UpdatedAt) {
+		return left.UpdatedAt.After(right.UpdatedAt)
+	}
+	return left.TaskID > right.TaskID
+}
+
+func dueScore(task teamcore.Task) int {
+	if task.DueAt.IsZero() || teamcore.IsTerminalState(task.Status) {
+		return 0
+	}
+	now := time.Now().UTC()
+	switch {
+	case task.DueAt.Before(now):
+		return 3
+	case task.DueAt.Before(now.Add(24 * time.Hour)):
+		return 2
+	default:
+		return 1
+	}
+}
+
+func priorityScore(value string) int {
+	switch strings.TrimSpace(strings.ToLower(value)) {
+	case "high", "urgent":
+		return 3
+	case "normal", "medium":
+		return 2
+	case "low":
+		return 1
+	default:
+		return 0
+	}
 }
 
 func handleAPITeamTaskUpdate(store *teamcore.Store, teamID, taskID string, w http.ResponseWriter, r *http.Request) {

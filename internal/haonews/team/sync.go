@@ -698,6 +698,9 @@ func normalizeReplicatedTask(teamID string, task Task) Task {
 		task.Status = "open"
 	}
 	task.Priority = normalizeTaskPriority(task.Priority)
+	if !task.DueAt.IsZero() {
+		task.DueAt = task.DueAt.UTC()
+	}
 	task.Assignees = normalizeNonEmptyStrings(task.Assignees)
 	task.Labels = normalizeNonEmptyStrings(task.Labels)
 	if task.CreatedAt.IsZero() {

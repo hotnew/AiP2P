@@ -30,6 +30,7 @@
           <div class="hero-actions hero-actions-compact live-room-actions">
             <a class="button-link" href="/api/teams/{{.Team.TeamID}}/sync">Sync JSON</a>
             <a class="button-link button-link-muted" href="/api/teams/{{.Team.TeamID}}/sync/conflicts">冲突 JSON</a>
+            <a class="button-link button-link-muted" href="/teams/{{.Team.TeamID}}/search">搜索</a>
             <a class="button-link button-link-muted" href="/teams/{{.Team.TeamID}}/history">历史</a>
             <a class="button-link button-link-muted" href="/teams/{{.Team.TeamID}}">Team 详情</a>
           </div>
@@ -70,6 +71,7 @@
           </div>
           <div class="team-section-actions">
             <a class="filter-chip" href="/teams/{{.Team.TeamID}}">Team 概览</a>
+            <a class="filter-chip" href="/teams/{{.Team.TeamID}}/search">搜索</a>
             <a class="filter-chip" href="/teams/{{.Team.TeamID}}/history">历史</a>
             <a class="filter-chip" href="/archive/team/{{.Team.TeamID}}">归档</a>
             <a class="filter-chip" href="/api/teams/{{.Team.TeamID}}/sync">Sync JSON</a>
@@ -136,22 +138,29 @@
               <a href="/teams/{{.Team.TeamID}}/history">去历史页处理</a>
             </div>
           </div>
-          {{if .ConflictViews}}
+          <div class="facet-list-inline team-inline-tags">
+            <span class="filter-chip">未处理 {{len .OpenConflictViews}}</span>
+            <span class="filter-chip">已处理 {{len .ResolvedConflictViews}}</span>
+          </div>
+          {{if .OpenConflictViews}}
             <section class="story-list">
-              {{range .ConflictViews}}
+              {{range .OpenConflictViews}}
                 <article class="story-card team-history-item team-conflict-card team-conflict-card-{{.ConflictClass}}">
                   <div class="card-meta">
                     {{if .Record.SyncType}}<span>{{.Record.SyncType}}</span>{{end}}
                     {{if .ConflictClass}}<span>{{.ConflictClass}}</span>{{end}}
+                    {{if .SeverityLabel}}<span>{{.SeverityLabel}}</span>{{end}}
                     {{if .ReasonLabel}}<span>{{.ReasonLabel}}</span>{{end}}
                     {{if .Record.SourceNode}}<span>{{.Record.SourceNode}}</span>{{end}}
                     {{if .Record.UpdatedAt.IsZero}}{{else}}<span>{{.Record.UpdatedAt.Local.Format "2006-01-02 15:04"}}</span>{{end}}
                   </div>
                   <h2>复制冲突：{{if .SubjectLabel}}{{.SubjectLabel}}{{else if .Record.SubjectID}}{{.Record.SubjectID}}{{else}}{{.Record.Key}}{{end}}</h2>
+                  {{if .SeverityLabel}}<p class="micro-copy">严重程度：{{.SeverityLabel}}</p>{{end}}
                   {{if .ActionHint}}<p class="micro-copy">{{.ActionHint}}</p>{{end}}
+                  {{if .ConsequenceHint}}<p class="micro-copy">{{.ConsequenceHint}}</p>{{end}}
                   <div class="facet-list-inline team-inline-tags">
-                    <span class="filter-chip">本地 v{{.Record.LocalVersion}}</span>
-                    <span class="filter-chip">远端 v{{.Record.RemoteVersion}}</span>
+                    <span class="filter-chip">本地 {{.LocalVersionLabel}}</span>
+                    <span class="filter-chip">远端 {{.RemoteVersionLabel}}</span>
                   </div>
                   {{if .Record.Resolution}}<p class="micro-copy">处理结果：{{.Record.Resolution}}{{if .Record.ResolvedBy}} · {{.Record.ResolvedBy}}{{end}}</p>{{end}}
                   {{$conflict := .}}
@@ -169,6 +178,26 @@
             </section>
           {{else}}
             <p class="team-empty-note">当前还没有新的 Team 复制冲突。后续如果 pending、ack 或对象版本分叉异常，会先在这里聚合。</p>
+          {{end}}
+          {{if .ResolvedConflictViews}}
+            <details class="panel panel-inline">
+              <summary class="panel-label">最近已处理冲突</summary>
+              <section class="story-list">
+                {{range .ResolvedConflictViews}}
+                  <article class="story-card team-history-item">
+                    <div class="card-meta">
+                      {{if .Record.SyncType}}<span>{{.Record.SyncType}}</span>{{end}}
+                      {{if .Record.Resolution}}<span>{{.Record.Resolution}}</span>{{end}}
+                      {{if .Record.ResolvedAt.IsZero}}{{else}}<span>{{.Record.ResolvedAt.Local.Format "2006-01-02 15:04"}}</span>{{end}}
+                    </div>
+                    <h2>{{if .SubjectLabel}}{{.SubjectLabel}}{{else}}{{.Record.Key}}{{end}}</h2>
+                    <p class="micro-copy">{{if .ResolvedBy}}{{.ResolvedBy}}{{else}}系统{{end}} 已处理该冲突。</p>
+                  </article>
+                {{end}}
+              </section>
+            </details>
+          {{else}}
+            <p class="team-empty-note">最近已处理冲突：当前还没有新的处理记录。</p>
           {{end}}
         </section>
       </main>

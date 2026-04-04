@@ -24,6 +24,8 @@
             <div class="live-room-summary-strip">
               <span><strong>Team ID</strong>{{.Team.TeamID}}</span>
               <span><strong>任务数</strong>{{len .Tasks}}</span>
+              <span><strong>我的进行中</strong>{{.MyOpenTaskCount}}</span>
+              <span><strong>已逾期</strong>{{.OverdueCount}}</span>
               <span><strong>可见性</strong>{{.Team.Visibility}}</span>
             </div>
           </div>
@@ -31,6 +33,7 @@
             <a class="button-link" href="/api/teams/{{.Team.TeamID}}/tasks">任务 JSON</a>
             <a class="button-link button-link-muted" href="/archive/team/{{.Team.TeamID}}">Team 归档</a>
             <a class="button-link button-link-muted" href="/teams/{{.Team.TeamID}}">Team 详情</a>
+            <a class="button-link button-link-muted" href="/teams/{{.Team.TeamID}}/search">搜索</a>
             <a class="button-link button-link-muted" href="/teams/{{.Team.TeamID}}/channels/main">主频道</a>
             <a class="button-link button-link-muted" href="/teams/{{.Team.TeamID}}/artifacts">产物</a>
           </div>
@@ -50,6 +53,7 @@
             <a class="filter-chip" href="/archive/team/{{.Team.TeamID}}">归档</a>
             <a class="filter-chip" href="/teams/{{.Team.TeamID}}/members">成员</a>
             <a class="filter-chip" href="/teams/{{.Team.TeamID}}/channels/main">主频道</a>
+            <a class="filter-chip" href="/teams/{{.Team.TeamID}}/search">搜索</a>
             <a class="filter-chip is-active" href="/teams/{{.Team.TeamID}}/tasks">任务</a>
             <a class="filter-chip" href="/teams/{{.Team.TeamID}}/artifacts">产物</a>
             <a class="filter-chip" href="/teams/{{.Team.TeamID}}/history">历史</a>
@@ -86,6 +90,11 @@
                 <strong>{{.Value}}</strong>
               </div>
             {{end}}
+          </div>
+          <div class="facet-list-inline team-inline-tags">
+            <span class="filter-chip">即将到期 {{.DueSoonCount}}</span>
+            <span class="filter-chip">已逾期 {{.OverdueCount}}</span>
+            <span class="filter-chip">默认执行代理 {{if .DefaultActorAgentID}}{{.DefaultActorAgentID}}{{else}}未设置{{end}}</span>
           </div>
         </section>
         <section class="panel panel-inline">
@@ -195,6 +204,10 @@
               <input type="text" name="priority" placeholder="low / medium / high">
             </label>
             <label>
+              <span>截止时间</span>
+              <input type="datetime-local" name="due_at">
+            </label>
+            <label>
               <span>负责者</span>
               <input type="text" name="assignees" placeholder="agent://pc75/live-alpha, agent://pc75/live-bravo">
             </label>
@@ -212,7 +225,7 @@
             </label>
             <label>
               <span>创建者</span>
-              <input type="text" name="created_by" placeholder="agent://pc75/live-bravo">
+              <input type="text" name="created_by" value="{{.DefaultActorAgentID}}" placeholder="agent://pc75/live-bravo">
             </label>
             <label class="team-form-wide">
               <span>说明</span>
@@ -226,7 +239,7 @@
         <section class="panel panel-inline" id="task-list">
           <div class="panel-head">
             <p class="panel-label">任务列表</p>
-            <span class="micro-copy">{{len .Tasks}} 条任务{{if or .FilterStatus .FilterAssignee .FilterLabel}} · 已筛选{{end}}</span>
+            <span class="micro-copy">{{len .Tasks}} 条任务{{if or .FilterStatus .FilterAssignee .FilterLabel}} · 已筛选{{end}}。先看推进中和即将到期任务。</span>
           </div>
           <div class="team-section-actions">
             <a class="filter-chip" href="/teams/{{.Team.TeamID}}/channels/main">主频道</a>
@@ -234,16 +247,28 @@
             <a class="filter-chip" href="/teams/{{.Team.TeamID}}/history">历史</a>
           </div>
           {{if .Tasks}}
-            <section class="directory-grid">
-              {{range .Tasks}}
+            {{range .TaskLanes}}
+              {{if .Tasks}}
+              <section class="panel panel-inline">
+                <div class="panel-head">
+                  <p class="panel-label">{{.Title}}</p>
+                  <span class="micro-copy">{{.Hint}}</span>
+                </div>
+                <div class="facet-list-inline team-inline-tags">
+                  <span class="filter-chip">{{.Count}} 条</span>
+                </div>
+                <section class="directory-grid">
+                  {{range .Tasks}}
                 <article class="directory-card">
                   <div class="card-meta">
                     {{if .Status}}<span>{{.Status}}</span>{{end}}
                     {{if .Priority}}<span>{{.Priority}}</span>{{end}}
+                    {{if .DueAt.IsZero}}{{else}}<span>{{.DueAt.Local.Format "2006-01-02 15:04"}}</span>{{end}}
                     {{if .UpdatedAt.IsZero}}{{else}}<span>{{.UpdatedAt.Local.Format "2006-01-02 15:04"}}</span>{{end}}
                   </div>
                   <h2><a href="/teams/{{$.Team.TeamID}}/tasks/{{urlquery .TaskID}}">{{.Title}}</a></h2>
                   {{if .Description}}<p class="micro-copy">{{.Description}}</p>{{end}}
+                  {{if .DueAt.IsZero}}{{else}}<p class="micro-copy">截止时间：{{.DueAt.Local.Format "2006-01-02 15:04"}}</p>{{end}}
                   {{if .CreatedBy}}<p class="micro-copy">创建者：<a href="/?author={{urlquery .CreatedBy}}">{{.CreatedBy}}</a></p>{{end}}
                   {{if .ChannelID}}<p class="micro-copy">频道：<a href="/teams/{{$.Team.TeamID}}/channels/{{urlquery .ChannelID}}">{{.ChannelID}}</a></p>{{end}}
                   {{if .Assignees}}
@@ -272,8 +297,11 @@
                     <a href="/api/teams/{{$.Team.TeamID}}/tasks/{{urlquery .TaskID}}">查看 JSON</a>
                   </div>
                 </article>
+                  {{end}}
+                </section>
+              </section>
               {{end}}
-            </section>
+            {{end}}
           {{else}}
             <p class="team-empty-note">当前还没有 Team Task。可以直接在本页创建任务，或先到频道里整理上下文后再落任务。</p>
           {{end}}

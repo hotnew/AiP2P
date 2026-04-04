@@ -66,7 +66,42 @@ type teamPageData struct {
 	DefaultActorAgentID string
 	CanQuickPost        bool
 	PolicyNotice        string
+	FocusTasks          []teamTaskFocusItem
+	RecentMessageItems  []teamMessagePreview
+	RecentChangeItems   []teamChangePreview
+	DashboardAlerts     []string
 	SummaryStats        []newsplugin.SummaryStat
+}
+
+type teamTaskFocusItem struct {
+	TaskID        string
+	Title         string
+	Status        string
+	Priority      string
+	DueAt         time.Time
+	DueLabel      string
+	ChannelID     string
+	Assignees     []string
+	ArtifactCount int
+	HistoryCount  int
+}
+
+type teamMessagePreview struct {
+	MessageID     string
+	ChannelID     string
+	AuthorAgentID string
+	Content       string
+	CreatedAt     time.Time
+}
+
+type teamChangePreview struct {
+	EventID    string
+	Scope      string
+	Action     string
+	Summary    string
+	SubjectID  string
+	ActorAgent string
+	CreatedAt  time.Time
 }
 
 type teamMembersPageData struct {
@@ -113,15 +148,19 @@ type teamHistoryPageData struct {
 }
 
 type teamSyncConflictView struct {
-	Record            corehaonews.TeamSyncConflictRecord `json:"record"`
-	AllowAcceptRemote bool                               `json:"allow_accept_remote"`
-	AllowKeepLocal    bool                               `json:"allow_keep_local"`
-	SuggestedAction   string                             `json:"suggested_action,omitempty"`
-	ReasonLabel       string                             `json:"reason_label,omitempty"`
-	ActionHint        string                             `json:"action_hint,omitempty"`
-	SubjectLabel      string                             `json:"subject_label,omitempty"`
-	ConflictClass     string                             `json:"conflict_class,omitempty"`
-	Actions           []teamSyncConflictActionView       `json:"actions,omitempty"`
+	Record             corehaonews.TeamSyncConflictRecord `json:"record"`
+	AllowAcceptRemote  bool                               `json:"allow_accept_remote"`
+	AllowKeepLocal     bool                               `json:"allow_keep_local"`
+	SuggestedAction    string                             `json:"suggested_action,omitempty"`
+	ReasonLabel        string                             `json:"reason_label,omitempty"`
+	ActionHint         string                             `json:"action_hint,omitempty"`
+	SubjectLabel       string                             `json:"subject_label,omitempty"`
+	ConflictClass      string                             `json:"conflict_class,omitempty"`
+	SeverityLabel      string                             `json:"severity_label,omitempty"`
+	ConsequenceHint    string                             `json:"consequence_hint,omitempty"`
+	LocalVersionLabel  string                             `json:"local_version_label,omitempty"`
+	RemoteVersionLabel string                             `json:"remote_version_label,omitempty"`
+	Actions            []teamSyncConflictActionView       `json:"actions,omitempty"`
 }
 
 type teamSyncConflictActionView struct {
@@ -143,24 +182,26 @@ type teamSyncStatusGroup struct {
 }
 
 type teamSyncPageData struct {
-	Project         string
-	Version         string
-	PageNav         []newsplugin.NavItem
-	NodeStatus      newsplugin.NodeStatus
-	Now             time.Time
-	Team            teamcore.Info
-	SyncNotice      string
-	SyncStatus      corehaonews.SyncTeamSyncStatus
-	WebhookStatus   teamcore.WebhookDeliveryStatus
-	RecentConflicts []corehaonews.TeamSyncConflictRecord
-	ConflictViews   []teamSyncConflictView
-	StatusGroups    []teamSyncStatusGroup
-	HealthLevel     string
-	HealthTitle     string
-	HealthHint      string
-	ResolvedTitle   string
-	ResolvedHint    string
-	SummaryStats    []newsplugin.SummaryStat
+	Project               string
+	Version               string
+	PageNav               []newsplugin.NavItem
+	NodeStatus            newsplugin.NodeStatus
+	Now                   time.Time
+	Team                  teamcore.Info
+	SyncNotice            string
+	SyncStatus            corehaonews.SyncTeamSyncStatus
+	WebhookStatus         teamcore.WebhookDeliveryStatus
+	RecentConflicts       []corehaonews.TeamSyncConflictRecord
+	ConflictViews         []teamSyncConflictView
+	OpenConflictViews     []teamSyncConflictView
+	ResolvedConflictViews []teamSyncConflictView
+	StatusGroups          []teamSyncStatusGroup
+	HealthLevel           string
+	HealthTitle           string
+	HealthHint            string
+	ResolvedTitle         string
+	ResolvedHint          string
+	SummaryStats          []newsplugin.SummaryStat
 }
 
 type teamWebhookPageData struct {
@@ -195,6 +236,47 @@ type teamA2APageData struct {
 	SummaryStats []newsplugin.SummaryStat
 }
 
+type teamSearchPageData struct {
+	Project       string
+	Version       string
+	PageNav       []newsplugin.NavItem
+	NodeStatus    newsplugin.NodeStatus
+	Now           time.Time
+	Team          teamcore.Info
+	Query         string
+	Scope         string
+	ScopeOptions  []teamSearchScopeOption
+	Sections      []teamSearchSectionView
+	SummaryStats  []newsplugin.SummaryStat
+	SearchTips    []string
+	ResultSummary string
+}
+
+type teamSearchScopeOption struct {
+	Value  string `json:"value"`
+	Label  string `json:"label"`
+	Active bool   `json:"active"`
+	Count  int    `json:"count,omitempty"`
+}
+
+type teamSearchSectionView struct {
+	Key     string                 `json:"key"`
+	Title   string                 `json:"title"`
+	Hint    string                 `json:"hint,omitempty"`
+	Count   int                    `json:"count"`
+	Results []teamSearchResultView `json:"results,omitempty"`
+}
+
+type teamSearchResultView struct {
+	Kind      string    `json:"kind"`
+	ID        string    `json:"id,omitempty"`
+	Title     string    `json:"title"`
+	Summary   string    `json:"summary,omitempty"`
+	URL       string    `json:"url"`
+	Meta      string    `json:"meta,omitempty"`
+	CreatedAt time.Time `json:"created_at,omitempty"`
+}
+
 type teamChannelPageData struct {
 	Project        string
 	Version        string
@@ -213,25 +295,38 @@ type teamChannelPageData struct {
 }
 
 type teamTasksPageData struct {
-	Project        string
-	Version        string
-	PageNav        []newsplugin.NavItem
-	NodeStatus     newsplugin.NodeStatus
-	Now            time.Time
-	Team           teamcore.Info
-	Tasks          []teamcore.Task
-	ArtifactCounts map[string]int
-	HistoryCounts  map[string]int
-	FilterStatus   string
-	FilterAssignee string
-	FilterLabel    string
-	FilterChannel  string
-	AppliedFilters []string
-	Statuses       []string
-	Assignees      []string
-	Labels         []string
-	Channels       []teamcore.ChannelSummary
-	SummaryStats   []newsplugin.SummaryStat
+	Project             string
+	Version             string
+	PageNav             []newsplugin.NavItem
+	NodeStatus          newsplugin.NodeStatus
+	Now                 time.Time
+	Team                teamcore.Info
+	Tasks               []teamcore.Task
+	ArtifactCounts      map[string]int
+	HistoryCounts       map[string]int
+	FilterStatus        string
+	FilterAssignee      string
+	FilterLabel         string
+	FilterChannel       string
+	AppliedFilters      []string
+	Statuses            []string
+	Assignees           []string
+	Labels              []string
+	Channels            []teamcore.ChannelSummary
+	DefaultActorAgentID string
+	OverdueCount        int
+	DueSoonCount        int
+	MyOpenTaskCount     int
+	TaskLanes           []teamTaskLane
+	SummaryStats        []newsplugin.SummaryStat
+}
+
+type teamTaskLane struct {
+	Key   string
+	Title string
+	Hint  string
+	Count int
+	Tasks []teamcore.Task
 }
 
 type teamTaskPageData struct {

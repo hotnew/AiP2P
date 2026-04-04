@@ -1,0 +1,107 @@
+{{define "team_search.html"}}
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>好牛Ai Team 搜索</title>
+  <link rel="stylesheet" href="/static/styles.css?v=20260330b">
+</head>
+<body>
+  <div class="app-shell">
+    {{template "appSidebar" .}}
+    <div class="page-shell">
+      {{template "sidebarToggle" .}}
+      <header class="hero hero-dashboard live-room-hero">
+        <div class="live-room-topline">
+          <a class="back-link" href="/teams/{{.Team.TeamID}}">返回 Team</a>
+          <p class="eyebrow">Team 检索</p>
+        </div>
+        <div class="hero-heading">
+          <div class="live-room-heading-main">
+            <h1>{{if .Team.Title}}{{.Team.Title}}{{else}}{{.Team.TeamID}}{{end}} / 搜索</h1>
+            <p class="hero-copy">在 Team 内直接找任务、产物、频道消息和治理历史，不需要再靠猜频道或翻历史。</p>
+            <div class="live-room-summary-strip">
+              <span><strong>Team ID</strong>{{.Team.TeamID}}</span>
+              <span><strong>范围</strong>{{.ResultSummary}}</span>
+            </div>
+          </div>
+          <div class="hero-actions hero-actions-compact live-room-actions">
+            <a class="button-link" href="/teams/{{.Team.TeamID}}">Team 详情</a>
+            <a class="button-link button-link-muted" href="/teams/{{.Team.TeamID}}/tasks">任务</a>
+            <a class="button-link button-link-muted" href="/teams/{{.Team.TeamID}}/sync">同步</a>
+            <a class="button-link button-link-muted" href="/api/teams/{{.Team.TeamID}}/search?q={{urlquery .Query}}&scope={{urlquery .Scope}}">搜索 JSON</a>
+          </div>
+        </div>
+      </header>
+      <main class="feed">
+        <section class="panel panel-inline">
+          <div class="panel-head">
+            <p class="panel-label">检索条件</p>
+            <span class="micro-copy">先搜关键词，再按任务、产物、消息或历史缩小范围。</span>
+          </div>
+          <form method="get" action="/teams/{{.Team.TeamID}}/search" class="settings-form team-form-grid">
+            <label>
+              <span>关键词</span>
+              <input type="text" name="q" value="{{.Query}}" placeholder="例如：alpha、owner、回放、截止时间">
+            </label>
+            <label>
+              <span>范围</span>
+              <select name="scope">
+                {{range .ScopeOptions}}
+                  <option value="{{.Value}}"{{if .Active}} selected{{end}}>{{.Label}}{{if gt .Count 0}} ({{.Count}}){{end}}</option>
+                {{end}}
+              </select>
+            </label>
+            <div class="team-form-actions team-form-wide">
+              <button class="button-link" type="submit">开始检索</button>
+              <a class="button-link button-link-muted" href="/teams/{{.Team.TeamID}}/search">清空</a>
+            </div>
+          </form>
+          <div class="facet-list-inline team-inline-tags">
+            {{range .SearchTips}}<span class="filter-chip">{{.}}</span>{{end}}
+          </div>
+        </section>
+        <section class="panel panel-inline">
+          <p class="panel-label">结果摘要</p>
+          <div class="hero-stats hero-stats-wide">
+            {{range .SummaryStats}}
+              <div class="hero-stat-card">
+                <span class="stat-label">{{.Label}}</span>
+                <strong>{{.Value}}</strong>
+              </div>
+            {{end}}
+          </div>
+          <p class="team-page-note">{{.ResultSummary}}</p>
+        </section>
+        {{range .Sections}}
+          <section class="panel panel-inline">
+            <div class="panel-head">
+              <p class="panel-label">{{.Title}}</p>
+              {{if .Hint}}<span class="micro-copy">{{.Hint}}</span>{{end}}
+            </div>
+            {{if .Results}}
+              <div class="story-list">
+                {{range .Results}}
+                  <article class="story-card">
+                    <div class="card-meta">
+                      <span>{{.Kind}}</span>
+                      {{if .Meta}}<span>{{.Meta}}</span>{{end}}
+                      {{if .CreatedAt.IsZero}}{{else}}<span>{{.CreatedAt.Local.Format "2006-01-02 15:04"}}</span>{{end}}
+                    </div>
+                    <h2><a href="{{.URL}}">{{.Title}}</a></h2>
+                    {{if .Summary}}<p>{{.Summary}}</p>{{end}}
+                  </article>
+                {{end}}
+              </div>
+            {{else}}
+              <p class="team-empty-note">当前范围没有命中。</p>
+            {{end}}
+          </section>
+        {{end}}
+      </main>
+    </div>
+  </div>
+</body>
+</html>
+{{end}}

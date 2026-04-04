@@ -106,6 +106,7 @@ type Task struct {
 	Assignees       []string  `json:"assignees,omitempty"`
 	Status          string    `json:"status,omitempty"`
 	Priority        string    `json:"priority,omitempty"`
+	DueAt           time.Time `json:"due_at,omitempty"`
 	Labels          []string  `json:"labels,omitempty"`
 	OriginPublicKey string    `json:"origin_public_key,omitempty"`
 	ParentPublicKey string    `json:"parent_public_key,omitempty"`
@@ -922,6 +923,9 @@ func (s *Store) appendTaskNoCtx(teamID string, task Task) error {
 	task.Priority = normalizeTaskPriority(task.Priority)
 	task.ChannelID = normalizeChannelID(task.ChannelID)
 	task.ContextID = normalizeContextID(task.ContextID)
+	if !task.DueAt.IsZero() {
+		task.DueAt = task.DueAt.UTC()
+	}
 	task.Description = strings.TrimSpace(task.Description)
 	task.CreatedBy = strings.TrimSpace(task.CreatedBy)
 	task.Assignees = normalizeNonEmptyStrings(task.Assignees)
@@ -1707,6 +1711,9 @@ func (s *Store) saveTaskIndexedLocked(teamID string, task Task, policy Policy) e
 	task.Priority = normalizeTaskPriority(task.Priority)
 	task.ChannelID = normalizeChannelID(task.ChannelID)
 	task.ContextID = normalizeContextID(task.ContextID)
+	if !task.DueAt.IsZero() {
+		task.DueAt = task.DueAt.UTC()
+	}
 	if task.ContextID == "" {
 		task.ContextID = normalizeContextID(current.ContextID)
 	}

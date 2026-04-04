@@ -209,6 +209,10 @@ func newHandler(app *newsplugin.App, store *teamcore.Store, staticFS fs.FS) http
 			handleTeamSync(app, store, teamID, w, r)
 			return
 		}
+		if len(parts) == 2 && parts[1] == "search" {
+			handleTeamSearch(app, store, teamID, w, r)
+			return
+		}
 		if len(parts) == 2 && parts[1] == "webhooks" {
 			handleTeamWebhookPage(app, store, teamID, w, r)
 			return
@@ -377,6 +381,10 @@ func newHandler(app *newsplugin.App, store *teamcore.Store, staticFS fs.FS) http
 		}
 		if len(parts) == 2 && parts[1] == "sync" {
 			handleAPITeamSync(app, store, teamID, w, r)
+			return
+		}
+		if len(parts) == 2 && parts[1] == "search" {
+			handleAPITeamSearch(store, teamID, w, r)
 			return
 		}
 		if len(parts) == 3 && parts[1] == "sync" && parts[2] == "conflicts" {

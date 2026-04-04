@@ -197,6 +197,10 @@ func handleTeam(app *newsplugin.App, store *teamcore.Store, teamID string, w htt
 		DefaultActorAgentID: teamDefaultActor(info, members),
 		CanQuickPost:        !policy.RequireSignature,
 		PolicyNotice:        teamPolicyNotice(policy),
+		FocusTasks:          buildTeamFocusTasks(tasks, artifacts, history, 4),
+		RecentMessageItems:  buildTeamMessagePreviews(messages, 5),
+		RecentChangeItems:   buildTeamChangePreviews(history, 5),
+		DashboardAlerts:     buildTeamDashboardAlerts(policy, conflicts, webhooks),
 		SummaryStats: []newsplugin.SummaryStat{
 			{Label: "成员", Value: formatTeamCount(countMembersByStatus(members, "active"))},
 			{Label: "频道", Value: formatTeamCount(len(channels))},
@@ -1020,6 +1024,122 @@ func teamPolicyNotice(policy teamcore.Policy) string {
 	return "当前 Team 可以直接用页面完成高频消息、任务、同步和归档操作。"
 }
 
+func buildTeamFocusTasks(tasks []teamcore.Task, artifacts []teamcore.Artifact, history []teamcore.ChangeEvent, limit int) []teamTaskFocusItem {
+	if len(tasks) == 0 || limit <= 0 {
+		return nil
+	}
+	copied := append([]teamcore.Task(nil), tasks...)
+	sort.SliceStable(copied, func(i, j int) bool { return compareTeamTasks(copied[i], copied[j]) })
+	out := make([]teamTaskFocusItem, 0, min(limit, len(copied)))
+	for _, task := range copied {
+		if len(out) >= limit {
+			break
+		}
+		out = append(out, teamTaskFocusItem{
+			TaskID:        task.TaskID,
+			Title:         task.Title,
+			Status:        task.Status,
+			Priority:      task.Priority,
+			DueAt:         task.DueAt,
+			DueLabel:      describeTaskDue(task),
+			ChannelID:     task.ChannelID,
+			Assignees:     task.Assignees,
+			ArtifactCount: countArtifactsByTask(artifacts, task.TaskID),
+			HistoryCount:  countHistoryByTask(history, task.TaskID),
+		})
+	}
+	return out
+}
+
+func buildTeamMessagePreviews(messages []teamcore.Message, limit int) []teamMessagePreview {
+	if len(messages) == 0 || limit <= 0 {
+		return nil
+	}
+	out := make([]teamMessagePreview, 0, min(limit, len(messages)))
+	for _, message := range messages {
+		if len(out) >= limit {
+			break
+		}
+		content := strings.TrimSpace(message.Content)
+		if len(content) > 88 {
+			content = content[:88] + "..."
+		}
+		out = append(out, teamMessagePreview{
+			MessageID:     message.MessageID,
+			ChannelID:     message.ChannelID,
+			AuthorAgentID: message.AuthorAgentID,
+			Content:       content,
+			CreatedAt:     message.CreatedAt,
+		})
+	}
+	return out
+}
+
+func buildTeamChangePreviews(history []teamcore.ChangeEvent, limit int) []teamChangePreview {
+	if len(history) == 0 || limit <= 0 {
+		return nil
+	}
+	out := make([]teamChangePreview, 0, min(limit, len(history)))
+	for _, item := range history {
+		if len(out) >= limit {
+			break
+		}
+		out = append(out, teamChangePreview{
+			EventID:    item.EventID,
+			Scope:      item.Scope,
+			Action:     item.Action,
+			Summary:    item.Summary,
+			SubjectID:  item.SubjectID,
+			ActorAgent: item.ActorAgentID,
+			CreatedAt:  item.CreatedAt,
+		})
+	}
+	return out
+}
+
+func buildTeamDashboardAlerts(policy teamcore.Policy, conflicts []corehaonews.TeamSyncConflictRecord, webhook teamcore.WebhookDeliveryStatus) []string {
+	alerts := make([]string, 0, 3)
+	if policy.RequireSignature {
+		alerts = append(alerts, "当前 Team 开启了消息签名要求，网页快捷发消息只在允许的 Team 中可用。")
+	}
+	if unresolved := countUnresolvedTeamConflicts(conflicts); unresolved > 0 {
+		alerts = append(alerts, "当前还有 "+formatTeamCount(unresolved)+" 个未处理同步冲突，建议优先处理。")
+	}
+	if webhook.DeadLetterCount > 0 {
+		alerts = append(alerts, "当前还有 "+formatTeamCount(webhook.DeadLetterCount)+" 条 webhook dead-letter，需要回放或修复。")
+	}
+	return alerts
+}
+
+func describeTaskDue(task teamcore.Task) string {
+	if task.DueAt.IsZero() {
+		return "未设置截止时间"
+	}
+	now := time.Now().UTC()
+	switch {
+	case teamcore.IsTerminalState(task.Status):
+		return "已完成任务"
+	case task.DueAt.Before(now):
+		return "已逾期"
+	case task.DueAt.Before(now.Add(24 * time.Hour)):
+		return "24 小时内到期"
+	case task.DueAt.Before(now.Add(72 * time.Hour)):
+		return "3 天内到期"
+	default:
+		return "已设置截止时间"
+	}
+}
+
+func countHistoryByTask(history []teamcore.ChangeEvent, taskID string) int {
+	count := 0
+	for _, item := range history {
+		if strings.TrimSpace(item.SubjectID) == strings.TrimSpace(taskID) {
+			count++
+		}
+	}
+	return count
+}
+
 func latestTeamValue(teams []teamcore.Summary) string {
 	for _, team := range teams {
 		if !team.UpdatedAt.IsZero() {
@@ -1555,11 +1675,13 @@ func taskHistoryMetadata(before, after teamcore.Task) map[string]any {
 		"status_after":     strings.TrimSpace(after.Status),
 		"priority_before":  strings.TrimSpace(before.Priority),
 		"priority_after":   strings.TrimSpace(after.Priority),
+		"due_before":       before.DueAt,
+		"due_after":        after.DueAt,
 		"assignees_before": before.Assignees,
 		"assignees_after":  after.Assignees,
 		"labels_before":    before.Labels,
 		"labels_after":     after.Labels,
-		"diff_summary":     "任务频道/标题/状态/优先级/指派/标签已更新",
+		"diff_summary":     "任务频道/标题/状态/优先级/截止时间/指派/标签已更新",
 	}
 }
 
@@ -1757,6 +1879,7 @@ func buildTeamHistoryDiff(scope string, metadata map[string]any) map[string]team
 			"title":     {"title_before", "title_after"},
 			"status":    {"status_before", "status_after"},
 			"priority":  {"priority_before", "priority_after"},
+			"due":       {"due_before", "due_after"},
 			"assignees": {"assignees_before", "assignees_after"},
 			"labels":    {"labels_before", "labels_after"},
 		}

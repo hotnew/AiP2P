@@ -241,6 +241,100 @@ func TestPluginBuildServesTeamWebhookAndA2APages(t *testing.T) {
 	}
 }
 
+func TestPluginBuildServesTeamSearchPageAndAPI(t *testing.T) {
+	t.Parallel()
+
+	site, root := buildTeamSite(t)
+	store, err := teamcore.OpenStore(filepath.Join(root, "store"))
+	if err != nil {
+		t.Fatalf("OpenStore error = %v", err)
+	}
+	teamRoot := filepath.Join(root, "store", "team", "search-team")
+	if err := os.MkdirAll(teamRoot, 0o755); err != nil {
+		t.Fatalf("MkdirAll error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(teamRoot, "team.json"), []byte(`{
+  "team_id":"search-team",
+  "title":"Search Team",
+  "channels":["main","research"]
+}`), 0o644); err != nil {
+		t.Fatalf("WriteFile(team.json) error = %v", err)
+	}
+	if err := store.SavePolicy("search-team", teamcore.Policy{}); err != nil {
+		t.Fatalf("SavePolicy error = %v", err)
+	}
+	if err := store.AppendTask("search-team", teamcore.Task{
+		TaskID:      "task-alpha",
+		Title:       "Alpha launch checklist",
+		Description: "Coordinate alpha rollout plan",
+		Status:      "doing",
+		Priority:    "high",
+		Assignees:   []string{"agent://pc75/live-alpha"},
+		CreatedAt:   time.Date(2026, 4, 4, 9, 0, 0, 0, time.UTC),
+		UpdatedAt:   time.Date(2026, 4, 4, 10, 0, 0, 0, time.UTC),
+	}); err != nil {
+		t.Fatalf("AppendTask error = %v", err)
+	}
+	if err := store.AppendArtifact("search-team", teamcore.Artifact{
+		ArtifactID: "artifact-alpha",
+		Title:      "Alpha spec",
+		Summary:    "Specification for alpha workflow",
+		Content:    "This artifact explains the alpha delivery path.",
+		Kind:       "doc",
+		CreatedAt:  time.Date(2026, 4, 4, 9, 30, 0, 0, time.UTC),
+		UpdatedAt:  time.Date(2026, 4, 4, 10, 30, 0, 0, time.UTC),
+	}); err != nil {
+		t.Fatalf("AppendArtifact error = %v", err)
+	}
+	if err := store.AppendMessage("search-team", teamcore.Message{
+		MessageID:     "msg-alpha",
+		ChannelID:     "main",
+		AuthorAgentID: "agent://pc75/live-alpha",
+		MessageType:   "chat",
+		Content:       "Need alpha rollout message in main channel.",
+		CreatedAt:     time.Date(2026, 4, 4, 11, 0, 0, 0, time.UTC),
+	}); err != nil {
+		t.Fatalf("AppendMessage error = %v", err)
+	}
+	if err := store.AppendHistory("search-team", teamcore.ChangeEvent{
+		EventID:      "event-alpha",
+		Scope:        "task",
+		Action:       "update",
+		SubjectID:    "task-alpha",
+		Summary:      "Alpha task moved into doing",
+		ActorAgentID: "agent://pc75/live-alpha",
+		CreatedAt:    time.Date(2026, 4, 4, 11, 30, 0, 0, time.UTC),
+	}); err != nil {
+		t.Fatalf("AppendHistory error = %v", err)
+	}
+
+	pageReq := httptest.NewRequest(http.MethodGet, "/teams/search-team/search?q=alpha", nil)
+	pageRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(pageRec, pageReq)
+	if pageRec.Code != http.StatusOK {
+		t.Fatalf("page status = %d, body = %s", pageRec.Code, pageRec.Body.String())
+	}
+	pageBody := pageRec.Body.String()
+	for _, needle := range []string{"Search Team / 搜索", "Alpha launch checklist", "Alpha spec", "Need alpha rollout message", "Alpha task moved into doing"} {
+		if !strings.Contains(pageBody, needle) {
+			t.Fatalf("page body missing %q: %s", needle, pageBody)
+		}
+	}
+
+	apiReq := httptest.NewRequest(http.MethodGet, "/api/teams/search-team/search?q=alpha&scope=all", nil)
+	apiRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(apiRec, apiReq)
+	if apiRec.Code != http.StatusOK {
+		t.Fatalf("api status = %d, body = %s", apiRec.Code, apiRec.Body.String())
+	}
+	apiBody := apiRec.Body.String()
+	for _, needle := range []string{`"team_id":"search-team"`, `"scope":"all"`, `"task-alpha"`, `"artifact-alpha"`, `"msg-alpha"`, `"event-alpha"`} {
+		if !strings.Contains(apiBody, needle) {
+			t.Fatalf("api body missing %q: %s", needle, apiBody)
+		}
+	}
+}
+
 func TestPluginBuildServesWebhookStatusAndReplay(t *testing.T) {
 	t.Parallel()
 
@@ -846,6 +940,7 @@ func TestPluginBuildServesTeamDetailAndAPI(t *testing.T) {
 		ChannelID: "research",
 		Status:    "doing",
 		Priority:  "high",
+		DueAt:     time.Date(2026, 4, 2, 3, 45, 0, 0, time.UTC),
 		Assignees: []string{"agent://pc75/live-charlie"},
 		UpdatedAt: time.Date(2026, 4, 1, 3, 45, 0, 0, time.UTC),
 		CreatedAt: time.Date(2026, 4, 1, 3, 40, 0, 0, time.UTC),
@@ -871,7 +966,7 @@ func TestPluginBuildServesTeamDetailAndAPI(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), "Project Beta") || !strings.Contains(rec.Body.String(), "成员") || !strings.Contains(rec.Body.String(), "Team Policy") || !strings.Contains(rec.Body.String(), "最近消息") || !strings.Contains(rec.Body.String(), "Team Beta decided to keep Team separate from Live.") || !strings.Contains(rec.Body.String(), "最近任务") || !strings.Contains(rec.Body.String(), "Implement TeamTask") || !strings.Contains(rec.Body.String(), "owner · agent://pc75/live-bravo") || !strings.Contains(rec.Body.String(), "工作入口") || !strings.Contains(rec.Body.String(), "/teams/project-beta/tasks?status=doing") || !strings.Contains(rec.Body.String(), "/teams/project-beta/artifacts?kind=markdown") {
+	if !strings.Contains(rec.Body.String(), "Project Beta") || !strings.Contains(rec.Body.String(), "成员") || !strings.Contains(rec.Body.String(), "Team Policy") || !strings.Contains(rec.Body.String(), "最近消息") || !strings.Contains(rec.Body.String(), "Team Beta decided to keep Team separate from Live.") || !strings.Contains(rec.Body.String(), "今日重点") || !strings.Contains(rec.Body.String(), "Implement TeamTask") || !strings.Contains(rec.Body.String(), "owner · agent://pc75/live-bravo") || !strings.Contains(rec.Body.String(), "马上开始") || !strings.Contains(rec.Body.String(), "/teams/project-beta/tasks?status=doing") || !strings.Contains(rec.Body.String(), "/teams/project-beta/artifacts?kind=markdown") {
 		t.Fatalf("expected team detail body, got %q", rec.Body.String())
 	}
 	if !strings.Contains(rec.Body.String(), "/teams/project-beta/channels/main") || !strings.Contains(rec.Body.String(), "/teams/project-beta/channels/research") {
@@ -894,7 +989,7 @@ func TestPluginBuildServesTeamDetailAndAPI(t *testing.T) {
 	if tasksPageRec.Code != http.StatusOK {
 		t.Fatalf("tasks page status = %d, body = %s", tasksPageRec.Code, tasksPageRec.Body.String())
 	}
-	if !strings.Contains(tasksPageRec.Body.String(), "Implement TeamTask") || !strings.Contains(tasksPageRec.Body.String(), "/teams/project-beta/tasks/team-task-implement-teamtask") {
+	if !strings.Contains(tasksPageRec.Body.String(), "Implement TeamTask") || !strings.Contains(tasksPageRec.Body.String(), "/teams/project-beta/tasks/team-task-implement-teamtask") || !strings.Contains(tasksPageRec.Body.String(), "推进中") || !strings.Contains(tasksPageRec.Body.String(), "截止时间") {
 		t.Fatalf("expected team tasks page body, got %q", tasksPageRec.Body.String())
 	}
 
@@ -904,7 +999,7 @@ func TestPluginBuildServesTeamDetailAndAPI(t *testing.T) {
 	if taskPageRec.Code != http.StatusOK {
 		t.Fatalf("task page status = %d, body = %s", taskPageRec.Code, taskPageRec.Body.String())
 	}
-	if !strings.Contains(taskPageRec.Body.String(), "Task comments stay inside TeamMessage, not Live.") || !strings.Contains(taskPageRec.Body.String(), "team-task-implement-teamtask") {
+	if !strings.Contains(taskPageRec.Body.String(), "Task comments stay inside TeamMessage, not Live.") || !strings.Contains(taskPageRec.Body.String(), "team-task-implement-teamtask") || !strings.Contains(taskPageRec.Body.String(), "截止时间") {
 		t.Fatalf("expected team task page body, got %q", taskPageRec.Body.String())
 	}
 
@@ -1564,7 +1659,7 @@ func TestPluginBuildHandlesTeamTaskFormWrites(t *testing.T) {
 	}
 
 	createReq := httptest.NewRequest(http.MethodPost, "/teams/project-forms/tasks/create", strings.NewReader(
-		"title=Created+via+form&status=doing&priority=high&assignees=agent%3A%2F%2Fpc75%2Flive-bravo&created_by=agent%3A%2F%2Fpc75%2Flive-alpha&description=form+task",
+		"title=Created+via+form&status=doing&priority=high&due_at=2026-04-05T09%3A30&assignees=agent%3A%2F%2Fpc75%2Flive-bravo&created_by=agent%3A%2F%2Fpc75%2Flive-alpha&description=form+task",
 	))
 	createReq.RemoteAddr = "127.0.0.1:23456"
 	createReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -1585,9 +1680,12 @@ func TestPluginBuildHandlesTeamTaskFormWrites(t *testing.T) {
 	if len(tasks) != 2 || tasks[0].Title != "Created via form" {
 		t.Fatalf("expected created task at top, got %#v", tasks)
 	}
+	if tasks[0].DueAt.IsZero() {
+		t.Fatalf("expected created task due_at to be set, got %#v", tasks[0])
+	}
 
 	updateReq := httptest.NewRequest(http.MethodPost, "/teams/project-forms/tasks/form-task-1/update", strings.NewReader(
-		"title=Updated+via+form&status=done&priority=high&assignees=agent%3A%2F%2Fpc75%2Flive-charlie&labels=weekly%2Cdone&description=form+update&actor_agent_id=agent%3A%2F%2Fpc75%2Flive-alpha",
+		"title=Updated+via+form&status=done&priority=high&due_at=2026-04-06T12%3A15&assignees=agent%3A%2F%2Fpc75%2Flive-charlie&labels=weekly%2Cdone&description=form+update&actor_agent_id=agent%3A%2F%2Fpc75%2Flive-alpha",
 	))
 	updateReq.RemoteAddr = "127.0.0.1:23456"
 	updateReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -1601,7 +1699,7 @@ func TestPluginBuildHandlesTeamTaskFormWrites(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadTask(updated) error = %v", err)
 	}
-	if updatedTask.Title != "Updated via form" || updatedTask.Status != "done" || updatedTask.ClosedAt.IsZero() {
+	if updatedTask.Title != "Updated via form" || updatedTask.Status != "done" || updatedTask.ClosedAt.IsZero() || updatedTask.DueAt.IsZero() {
 		t.Fatalf("unexpected updated form task: %#v", updatedTask)
 	}
 
@@ -1944,17 +2042,26 @@ func TestBuildTeamSyncConflictViewsExplainsSuggestions(t *testing.T) {
 	if views[0].ConflictClass != "safe-local" || !views[0].AllowKeepLocal || views[0].SubjectLabel != "Task / task-1" {
 		t.Fatalf("unexpected local_newer metadata: %#v", views[0])
 	}
+	if views[0].SeverityLabel != "attention" || !strings.Contains(views[0].ConsequenceHint, "旧版本覆盖") {
+		t.Fatalf("unexpected local_newer severity metadata: %#v", views[0])
+	}
 	if views[1].SuggestedAction != "accept_remote" || !strings.Contains(views[1].ReasonLabel, "内容不同") || !strings.Contains(views[1].ActionHint, "接受远端") {
 		t.Fatalf("unexpected same_version_diverged view: %#v", views[1])
 	}
 	if views[1].ConflictClass != "diverged" || !views[1].AllowAcceptRemote || len(views[1].Actions) < 3 {
 		t.Fatalf("unexpected diverged actions: %#v", views[1])
 	}
+	if views[1].SeverityLabel != "risky" || !strings.Contains(views[1].ConsequenceHint, "持续分叉") {
+		t.Fatalf("unexpected diverged severity metadata: %#v", views[1])
+	}
 	if views[2].SuggestedAction != "dismiss" || !strings.Contains(views[2].ReasonLabel, "签名") || !strings.Contains(views[2].ActionHint, "驳回") {
 		t.Fatalf("unexpected signature_rejected view: %#v", views[2])
 	}
 	if views[2].ConflictClass != "rejected" || views[2].AllowAcceptRemote {
 		t.Fatalf("unexpected signature_rejected metadata: %#v", views[2])
+	}
+	if views[2].SeverityLabel != "blocked" || !strings.Contains(views[2].ConsequenceHint, "签名校验失败") {
+		t.Fatalf("unexpected rejected severity metadata: %#v", views[2])
 	}
 }
 

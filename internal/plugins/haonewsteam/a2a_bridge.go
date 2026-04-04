@@ -252,6 +252,7 @@ func mapTaskToA2A(task teamcore.Task) map[string]any {
 		"description": task.Description,
 		"status":      mapTeamStateToA2A(task.Status),
 		"priority":    task.Priority,
+		"due_at":      task.DueAt,
 		"assignees":   task.Assignees,
 		"labels":      task.Labels,
 		"created_by":  task.CreatedBy,

@@ -31,6 +31,7 @@
           <div class="hero-actions hero-actions-compact live-room-actions">
             <a class="button-link" href="/teams/{{.Team.TeamID}}/channels/main">主频道</a>
             <a class="button-link button-link-muted" href="/teams/{{.Team.TeamID}}/sync">同步</a>
+            <a class="button-link button-link-muted" href="/teams/{{.Team.TeamID}}/search">搜索</a>
             <a class="button-link button-link-muted" href="/teams/{{.Team.TeamID}}/webhooks">Webhook</a>
             <a class="button-link button-link-muted" href="/teams/{{.Team.TeamID}}/a2a">A2A</a>
             <a class="button-link button-link-muted" href="/archive/team/{{.Team.TeamID}}">Team 归档</a>
@@ -54,6 +55,7 @@
           <div class="team-page-nav">
             <a class="filter-chip is-active" href="/teams/{{.Team.TeamID}}">概览</a>
             <a class="filter-chip" href="/teams/{{.Team.TeamID}}/sync">同步</a>
+            <a class="filter-chip" href="/teams/{{.Team.TeamID}}/search">搜索</a>
             <a class="filter-chip" href="/teams/{{.Team.TeamID}}/webhooks">Webhook</a>
             <a class="filter-chip" href="/teams/{{.Team.TeamID}}/a2a">A2A</a>
             <a class="filter-chip" href="/archive/team/{{.Team.TeamID}}">归档</a>
@@ -121,6 +123,55 @@
         </section>
         <section class="panel panel-inline">
           <div class="panel-head">
+            <p class="panel-label">今日重点</p>
+            <span class="micro-copy">把最重要的任务、最近变化和异常放在同一屏里。</span>
+          </div>
+          {{if .DashboardAlerts}}
+            <div class="facet-list-inline team-inline-tags">
+              {{range .DashboardAlerts}}<span class="filter-chip">{{.}}</span>{{end}}
+            </div>
+          {{end}}
+          <div class="team-workbench-grid">
+            <article class="team-workbench-card">
+              <p class="panel-label">关键任务</p>
+              {{if .FocusTasks}}
+                <div class="story-links">
+                  {{range .FocusTasks}}
+                    <a href="/teams/{{$.Team.TeamID}}/tasks/{{urlquery .TaskID}}">{{.Title}} · {{.DueLabel}}</a>
+                  {{end}}
+                </div>
+              {{else}}
+                <p class="team-empty-note">当前没有需要优先推进的任务，可以直接新建任务或进入主频道整理上下文。</p>
+              {{end}}
+            </article>
+            <article class="team-workbench-card">
+              <p class="panel-label">最近变更</p>
+              {{if .RecentChangeItems}}
+                <div class="story-links">
+                  {{range .RecentChangeItems}}
+                    <a href="/teams/{{$.Team.TeamID}}/history?scope={{urlquery .Scope}}">{{.Summary}}</a>
+                  {{end}}
+                </div>
+              {{else}}
+                <p class="team-empty-note">当前没有新的治理或任务变更。</p>
+              {{end}}
+            </article>
+            <article class="team-workbench-card">
+              <p class="panel-label">最近消息</p>
+              {{if .RecentMessageItems}}
+                <div class="story-links">
+                  {{range .RecentMessageItems}}
+                    <a href="/teams/{{$.Team.TeamID}}/channels/{{if .ChannelID}}{{urlquery .ChannelID}}{{else}}main{{end}}">{{.AuthorAgentID}}：{{.Content}}</a>
+                  {{end}}
+                </div>
+              {{else}}
+                <p class="team-empty-note">最近没有新的主频道消息。</p>
+              {{end}}
+            </article>
+          </div>
+        </section>
+        <section class="panel panel-inline">
+          <div class="panel-head">
             <p class="panel-label">当前上下文</p>
             <span class="micro-copy">从这里直接进入成员、频道、任务、产物和历史，不需要绕回别的模块。</span>
           </div>
@@ -138,6 +189,7 @@
             <a class="filter-chip" href="/teams/{{.Team.TeamID}}/channels/main">主频道</a>
             <a class="filter-chip" href="/teams/{{.Team.TeamID}}/tasks">任务列表</a>
             <a class="filter-chip" href="/teams/{{.Team.TeamID}}/artifacts">产物列表</a>
+            <a class="filter-chip" href="/teams/{{.Team.TeamID}}/search">检索入口</a>
             <a class="filter-chip" href="/teams/{{.Team.TeamID}}/history">全部历史</a>
             <a class="filter-chip" href="/teams/{{.Team.TeamID}}/sync">同步健康</a>
             <a class="filter-chip" href="/teams/{{.Team.TeamID}}/webhooks">Webhook</a>

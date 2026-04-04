@@ -41,23 +41,25 @@ func handleTeamSync(app *newsplugin.App, store *teamcore.Store, teamID string, w
 		return
 	}
 	data := teamSyncPageData{
-		Project:         app.ProjectName(),
-		Version:         app.VersionString(),
-		PageNav:         app.PageNav("/teams"),
-		NodeStatus:      app.NodeStatus(index),
-		Now:             time.Now(),
-		Team:            info,
-		SyncNotice:      strings.TrimSpace(r.URL.Query().Get("resolved")),
-		SyncStatus:      status.TeamSync,
-		WebhookStatus:   webhookStatus,
-		RecentConflicts: conflicts,
-		ConflictViews:   buildTeamSyncConflictViews(conflicts),
-		StatusGroups:    buildTeamSyncStatusGroups(status.TeamSync, webhookStatus),
-		HealthLevel:     teamSyncHealthLevel(status.TeamSync, webhookStatus),
-		HealthTitle:     teamSyncHealthTitle(status.TeamSync, webhookStatus),
-		HealthHint:      teamSyncHealthHint(status.TeamSync, webhookStatus),
-		ResolvedTitle:   teamSyncResolvedTitle(strings.TrimSpace(r.URL.Query().Get("resolved"))),
-		ResolvedHint:    teamSyncResolvedHint(strings.TrimSpace(r.URL.Query().Get("resolved"))),
+		Project:               app.ProjectName(),
+		Version:               app.VersionString(),
+		PageNav:               app.PageNav("/teams"),
+		NodeStatus:            app.NodeStatus(index),
+		Now:                   time.Now(),
+		Team:                  info,
+		SyncNotice:            strings.TrimSpace(r.URL.Query().Get("resolved")),
+		SyncStatus:            status.TeamSync,
+		WebhookStatus:         webhookStatus,
+		RecentConflicts:       conflicts,
+		ConflictViews:         buildTeamSyncConflictViews(conflicts),
+		OpenConflictViews:     buildOpenTeamSyncConflictViews(conflicts),
+		ResolvedConflictViews: buildResolvedTeamSyncConflictViews(conflicts),
+		StatusGroups:          buildTeamSyncStatusGroups(status.TeamSync, webhookStatus),
+		HealthLevel:           teamSyncHealthLevel(status.TeamSync, webhookStatus),
+		HealthTitle:           teamSyncHealthTitle(status.TeamSync, webhookStatus),
+		HealthHint:            teamSyncHealthHint(status.TeamSync, webhookStatus),
+		ResolvedTitle:         teamSyncResolvedTitle(strings.TrimSpace(r.URL.Query().Get("resolved"))),
+		ResolvedHint:          teamSyncResolvedHint(strings.TrimSpace(r.URL.Query().Get("resolved"))),
 		SummaryStats: []newsplugin.SummaryStat{
 			{Label: "已订阅 Team", Value: formatTeamCount(status.TeamSync.SubscribedTeams)},
 			{Label: "pending ack", Value: formatTeamCount(status.TeamSync.PendingAcks)},
@@ -216,18 +218,44 @@ func buildTeamSyncConflictViews(records []corehaonews.TeamSyncConflictRecord) []
 		reasonLabel, actionHint, suggestedAction := describeTeamSyncConflict(record, supportsAcceptRemoteConflict(syncType))
 		allowKeepLocal, allowAcceptRemote := conflictActionPermissions(record, supportsAcceptRemoteConflict(syncType))
 		views = append(views, teamSyncConflictView{
-			Record:            record,
-			AllowAcceptRemote: allowAcceptRemote,
-			AllowKeepLocal:    allowKeepLocal,
-			SuggestedAction:   suggestedAction,
-			ReasonLabel:       reasonLabel,
-			ActionHint:        actionHint,
-			SubjectLabel:      describeTeamSyncConflictSubject(record),
-			ConflictClass:     classifyTeamSyncConflict(record),
-			Actions:           buildTeamSyncConflictActions(record, allowKeepLocal, allowAcceptRemote, suggestedAction),
+			Record:             record,
+			AllowAcceptRemote:  allowAcceptRemote,
+			AllowKeepLocal:     allowKeepLocal,
+			SuggestedAction:    suggestedAction,
+			ReasonLabel:        reasonLabel,
+			ActionHint:         actionHint,
+			SubjectLabel:       describeTeamSyncConflictSubject(record),
+			ConflictClass:      classifyTeamSyncConflict(record),
+			SeverityLabel:      describeTeamSyncConflictSeverity(record),
+			ConsequenceHint:    describeTeamSyncConflictConsequence(record),
+			LocalVersionLabel:  formatSyncConflictVersion(record.LocalVersion),
+			RemoteVersionLabel: formatSyncConflictVersion(record.RemoteVersion),
+			Actions:            buildTeamSyncConflictActions(record, allowKeepLocal, allowAcceptRemote, suggestedAction),
 		})
 	}
 	return views
+}
+
+func buildOpenTeamSyncConflictViews(records []corehaonews.TeamSyncConflictRecord) []teamSyncConflictView {
+	views := buildTeamSyncConflictViews(records)
+	out := make([]teamSyncConflictView, 0, len(views))
+	for _, view := range views {
+		if strings.TrimSpace(view.Record.Resolution) == "" {
+			out = append(out, view)
+		}
+	}
+	return out
+}
+
+func buildResolvedTeamSyncConflictViews(records []corehaonews.TeamSyncConflictRecord) []teamSyncConflictView {
+	views := buildTeamSyncConflictViews(records)
+	out := make([]teamSyncConflictView, 0, len(views))
+	for _, view := range views {
+		if strings.TrimSpace(view.Record.Resolution) != "" {
+			out = append(out, view)
+		}
+	}
+	return out
 }
 
 func conflictActionPermissions(record corehaonews.TeamSyncConflictRecord, allowAcceptRemote bool) (bool, bool) {
@@ -314,6 +342,43 @@ func classifyTeamSyncConflict(record corehaonews.TeamSyncConflictRecord) string 
 	default:
 		return "review"
 	}
+}
+
+func describeTeamSyncConflictSeverity(record corehaonews.TeamSyncConflictRecord) string {
+	switch strings.TrimSpace(record.Reason) {
+	case "signature_rejected", "policy_rejected":
+		return "blocked"
+	case "same_version_diverged":
+		return "risky"
+	case "remote_newer", "local_newer":
+		return "attention"
+	default:
+		return "info"
+	}
+}
+
+func describeTeamSyncConflictConsequence(record corehaonews.TeamSyncConflictRecord) string {
+	switch strings.TrimSpace(record.Reason) {
+	case "remote_newer":
+		return "如果继续保留本地，远端较新的内容不会自动进入当前节点。"
+	case "local_newer":
+		return "如果直接接受远端，当前节点已经更新过的内容会被旧版本覆盖。"
+	case "same_version_diverged":
+		return "两个节点现在都认为自己是当前版本，不先统一结果就会持续分叉。"
+	case "signature_rejected":
+		return "这条记录因签名校验失败被拒绝，先修签名或来源再考虑重放。"
+	case "policy_rejected":
+		return "这条记录被 Team Policy 拒绝，直接接受远端不会生效。"
+	default:
+		return "建议先查看本地和远端版本，再决定用哪个动作收敛。"
+	}
+}
+
+func formatSyncConflictVersion(value time.Time) string {
+	if value.IsZero() {
+		return "-"
+	}
+	return value.Local().Format("2006-01-02 15:04:05")
 }
 
 func buildTeamSyncStatusGroups(status corehaonews.SyncTeamSyncStatus, webhook teamcore.WebhookDeliveryStatus) []teamSyncStatusGroup {

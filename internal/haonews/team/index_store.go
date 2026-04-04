@@ -17,6 +17,7 @@ type TaskIndexEntry struct {
 	Length    int       `json:"length"`
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	UpdatedAt time.Time `json:"updated_at,omitempty"`
+	DueAt     time.Time `json:"due_at,omitempty"`
 	ChannelID string    `json:"channel_id,omitempty"`
 	ContextID string    `json:"context_id,omitempty"`
 	Status    string    `json:"status,omitempty"`
@@ -170,6 +171,7 @@ func taskIndexEntryFromTask(task Task, offset int64, length int) TaskIndexEntry 
 		Length:    length,
 		CreatedAt: task.CreatedAt,
 		UpdatedAt: task.UpdatedAt,
+		DueAt:     task.DueAt,
 		ChannelID: task.ChannelID,
 		ContextID: task.ContextID,
 		Status:    task.Status,

@@ -26,6 +26,7 @@
               <span><strong>频道</strong>{{if .Task.ChannelID}}{{.Task.ChannelID}}{{else}}-{{end}}</span>
               <span><strong>状态</strong>{{if .Task.Status}}{{.Task.Status}}{{else}}-{{end}}</span>
               <span><strong>优先级</strong>{{if .Task.Priority}}{{.Task.Priority}}{{else}}-{{end}}</span>
+              <span><strong>截止时间</strong>{{if .Task.DueAt.IsZero}}-{{else}}{{.Task.DueAt.Local.Format "2006-01-02 15:04"}}{{end}}</span>
               <span><strong>Team</strong>{{.Team.TeamID}}</span>
             </div>
           </div>
@@ -164,6 +165,10 @@
             <label>
               <span>优先级</span>
               <input type="text" name="priority" value="{{.Task.Priority}}">
+            </label>
+            <label>
+              <span>截止时间</span>
+              <input type="datetime-local" name="due_at" value="{{if .Task.DueAt.IsZero}}{{else}}{{.Task.DueAt.Local.Format "2006-01-02T15:04"}}{{end}}">
             </label>
             <label>
               <span>频道</span>
