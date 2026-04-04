@@ -209,6 +209,14 @@ func newHandler(app *newsplugin.App, store *teamcore.Store, staticFS fs.FS) http
 			handleTeamSync(app, store, teamID, w, r)
 			return
 		}
+		if len(parts) == 2 && parts[1] == "webhooks" {
+			handleTeamWebhookPage(app, store, teamID, w, r)
+			return
+		}
+		if len(parts) == 2 && parts[1] == "a2a" {
+			handleTeamA2APage(app, store, teamID, w, r)
+			return
+		}
 		if len(parts) == 5 && parts[1] == "sync" && parts[2] == "conflicts" && parts[4] == "resolve" && r.Method == http.MethodPost {
 			handleTeamSyncConflictResolvePage(app, store, teamID, parts[3], w, r)
 			return

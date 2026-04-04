@@ -178,8 +178,66 @@ func TestPluginBuildRejectsUnsignedMessageWhenTeamPolicyRequiresSignature(t *tes
 	if msgRec.Code != http.StatusBadRequest {
 		t.Fatalf("expected bad request for unsigned message, got %d body=%s", msgRec.Code, msgRec.Body.String())
 	}
-	if !strings.Contains(msgRec.Body.String(), "signature verification failed") {
-		t.Fatalf("expected signature verification failure body, got %q", msgRec.Body.String())
+	if !strings.Contains(msgRec.Body.String(), `"error":"message_signature_required"`) && !strings.Contains(msgRec.Body.String(), `"error": "message_signature_required"`) {
+		t.Fatalf("expected structured signature error body, got %q", msgRec.Body.String())
+	}
+}
+
+func TestPluginBuildServesTeamWebhookAndA2APages(t *testing.T) {
+	t.Parallel()
+
+	site, root := buildTeamSite(t)
+	teamRoot := filepath.Join(root, "store", "team", "product-team")
+	if err := os.MkdirAll(teamRoot, 0o755); err != nil {
+		t.Fatalf("MkdirAll error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(teamRoot, "team.json"), []byte(`{
+  "team_id":"product-team",
+  "title":"Product Team",
+  "owner_agent_id":"agent://pc75/openclaw01"
+}`), 0o644); err != nil {
+		t.Fatalf("WriteFile(team.json) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(teamRoot, "members.json"), []byte(`[
+  {"agent_id":"agent://pc75/openclaw01","role":"owner","status":"active"}
+]`), 0o644); err != nil {
+		t.Fatalf("WriteFile(members.json) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(teamRoot, "webhooks.json"), []byte(`[
+  {"webhook_id":"hook-page","url":"http://127.0.0.1/hook","events":["message.create"]}
+]`), 0o644); err != nil {
+		t.Fatalf("WriteFile(webhooks.json) error = %v", err)
+	}
+	agentDir := filepath.Join(teamRoot, "agents")
+	if err := os.MkdirAll(agentDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(agentDir) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(agentDir, "agent___pc75_openclaw01.json"), []byte(`{
+  "agent_id":"agent://pc75/openclaw01",
+  "name":"Owner Card",
+  "endpoint":"https://example.test/a2a"
+}`), 0o644); err != nil {
+		t.Fatalf("WriteFile(agent card) error = %v", err)
+	}
+
+	webhookReq := httptest.NewRequest(http.MethodGet, "/teams/product-team/webhooks", nil)
+	webhookRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(webhookRec, webhookReq)
+	if webhookRec.Code != http.StatusOK {
+		t.Fatalf("webhook page status = %d, body = %s", webhookRec.Code, webhookRec.Body.String())
+	}
+	if body := webhookRec.Body.String(); !strings.Contains(body, "Webhook") || !strings.Contains(body, "hook-page") {
+		t.Fatalf("webhook page body = %q", body)
+	}
+
+	a2aReq := httptest.NewRequest(http.MethodGet, "/teams/product-team/a2a", nil)
+	a2aRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(a2aRec, a2aReq)
+	if a2aRec.Code != http.StatusOK {
+		t.Fatalf("a2a page status = %d, body = %s", a2aRec.Code, a2aRec.Body.String())
+	}
+	if body := a2aRec.Body.String(); !strings.Contains(body, "Agent To Agent") || !strings.Contains(body, "Owner Card") {
+		t.Fatalf("a2a page body = %q", body)
 	}
 }
 
@@ -347,8 +405,8 @@ func TestPluginBuildEnforcesTeamActionPermissions(t *testing.T) {
 	if msgRec.Code != http.StatusForbidden {
 		t.Fatalf("expected forbidden for message.send, got %d body=%s", msgRec.Code, msgRec.Body.String())
 	}
-	if !strings.Contains(msgRec.Body.String(), "policy denied action") {
-		t.Fatalf("expected policy denied action body, got %q", msgRec.Body.String())
+	if !strings.Contains(msgRec.Body.String(), `"error":"permission_denied"`) && !strings.Contains(msgRec.Body.String(), `"error": "permission_denied"`) {
+		t.Fatalf("expected structured permission error body, got %q", msgRec.Body.String())
 	}
 
 	memberPolicyReq := httptest.NewRequest(http.MethodPost, "/api/teams/permission-team/policy", strings.NewReader(`{
@@ -1886,7 +1944,7 @@ func TestBuildTeamSyncConflictViewsExplainsSuggestions(t *testing.T) {
 	if views[0].ConflictClass != "safe-local" || !views[0].AllowKeepLocal || views[0].SubjectLabel != "Task / task-1" {
 		t.Fatalf("unexpected local_newer metadata: %#v", views[0])
 	}
-	if views[1].SuggestedAction != "accept_remote" || !strings.Contains(views[1].ReasonLabel, "分叉") || !strings.Contains(views[1].ActionHint, "接收远端") {
+	if views[1].SuggestedAction != "accept_remote" || !strings.Contains(views[1].ReasonLabel, "内容不同") || !strings.Contains(views[1].ActionHint, "接受远端") {
 		t.Fatalf("unexpected same_version_diverged view: %#v", views[1])
 	}
 	if views[1].ConflictClass != "diverged" || !views[1].AllowAcceptRemote || len(views[1].Actions) < 3 {

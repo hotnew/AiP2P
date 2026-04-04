@@ -1,0 +1,119 @@
+{{define "team_webhook.html"}}
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>好牛Ai Team Webhook</title>
+  <link rel="stylesheet" href="/static/styles.css?v=20260330b">
+</head>
+<body>
+  <div class="app-shell">
+    {{template "appSidebar" .}}
+    <div class="page-shell">
+      {{template "sidebarToggle" .}}
+      <header class="hero hero-dashboard live-room-hero">
+        <div class="live-room-topline">
+          <a class="back-link" href="/teams/{{.Team.TeamID}}">返回 Team</a>
+          <p class="eyebrow">Webhook 交付</p>
+        </div>
+        <div class="hero-heading">
+          <div class="live-room-heading-main">
+            <h1>{{if .Team.Title}}{{.Team.Title}}{{else}}{{.Team.TeamID}}{{end}} / Webhook</h1>
+            <p class="hero-copy">这里直接看 Team 的 Webhook 配置、投递结果、失败原因和 replay，不再只靠 API 返回和日志手工判断。</p>
+          </div>
+          <div class="hero-actions hero-actions-compact live-room-actions">
+            <a class="button-link" href="/api/teams/{{.Team.TeamID}}/webhooks">Webhook JSON</a>
+            <a class="button-link button-link-muted" href="/api/teams/{{.Team.TeamID}}/webhooks/status">Status JSON</a>
+            <a class="button-link button-link-muted" href="/teams/{{.Team.TeamID}}/sync">同步</a>
+            <a class="button-link button-link-muted" href="/teams/{{.Team.TeamID}}">Team 详情</a>
+          </div>
+        </div>
+      </header>
+      <main class="feed">
+        {{if .ReplayNotice}}
+        <section class="panel panel-inline">
+          <p class="panel-label">最近动作</p>
+          <p class="team-empty-note">最近已重新投递 delivery：<code>{{.ReplayNotice}}</code></p>
+        </section>
+        {{end}}
+        <section class="panel panel-inline">
+          <p class="panel-label">投递状态</p>
+          <div class="hero-stats hero-stats-wide">
+            <div class="hero-stat-card"><span class="stat-label">已投递</span><strong>{{.WebhookStatus.DeliveredCount}}</strong></div>
+            <div class="hero-stat-card"><span class="stat-label">重试中</span><strong>{{.WebhookStatus.RetryingCount}}</strong></div>
+            <div class="hero-stat-card"><span class="stat-label">失败</span><strong>{{.WebhookStatus.FailedCount}}</strong></div>
+            <div class="hero-stat-card"><span class="stat-label">dead-letter</span><strong>{{.WebhookStatus.DeadLetterCount}}</strong></div>
+          </div>
+        </section>
+        <section class="panel panel-inline">
+          <div class="panel-head">
+            <p class="panel-label">当前配置</p>
+            <span class="micro-copy">配置更新仍通过 API 完成，这里先把现状和结果说明白。</span>
+          </div>
+          {{if .Webhooks}}
+          <section class="directory-grid">
+            {{range .Webhooks}}
+            <article class="directory-card">
+              <div class="card-meta">
+                <span>{{if .WebhookID}}{{.WebhookID}}{{else}}webhook{{end}}</span>
+                <span>{{if .Events}}{{len .Events}} 个事件{{else}}全部事件{{end}}</span>
+              </div>
+              <h2>{{.URL}}</h2>
+              <p class="micro-copy">最近更新时间：{{if .UpdatedAt.IsZero}}暂无{{else}}{{.UpdatedAt.Local.Format "2006-01-02 15:04:05"}}{{end}}</p>
+              <div class="facet-list-inline team-inline-tags">
+                {{if .Events}}
+                  {{range .Events}}<span class="filter-chip">{{.}}</span>{{end}}
+                {{else}}
+                  <span class="filter-chip">全部事件</span>
+                {{end}}
+              </div>
+            </article>
+            {{end}}
+          </section>
+          {{else}}
+          <p class="team-empty-note">当前还没有配置 Webhook。可以继续用 `POST /api/teams/{{.Team.TeamID}}/webhooks` 添加。</p>
+          {{end}}
+        </section>
+        <section class="panel panel-inline">
+          <div class="panel-head">
+            <p class="panel-label">最近投递记录</p>
+            <span class="micro-copy">失败或 dead-letter 的记录可以直接在这里 replay。</span>
+          </div>
+          {{if .RecentDeliveries}}
+          <section class="story-list">
+            {{range .RecentDeliveries}}
+            <article class="story-card">
+              <div class="card-meta">
+                <span>{{.Status}}</span>
+                <span>{{.Event.Kind}}.{{.Event.Action}}</span>
+                {{if .StatusCode}}<span>{{.StatusCode}}</span>{{end}}
+                {{if .UpdatedAt.IsZero}}{{else}}<span>{{.UpdatedAt.Local.Format "2006-01-02 15:04"}}</span>{{end}}
+              </div>
+              <h2>{{if .WebhookID}}{{.WebhookID}}{{else}}{{.DeliveryID}}{{end}}</h2>
+              <p class="micro-copy"><code>{{.URL}}</code></p>
+              {{if .Error}}<p class="team-empty-note">{{.Error}}</p>{{end}}
+              {{if .ReplayedFrom}}<p class="micro-copy">replayed from：<code>{{.ReplayedFrom}}</code></p>{{end}}
+              <div class="team-card-links">
+                {{if or (eq .Status "failed") (eq .Status "dead_letter")}}
+                <form method="post" action="/api/teams/{{$.Team.TeamID}}/webhooks/replay/{{.DeliveryID}}">
+                  <input type="hidden" name="actor_agent_id" value="{{$.Team.OwnerAgentID}}">
+                  <button class="button-link" type="submit">重新投递</button>
+                </form>
+                {{end}}
+                <a href="/api/teams/{{$.Team.TeamID}}/webhooks/status">状态 JSON</a>
+              </div>
+            </article>
+            {{end}}
+          </section>
+          {{else}}
+          <p class="team-empty-note">当前还没有投递记录。</p>
+          {{end}}
+        </section>
+      </main>
+    </div>
+  </div>
+{{template "sidebarScript" .}}
+</body>
+</html>
+{{end}}

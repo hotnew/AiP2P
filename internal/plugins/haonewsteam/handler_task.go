@@ -683,10 +683,18 @@ func handleAPITeamTaskStatus(store *teamcore.Store, teamID, taskID string, w htt
 	updated.Status = payload.Status
 	updated.UpdatedAt = time.Now().UTC()
 	if err := requireTeamAction(store, teamID, payload.ActorAgentID, "task.transition"); err != nil {
+		if resp, ok := classifyTeamAPIError(teamID, err); ok {
+			writeTeamAPIError(w, http.StatusForbidden, resp)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusForbidden)
 		return
 	}
 	if err := store.SaveTaskCtx(r.Context(), teamID, updated); err != nil {
+		if resp, ok := classifyTeamAPIError(teamID, err); ok {
+			writeTeamAPIError(w, http.StatusBadRequest, resp)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}

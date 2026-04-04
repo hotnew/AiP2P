@@ -15,7 +15,25 @@ type teamIndexPageData struct {
 	NodeStatus   newsplugin.NodeStatus
 	Now          time.Time
 	Teams        []teamcore.Summary
+	Digests      []teamActivityDigest
 	SummaryStats []newsplugin.SummaryStat
+}
+
+type teamActivityDigest struct {
+	TeamID              string
+	Title               string
+	Description         string
+	Visibility          string
+	MemberCount         int
+	ChannelCount        int
+	RecentMessages      int
+	OpenTasks           int
+	UnresolvedConflicts int
+	WebhookDeadLetters  int
+	LastActivityAt      time.Time
+	TopAction           string
+	TopActionURL        string
+	HealthLabel         string
 }
 
 type teamPageData struct {
@@ -42,8 +60,12 @@ type teamPageData struct {
 	RecentConflicts     []corehaonews.TeamSyncConflictRecord
 	UnresolvedConflicts int
 	ResolvedConflicts   int
+	WebhookStatus       teamcore.WebhookDeliveryStatus
 	TaskStatusCounts    map[string]int
 	ArtifactKindCounts  map[string]int
+	DefaultActorAgentID string
+	CanQuickPost        bool
+	PolicyNotice        string
 	SummaryStats        []newsplugin.SummaryStat
 }
 
@@ -133,7 +155,44 @@ type teamSyncPageData struct {
 	RecentConflicts []corehaonews.TeamSyncConflictRecord
 	ConflictViews   []teamSyncConflictView
 	StatusGroups    []teamSyncStatusGroup
+	HealthLevel     string
+	HealthTitle     string
+	HealthHint      string
+	ResolvedTitle   string
+	ResolvedHint    string
 	SummaryStats    []newsplugin.SummaryStat
+}
+
+type teamWebhookPageData struct {
+	Project          string
+	Version          string
+	PageNav          []newsplugin.NavItem
+	NodeStatus       newsplugin.NodeStatus
+	Now              time.Time
+	Team             teamcore.Info
+	Webhooks         []teamcore.PushNotificationConfig
+	WebhookStatus    teamcore.WebhookDeliveryStatus
+	RecentDeliveries []teamcore.WebhookDeliveryRecord
+	ReplayNotice     string
+}
+
+type teamA2AEndpointInfo struct {
+	Method      string
+	Path        string
+	Description string
+}
+
+type teamA2APageData struct {
+	Project      string
+	Version      string
+	PageNav      []newsplugin.NavItem
+	NodeStatus   newsplugin.NodeStatus
+	Now          time.Time
+	Team         teamcore.Info
+	Agents       []teamcore.AgentCard
+	Tasks        []teamcore.Task
+	Endpoints    []teamA2AEndpointInfo
+	SummaryStats []newsplugin.SummaryStat
 }
 
 type teamChannelPageData struct {

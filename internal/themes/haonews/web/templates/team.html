@@ -17,7 +17,7 @@
         <div class="hero-heading">
           <div>
             <h1>Team</h1>
-            <p class="hero-copy">Team 用于长期项目协作、成员管理、频道、任务和工件沉淀。这里的入口只指向 Team 自身页面，成员、频道、任务、产物和历史都留在 Team 内部。</p>
+            <p class="hero-copy">Team 是长期项目协作工作区。你不需要先理解底层同步、Webhook 或 A2A，先从“这个 Team 现在最该处理什么”开始就可以。</p>
           </div>
           <div class="hero-actions hero-actions-compact">
             <a class="button-link" href="/api/teams">JSON 接口</a>
@@ -52,14 +52,14 @@
         </section>
         <section class="panel panel-inline" id="team-suggestion">
           <div class="panel-head">
-            <p class="panel-label">工作台入口</p>
-            <span class="micro-copy">先选 Team，再进入成员、主频道、任务、产物和历史，不跨到其他模块。</span>
+            <p class="panel-label">怎么开始用 Team</p>
+            <span class="micro-copy">先选 Team，看摘要，再决定是进主频道、任务、同步还是 webhook。</span>
           </div>
           <div class="team-workbench-grid">
             <article class="team-workbench-card">
               <p class="panel-label">先选 Team</p>
               <strong>{{len .Teams}}</strong>
-              <p class="team-empty-note">先从 Team 目录进入一个长期项目空间，再继续成员、频道、任务和产物。</p>
+              <p class="team-empty-note">先从 Team 目录进入一个工作区，再处理最近消息、进行中任务和待处理同步问题。</p>
               <div class="team-card-links">
                 <a href="#team-directory">打开 Team 目录</a>
                 <a href="/archive/team">查看 Team 归档</a>
@@ -68,8 +68,8 @@
             </article>
             <article class="team-workbench-card">
               <p class="panel-label">典型入口</p>
-              <strong>team</strong>
-              <p class="team-empty-note">进入 Team 后优先使用成员治理、主频道、任务、产物和历史，不借 Live 或 Topics。</p>
+              <strong>频道 / 任务 / 同步</strong>
+              <p class="team-empty-note">大多数 Team 都先看主频道和任务；如果有冲突或 webhook 失败，再直接进同步或 webhook 页面。</p>
               <div class="team-card-links">
                 <a href="#team-directory">选择 Team</a>
                 <a href="#module-boundary">边界说明</a>
@@ -90,7 +90,7 @@
           <section class="panel panel-inline" id="team-directory">
             <div class="panel-head">
               <p class="panel-label">Team 目录</p>
-              <span class="micro-copy">{{len .Teams}} 个 Team 可直接打开。</span>
+              <span class="micro-copy">{{len .Teams}} 个 Team 可直接打开，卡片会优先告诉你最值得进入的动作。</span>
             </div>
             <div class="team-section-actions">
               <a class="filter-chip" href="#team-suggestion">工作台入口</a>
@@ -98,32 +98,37 @@
             </div>
           </section>
           <section class="directory-grid">
-            {{range .Teams}}
+            {{range .Digests}}
               <article class="directory-card">
                 <div class="card-meta">
                   <span>{{.Visibility}}</span>
                   <span>{{.MemberCount}} 名成员</span>
                   <span>{{.ChannelCount}} 个频道</span>
+                  <span>{{.HealthLabel}}</span>
                 </div>
                 <h2><a href="/teams/{{.TeamID}}">{{if .Title}}{{.Title}}{{else}}{{.TeamID}}{{end}}</a></h2>
                 {{if .Description}}<p class="micro-copy">{{.Description}}</p>{{end}}
-                <p class="micro-copy">Owner：<code>{{.OwnerAgentID}}</code></p>
                 <p class="micro-copy">Team ID：<code>{{.TeamID}}</code></p>
                 <div class="facet-list-inline team-inline-tags">
-                  <span class="filter-chip">{{.Visibility}}</span>
-                  <span class="filter-chip">{{.MemberCount}} 成员</span>
-                  <span class="filter-chip">{{.ChannelCount}} 频道</span>
+                  <span class="filter-chip">最近消息 {{.RecentMessages}}</span>
+                  <span class="filter-chip">进行中任务 {{.OpenTasks}}</span>
+                  <span class="filter-chip">冲突 {{.UnresolvedConflicts}}</span>
+                  <span class="filter-chip">dead-letter {{.WebhookDeadLetters}}</span>
                 </div>
+                <p class="team-empty-note">下一步建议：<strong>{{.TopAction}}</strong></p>
                 <div class="story-links">
                   <a href="/teams/{{.TeamID}}">打开 Team</a>
+                  <a href="{{.TopActionURL}}">{{.TopAction}}</a>
+                  <a href="/teams/{{.TeamID}}/sync">同步</a>
+                  <a href="/teams/{{.TeamID}}/webhooks">Webhook</a>
                   <a href="/teams/{{.TeamID}}/members">成员治理</a>
                   <a href="/teams/{{.TeamID}}/channels/main">主频道</a>
                   <a href="/teams/{{.TeamID}}/tasks">任务</a>
-                <a href="/teams/{{.TeamID}}/artifacts">产物</a>
-                <a href="/teams/{{.TeamID}}/history">历史</a>
-                <a href="/archive/team/{{.TeamID}}">归档</a>
-                <a href="/api/teams/{{.TeamID}}">查看 JSON</a>
-              </div>
+                  <a href="/teams/{{.TeamID}}/artifacts">产物</a>
+                  <a href="/teams/{{.TeamID}}/history">历史</a>
+                  <a href="/archive/team/{{.TeamID}}">归档</a>
+                  <a href="/api/teams/{{.TeamID}}">查看 JSON</a>
+                </div>
               </article>
             {{end}}
           </section>

@@ -298,10 +298,18 @@ func handleAPITeamChannelMessageCreate(store *teamcore.Store, teamID, channelID 
 	payload.ChannelID = channelID
 	payload.CreatedAt = time.Now().UTC()
 	if err := requireTeamAction(store, teamID, payload.AuthorAgentID, "message.send"); err != nil {
+		if resp, ok := classifyTeamAPIError(teamID, err); ok {
+			writeTeamAPIError(w, http.StatusForbidden, resp)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusForbidden)
 		return
 	}
 	if err := store.AppendMessageCtx(r.Context(), teamID, payload); err != nil {
+		if resp, ok := classifyTeamAPIError(teamID, err); ok {
+			writeTeamAPIError(w, http.StatusBadRequest, resp)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}

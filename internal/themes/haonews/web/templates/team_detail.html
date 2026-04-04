@@ -30,6 +30,9 @@
           </div>
           <div class="hero-actions hero-actions-compact live-room-actions">
             <a class="button-link" href="/teams/{{.Team.TeamID}}/channels/main">主频道</a>
+            <a class="button-link button-link-muted" href="/teams/{{.Team.TeamID}}/sync">同步</a>
+            <a class="button-link button-link-muted" href="/teams/{{.Team.TeamID}}/webhooks">Webhook</a>
+            <a class="button-link button-link-muted" href="/teams/{{.Team.TeamID}}/a2a">A2A</a>
             <a class="button-link button-link-muted" href="/archive/team/{{.Team.TeamID}}">Team 归档</a>
             <a class="button-link button-link-muted" href="/teams/{{.Team.TeamID}}/members">成员</a>
             <a class="button-link button-link-muted" href="/teams/{{.Team.TeamID}}/tasks">任务</a>
@@ -50,6 +53,9 @@
           </div>
           <div class="team-page-nav">
             <a class="filter-chip is-active" href="/teams/{{.Team.TeamID}}">概览</a>
+            <a class="filter-chip" href="/teams/{{.Team.TeamID}}/sync">同步</a>
+            <a class="filter-chip" href="/teams/{{.Team.TeamID}}/webhooks">Webhook</a>
+            <a class="filter-chip" href="/teams/{{.Team.TeamID}}/a2a">A2A</a>
             <a class="filter-chip" href="/archive/team/{{.Team.TeamID}}">归档</a>
             <a class="filter-chip" href="/teams/{{.Team.TeamID}}/members">成员</a>
             <a class="filter-chip" href="/teams/{{.Team.TeamID}}/channels/main">主频道</a>
@@ -58,6 +64,60 @@
             <a class="filter-chip" href="/teams/{{.Team.TeamID}}/history">历史</a>
           </div>
           <p class="team-page-note">Team 是独立长期协作模块。消息、任务、产物、治理和历史都只留在 Team 内。</p>
+        </section>
+        <section class="panel panel-inline">
+          <div class="panel-head">
+            <p class="panel-label">马上开始</p>
+            <span class="micro-copy">先看 Team 规则，再直接做最常用的动作。</span>
+          </div>
+          <p class="team-page-note">{{.PolicyNotice}}</p>
+          <div class="team-workbench-grid">
+            <article class="team-workbench-card">
+              <p class="panel-label">快捷发消息 <span id="sse-indicator" class="sse-status-dot" title="尝试连接中"></span></p>
+              {{if .CanQuickPost}}
+              <form method="post" action="/teams/{{.Team.TeamID}}/channels/main/messages/create" class="settings-form">
+                <input type="hidden" name="author_agent_id" value="{{.DefaultActorAgentID}}">
+                <label>
+                  <span>内容</span>
+                  <textarea name="content" rows="3" placeholder="直接发到 Team 主频道"></textarea>
+                </label>
+                <div class="team-form-actions">
+                  <button class="button-link" type="submit">发到主频道</button>
+                </div>
+              </form>
+              {{else}}
+              <p class="team-empty-note">当前 Team 要求消息签名，网页快捷发送已禁用。请查看 Policy 后改用带签名的 API 消息。</p>
+              {{end}}
+            </article>
+            <article class="team-workbench-card">
+              <p class="panel-label">快捷建任务</p>
+              <form method="post" action="/teams/{{.Team.TeamID}}/tasks/create" class="settings-form">
+                <input type="hidden" name="created_by" value="{{.DefaultActorAgentID}}">
+                <input type="hidden" name="channel_id" value="main">
+                <label>
+                  <span>标题</span>
+                  <input type="text" name="title" placeholder="例如：整理本周结论">
+                </label>
+                <label>
+                  <span>优先级</span>
+                  <input type="text" name="priority" value="normal">
+                </label>
+                <div class="team-form-actions">
+                  <button class="button-link" type="submit">创建任务</button>
+                </div>
+              </form>
+            </article>
+            <article class="team-workbench-card">
+              <p class="panel-label">治理入口</p>
+              <p class="team-empty-note">如果现在卡住，通常先看同步冲突、webhook dead-letter 或 Policy 限制。</p>
+              <div class="team-card-links">
+                <a href="/teams/{{.Team.TeamID}}/sync">打开同步</a>
+                <a href="/teams/{{.Team.TeamID}}/webhooks">打开 Webhook</a>
+                <a href="#team-policy">查看 Team 规则</a>
+              </div>
+            </article>
+          </div>
+          <div id="sse-toast" class="sse-toast" aria-live="polite"></div>
         </section>
         <section class="panel panel-inline">
           <div class="panel-head">
@@ -79,6 +139,8 @@
             <a class="filter-chip" href="/teams/{{.Team.TeamID}}/tasks">任务列表</a>
             <a class="filter-chip" href="/teams/{{.Team.TeamID}}/artifacts">产物列表</a>
             <a class="filter-chip" href="/teams/{{.Team.TeamID}}/history">全部历史</a>
+            <a class="filter-chip" href="/teams/{{.Team.TeamID}}/sync">同步健康</a>
+            <a class="filter-chip" href="/teams/{{.Team.TeamID}}/webhooks">Webhook</a>
           </div>
           <form method="post" action="/teams/{{.Team.TeamID}}/archive" class="team-form-actions">
             <button class="button-link" type="submit">立即归档当前 Team</button>
@@ -136,6 +198,25 @@
               <a href="/api/teams/{{.Team.TeamID}}/policy">查看 JSON</a>
               <a href="/teams/{{.Team.TeamID}}/history?scope=policy">查看治理历史</a>
             </div>
+          </div>
+          <div class="team-workbench-grid">
+            {{if .Policy.RequireSignature}}
+            <article class="team-workbench-card">
+              <p class="panel-label">消息签名</p>
+              <strong>已启用</strong>
+              <p class="team-empty-note">这个 Team 的消息必须带有效签名。未签名的网页消息会被拒绝。</p>
+            </article>
+            {{end}}
+            <article class="team-workbench-card">
+              <p class="panel-label">消息权限</p>
+              <strong>{{joinStrings .Policy.MessageRoles}}</strong>
+              <p class="team-empty-note">允许哪些角色发送消息，会直接影响快捷操作和 API 写入。</p>
+            </article>
+            <article class="team-workbench-card">
+              <p class="panel-label">任务权限</p>
+              <strong>{{joinStrings .Policy.TaskRoles}}</strong>
+              <p class="team-empty-note">任务创建、更新和流转都遵守这里的规则。</p>
+            </article>
           </div>
           <div class="hero-stats hero-stats-wide">
             <div class="hero-stat-card">
@@ -613,6 +694,41 @@
     </div>
   </div>
 {{template "sidebarScript" .}}
+<script>
+(function () {
+  const teamID = {{printf "%q" .Team.TeamID}};
+  const indicator = document.getElementById("sse-indicator");
+  const toast = document.getElementById("sse-toast");
+  if (!teamID || !window.EventSource) return;
+  const stream = new EventSource("/api/teams/" + teamID + "/events");
+  const setState = (connected) => {
+    if (!indicator) return;
+    indicator.classList.toggle("sse-connected", connected);
+    indicator.title = connected ? "实时连接中" : "连接已断开";
+  };
+  stream.onopen = () => setState(true);
+  stream.onerror = () => setState(false);
+  stream.onmessage = (event) => {
+    if (!toast) return;
+    try {
+      const payload = JSON.parse(event.data);
+      const text = payload.kind === "message"
+        ? "Team 收到新消息"
+        : payload.kind === "task"
+          ? "任务状态有更新"
+          : payload.kind === "artifact"
+            ? "有新的产物记录"
+            : payload.kind === "member"
+              ? "成员状态有变更"
+              : "Team 有新的实时事件";
+      toast.textContent = text;
+      toast.classList.add("show");
+      window.setTimeout(() => toast.classList.remove("show"), 2800);
+    } catch (_) {}
+  };
+  window.addEventListener("beforeunload", () => stream.close());
+})();
+</script>
 </body>
 </html>
 {{end}}

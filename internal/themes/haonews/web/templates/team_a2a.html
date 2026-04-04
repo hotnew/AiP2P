@@ -1,0 +1,113 @@
+{{define "team_a2a.html"}}
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>好牛Ai Team A2A</title>
+  <link rel="stylesheet" href="/static/styles.css?v=20260330b">
+</head>
+<body>
+  <div class="app-shell">
+    {{template "appSidebar" .}}
+    <div class="page-shell">
+      {{template "sidebarToggle" .}}
+      <header class="hero hero-dashboard live-room-hero">
+        <div class="live-room-topline">
+          <a class="back-link" href="/teams/{{.Team.TeamID}}">返回 Team</a>
+          <p class="eyebrow">Agent To Agent</p>
+        </div>
+        <div class="hero-heading">
+          <div class="live-room-heading-main">
+            <h1>{{if .Team.Title}}{{.Team.Title}}{{else}}{{.Team.TeamID}}{{end}} / A2A</h1>
+            <p class="hero-copy">这里把 Team 的 A2A 能力翻成人类可读页面：有哪些 Agent、有哪些端点、最近能对哪些任务做动作。</p>
+          </div>
+          <div class="hero-actions hero-actions-compact live-room-actions">
+            <a class="button-link" href="/.well-known/agent.json">Agent JSON</a>
+            <a class="button-link button-link-muted" href="/a2a/teams/{{.Team.TeamID}}/tasks">Task JSON</a>
+            <a class="button-link button-link-muted" href="/teams/{{.Team.TeamID}}">Team 详情</a>
+          </div>
+        </div>
+        <div class="hero-stats hero-stats-wide">
+          {{range .SummaryStats}}
+          <div class="hero-stat-card">
+            <span class="stat-label">{{.Label}}</span>
+            <strong>{{.Value}}</strong>
+          </div>
+          {{end}}
+        </div>
+      </header>
+      <main class="feed">
+        <section class="panel panel-inline">
+          <div class="panel-head">
+            <p class="panel-label">A2A 端点</p>
+            <span class="micro-copy">先看 Team 暴露了哪些稳定端点，再决定接 JSON 还是直接调动作。</span>
+          </div>
+          <section class="story-list">
+            {{range .Endpoints}}
+            <article class="story-card">
+              <div class="card-meta"><span>{{.Method}}</span></div>
+              <h2><code>{{.Path}}</code></h2>
+              <p class="micro-copy">{{.Description}}</p>
+            </article>
+            {{end}}
+          </section>
+        </section>
+        <section class="panel panel-inline">
+          <div class="panel-head">
+            <p class="panel-label">Agent Cards</p>
+            <span class="micro-copy">这些 AgentCard 决定别的节点或自动化工具如何识别这个 Team 的参与者。</span>
+          </div>
+          {{if .Agents}}
+          <section class="directory-grid">
+            {{range .Agents}}
+            <article class="directory-card">
+              <div class="card-meta">
+                <span>{{if .Version}}{{.Version}}{{else}}agent{{end}}</span>
+                <span>{{len .Skills}} skills</span>
+              </div>
+              <h2>{{if .Name}}{{.Name}}{{else}}{{.AgentID}}{{end}}</h2>
+              <p class="micro-copy"><code>{{.AgentID}}</code></p>
+              {{if .Description}}<p class="micro-copy">{{.Description}}</p>{{end}}
+              {{if .Endpoint}}<p class="micro-copy">endpoint：<code>{{.Endpoint}}</code></p>{{end}}
+            </article>
+            {{end}}
+          </section>
+          {{else}}
+          <p class="team-empty-note">当前还没有 Agent Card。可以继续用 `/api/teams/{{.Team.TeamID}}/agents` 注册。</p>
+          {{end}}
+        </section>
+        <section class="panel panel-inline">
+          <div class="panel-head">
+            <p class="panel-label">近期任务</p>
+            <span class="micro-copy">A2A 现在最常见的动作是读任务、看详情、取消任务和流式接收消息。</span>
+          </div>
+          {{if .Tasks}}
+          <section class="story-list">
+            {{range .Tasks}}
+            <article class="story-card">
+              <div class="card-meta">
+                <span>{{if .Status}}{{.Status}}{{else}}open{{end}}</span>
+                {{if .Priority}}<span>{{.Priority}}</span>{{end}}
+                {{if .ChannelID}}<span>{{.ChannelID}}</span>{{end}}
+              </div>
+              <h2>{{.Title}}</h2>
+              {{if .Description}}<p class="micro-copy">{{.Description}}</p>{{end}}
+              <div class="team-card-links">
+                <a href="/teams/{{$.Team.TeamID}}/tasks/{{.TaskID}}">打开任务</a>
+                <a href="/a2a/teams/{{$.Team.TeamID}}/tasks/{{.TaskID}}">A2A JSON</a>
+              </div>
+            </article>
+            {{end}}
+          </section>
+          {{else}}
+          <p class="team-empty-note">当前还没有近期任务。</p>
+          {{end}}
+        </section>
+      </main>
+    </div>
+  </div>
+{{template "sidebarScript" .}}
+</body>
+</html>
+{{end}}

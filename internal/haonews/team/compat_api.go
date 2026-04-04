@@ -5,6 +5,11 @@ import (
 	"time"
 )
 
+// Deprecated: this file contains compatibility wrappers that call the ctx-aware
+// Store API with context.Background(). New code should always use the ...Ctx
+// variants directly. These wrappers remain only to keep older callers building
+// during the v0.5.x line and should be removed after the compatibility window.
+
 func (s *Store) ListTeams() ([]Summary, error) {
 	return s.ListTeamsCtx(context.Background())
 }

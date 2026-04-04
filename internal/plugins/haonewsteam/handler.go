@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -35,6 +36,13 @@ func handleTeamIndex(app *newsplugin.App, store *teamcore.Store, w http.Response
 	for _, team := range teams {
 		memberCount += team.MemberCount
 	}
+	digests := buildTeamActivityDigests(r.Context(), app, store, teams)
+	unresolved := 0
+	deadLetters := 0
+	for _, digest := range digests {
+		unresolved += digest.UnresolvedConflicts
+		deadLetters += digest.WebhookDeadLetters
+	}
 	data := teamIndexPageData{
 		Project:    app.ProjectName(),
 		Version:    app.VersionString(),
@@ -42,9 +50,12 @@ func handleTeamIndex(app *newsplugin.App, store *teamcore.Store, w http.Response
 		NodeStatus: app.NodeStatus(index),
 		Now:        time.Now(),
 		Teams:      teams,
+		Digests:    digests,
 		SummaryStats: []newsplugin.SummaryStat{
 			{Label: "团队数", Value: formatTeamCount(len(teams))},
 			{Label: "成员总数", Value: formatTeamCount(memberCount)},
+			{Label: "待处理冲突", Value: formatTeamCount(unresolved)},
+			{Label: "webhook dead-letter", Value: formatTeamCount(deadLetters)},
 			{Label: "最近更新", Value: latestTeamValue(teams)},
 		},
 	}
@@ -68,6 +79,7 @@ func handleTeam(app *newsplugin.App, store *teamcore.Store, teamID string, w htt
 		history   []teamcore.ChangeEvent
 		channels  []teamcore.ChannelSummary
 		conflicts []corehaonews.TeamSyncConflictRecord
+		webhooks  teamcore.WebhookDeliveryStatus
 		index     newsplugin.Index
 	)
 	g, _ := errgroup.WithContext(r.Context())
@@ -136,6 +148,14 @@ func handleTeam(app *newsplugin.App, store *teamcore.Store, teamID string, w htt
 		return nil
 	})
 	g.Go(func() error {
+		value, err := store.LoadWebhookDeliveryStatusCtx(r.Context(), teamID)
+		if err != nil {
+			return err
+		}
+		webhooks = value
+		return nil
+	})
+	g.Go(func() error {
 		value, err := app.Index()
 		if err != nil {
 			return err
@@ -171,14 +191,20 @@ func handleTeam(app *newsplugin.App, store *teamcore.Store, teamID string, w htt
 		RecentConflicts:     conflicts,
 		UnresolvedConflicts: countUnresolvedTeamConflicts(conflicts),
 		ResolvedConflicts:   countResolvedTeamConflicts(app.StoreRoot(), teamID),
+		WebhookStatus:       webhooks,
 		TaskStatusCounts:    taskStatusCounts(tasks),
 		ArtifactKindCounts:  artifactKindCounts(artifacts),
+		DefaultActorAgentID: teamDefaultActor(info, members),
+		CanQuickPost:        !policy.RequireSignature,
+		PolicyNotice:        teamPolicyNotice(policy),
 		SummaryStats: []newsplugin.SummaryStat{
 			{Label: "成员", Value: formatTeamCount(countMembersByStatus(members, "active"))},
 			{Label: "频道", Value: formatTeamCount(len(channels))},
 			{Label: "任务", Value: formatTeamCount(len(tasks))},
 			{Label: "产物", Value: formatTeamCount(len(artifacts))},
 			{Label: "待审批", Value: formatTeamCount(countMembersByStatus(members, "pending"))},
+			{Label: "冲突", Value: formatTeamCount(countUnresolvedTeamConflicts(conflicts))},
+			{Label: "dead-letter", Value: formatTeamCount(webhooks.DeadLetterCount)},
 		},
 	}
 	if err := app.Templates().ExecuteTemplate(w, "team_detail.html", data); err != nil {
@@ -878,6 +904,120 @@ func handleAPITeamAgent(store *teamcore.Store, teamID, agentID string, w http.Re
 
 func formatTeamCount(value int) string {
 	return strconv.Itoa(value)
+}
+
+func buildTeamActivityDigests(ctx context.Context, app *newsplugin.App, store *teamcore.Store, teams []teamcore.Summary) []teamActivityDigest {
+	if len(teams) == 0 || app == nil || store == nil {
+		return nil
+	}
+	out := make([]teamActivityDigest, len(teams))
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 6)
+	for i, team := range teams {
+		i, team := i, team
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			select {
+			case sem <- struct{}{}:
+			case <-ctx.Done():
+				return
+			}
+			defer func() { <-sem }()
+
+			digest := teamActivityDigest{
+				TeamID:       team.TeamID,
+				Title:        team.Title,
+				Description:  team.Description,
+				Visibility:   team.Visibility,
+				MemberCount:  team.MemberCount,
+				ChannelCount: team.ChannelCount,
+				LastActivityAt: func() time.Time {
+					if !team.UpdatedAt.IsZero() {
+						return team.UpdatedAt
+					}
+					return team.CreatedAt
+				}(),
+				TopAction:    "进入 Team",
+				TopActionURL: "/teams/" + team.TeamID,
+			}
+
+			taskCounts, err := store.CountTasksByStatusCtx(ctx, team.TeamID)
+			if err == nil {
+				digest.OpenTasks = taskCounts[teamcore.TaskStateOpen] + taskCounts[teamcore.TaskStateDoing] + taskCounts[teamcore.TaskStateBlocked] + taskCounts[teamcore.TaskStateReview]
+			}
+			channels, err := store.ListChannelsCtx(ctx, team.TeamID)
+			if err == nil {
+				for _, channel := range channels {
+					if channel.Hidden {
+						continue
+					}
+					if !channel.LastMessageAt.IsZero() && channel.LastMessageAt.After(digest.LastActivityAt) {
+						digest.LastActivityAt = channel.LastMessageAt
+					}
+					recent, countErr := store.CountRecentMessagesCtx(ctx, team.TeamID, channel.ChannelID, time.Now().Add(-72*time.Hour))
+					if countErr == nil {
+						digest.RecentMessages += recent
+					}
+				}
+			}
+			conflicts, err := corehaonews.LoadTeamSyncConflicts(app.StoreRoot(), team.TeamID, corehaonews.TeamSyncConflictFilter{Limit: 20})
+			if err == nil {
+				digest.UnresolvedConflicts = countUnresolvedTeamConflicts(conflicts)
+			}
+			webhookStatus, err := store.LoadWebhookDeliveryStatusCtx(ctx, team.TeamID)
+			if err == nil {
+				digest.WebhookDeadLetters = webhookStatus.DeadLetterCount
+			}
+			switch {
+			case digest.WebhookDeadLetters > 0:
+				digest.TopAction = "处理 webhook 失败"
+				digest.TopActionURL = "/teams/" + team.TeamID + "/webhooks"
+				digest.HealthLabel = "需要处理"
+			case digest.UnresolvedConflicts > 0:
+				digest.TopAction = "处理同步冲突"
+				digest.TopActionURL = "/teams/" + team.TeamID + "/sync"
+				digest.HealthLabel = "需要处理"
+			case digest.OpenTasks > 0:
+				digest.TopAction = "查看进行中任务"
+				digest.TopActionURL = "/teams/" + team.TeamID + "/tasks?status=open"
+				digest.HealthLabel = "进行中"
+			case digest.RecentMessages > 0:
+				digest.TopAction = "查看最近消息"
+				digest.TopActionURL = "/teams/" + team.TeamID + "/channels/main"
+				digest.HealthLabel = "活跃"
+			default:
+				digest.TopAction = "进入 Team"
+				digest.TopActionURL = "/teams/" + team.TeamID
+				digest.HealthLabel = "稳定"
+			}
+			out[i] = digest
+		}()
+	}
+	wg.Wait()
+	return out
+}
+
+func teamDefaultActor(info teamcore.Info, members []teamcore.Member) string {
+	if strings.TrimSpace(info.OwnerAgentID) != "" {
+		return strings.TrimSpace(info.OwnerAgentID)
+	}
+	for _, member := range members {
+		if member.Status == "active" && strings.TrimSpace(member.AgentID) != "" {
+			return strings.TrimSpace(member.AgentID)
+		}
+	}
+	return ""
+}
+
+func teamPolicyNotice(policy teamcore.Policy) string {
+	if policy.RequireSignature {
+		return "本 Team 要求消息签名。网页快捷发消息会被禁用，请改用带签名的 API 消息。"
+	}
+	if len(policy.Permissions) > 0 {
+		return "本 Team 已启用细粒度权限规则。若某些动作被拒绝，请先查看 Policy 摘要。"
+	}
+	return "当前 Team 可以直接用页面完成高频消息、任务、同步和归档操作。"
 }
 
 func latestTeamValue(teams []teamcore.Summary) string {

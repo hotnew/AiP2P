@@ -53,6 +53,11 @@ func handleTeamSync(app *newsplugin.App, store *teamcore.Store, teamID string, w
 		RecentConflicts: conflicts,
 		ConflictViews:   buildTeamSyncConflictViews(conflicts),
 		StatusGroups:    buildTeamSyncStatusGroups(status.TeamSync, webhookStatus),
+		HealthLevel:     teamSyncHealthLevel(status.TeamSync, webhookStatus),
+		HealthTitle:     teamSyncHealthTitle(status.TeamSync, webhookStatus),
+		HealthHint:      teamSyncHealthHint(status.TeamSync, webhookStatus),
+		ResolvedTitle:   teamSyncResolvedTitle(strings.TrimSpace(r.URL.Query().Get("resolved"))),
+		ResolvedHint:    teamSyncResolvedHint(strings.TrimSpace(r.URL.Query().Get("resolved"))),
 		SummaryStats: []newsplugin.SummaryStat{
 			{Label: "已订阅 Team", Value: formatTeamCount(status.TeamSync.SubscribedTeams)},
 			{Label: "pending ack", Value: formatTeamCount(status.TeamSync.PendingAcks)},
@@ -242,19 +247,19 @@ func buildTeamSyncConflictActions(record corehaonews.TeamSyncConflictRecord, all
 		return nil
 	}
 	actions := []teamSyncConflictActionView{
-		{Value: "dismiss", Label: "dismiss", Primary: suggestedAction == "dismiss"},
+		{Value: "dismiss", Label: "忽略", Primary: suggestedAction == "dismiss"},
 	}
 	if allowKeepLocal {
 		actions = append(actions, teamSyncConflictActionView{
 			Value:   "keep_local",
-			Label:   "keep_local",
+			Label:   "保留本地",
 			Primary: suggestedAction == "keep_local",
 		})
 	}
 	if allowAcceptRemote {
 		actions = append(actions, teamSyncConflictActionView{
 			Value:   "accept_remote",
-			Label:   "accept_remote",
+			Label:   "接受远端",
 			Primary: suggestedAction == "accept_remote" || suggestedAction == "review_accept_remote",
 		})
 	}
@@ -398,7 +403,7 @@ func describeTeamSyncConflict(record corehaonews.TeamSyncConflictRecord, allowAc
 		return "本地版本更新较新", "建议人工复核后再决定是否保留本地版本。", "dismiss"
 	case reason == "same_version_diverged":
 		if allowAcceptRemote {
-			return "同版本分叉", "建议先选一个方向，通常接收远端即可恢复一致性。", "accept_remote"
+			return "版本相同但内容不同", "两个节点在同一版本号上出现了不同内容。通常先接受远端或保留本地，统一到一个结果。", "accept_remote"
 		}
 		return "同版本分叉", "建议人工复核差异后再处理。", "dismiss"
 	case reason == "signature_rejected":
@@ -421,6 +426,92 @@ func describeTeamSyncConflict(record corehaonews.TeamSyncConflictRecord, allowAc
 		}
 		return reason, "建议人工复核后再决定。", "dismiss"
 	}
+}
+
+func teamSyncHealthLevel(status corehaonews.SyncTeamSyncStatus, webhook teamcore.WebhookDeliveryStatus) string {
+	if status.SubscribedTeams == 0 {
+		return "disabled"
+	}
+	if status.Conflicts > status.ResolvedConflicts || webhook.DeadLetterCount > 0 {
+		return "attention"
+	}
+	last := mostRecentTime(status.LastAppliedAt, status.LastReceivedAt, status.LastPublishedAt)
+	if !last.IsZero() && time.Since(last) > time.Hour {
+		return "stale"
+	}
+	return "healthy"
+}
+
+func teamSyncHealthTitle(status corehaonews.SyncTeamSyncStatus, webhook teamcore.WebhookDeliveryStatus) string {
+	switch teamSyncHealthLevel(status, webhook) {
+	case "disabled":
+		return "未启用同步"
+	case "attention":
+		return "需要处理"
+	case "stale":
+		return "同步可能停滞"
+	default:
+		return "同步正常运行中"
+	}
+}
+
+func teamSyncHealthHint(status corehaonews.SyncTeamSyncStatus, webhook teamcore.WebhookDeliveryStatus) string {
+	switch teamSyncHealthLevel(status, webhook) {
+	case "disabled":
+		return "当前节点没有订阅任何 Team，同步链路还没有启动。"
+	case "attention":
+		parts := make([]string, 0, 2)
+		if status.Conflicts > status.ResolvedConflicts {
+			parts = append(parts, "有未处理的复制冲突")
+		}
+		if webhook.DeadLetterCount > 0 {
+			parts = append(parts, "webhook 存在 dead-letter")
+		}
+		return strings.Join(parts, "，")
+	case "stale":
+		return "最近超过 1 小时没有新的 publish / receive / apply，建议检查对端节点和 sync daemon。"
+	default:
+		return "最近的 publish / receive / apply 都在前进，可以把细节指标折叠起来只在需要时查看。"
+	}
+}
+
+func teamSyncResolvedTitle(action string) string {
+	switch action {
+	case "dismiss":
+		return "冲突已忽略"
+	case "accept_remote":
+		return "已接受远端版本"
+	case "keep_local":
+		return "已保留本地版本"
+	default:
+		return ""
+	}
+}
+
+func teamSyncResolvedHint(action string) string {
+	switch action {
+	case "dismiss":
+		return "这次冲突已标记为忽略；后续如果再次出现同类分叉，还会重新进入列表。"
+	case "accept_remote":
+		return "本地将以远端内容为准；如果后面继续分叉，再回到这里处理。"
+	case "keep_local":
+		return "本地版本已经保留；远端内容本次不会覆盖当前结果。"
+	default:
+		return ""
+	}
+}
+
+func mostRecentTime(values ...*time.Time) time.Time {
+	var out time.Time
+	for _, value := range values {
+		if value == nil || value.IsZero() {
+			continue
+		}
+		if out.IsZero() || value.After(out) {
+			out = *value
+		}
+	}
+	return out
 }
 
 func countUnresolvedTeamConflicts(conflicts []corehaonews.TeamSyncConflictRecord) int {

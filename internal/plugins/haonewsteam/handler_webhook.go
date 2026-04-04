@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	teamcore "hao.news/internal/haonews/team"
@@ -47,8 +49,11 @@ func handleAPITeamWebhookReplay(store *teamcore.Store, teamID, deliveryID string
 	var payload struct {
 		ActorAgentID string `json:"actor_agent_id"`
 	}
-	if r.Body != nil {
+	if strings.Contains(strings.ToLower(r.Header.Get("Content-Type")), "application/json") && r.Body != nil {
 		_ = json.NewDecoder(r.Body).Decode(&payload)
+	} else {
+		_ = r.ParseForm()
+		payload.ActorAgentID = strings.TrimSpace(r.FormValue("actor_agent_id"))
 	}
 	if err := requireTeamAction(store, teamID, payload.ActorAgentID, "policy.update"); err != nil {
 		http.Error(w, err.Error(), http.StatusForbidden)
@@ -65,6 +70,10 @@ func handleAPITeamWebhookReplay(store *teamcore.Store, teamID, deliveryID string
 		http.Error(w, err.Error(), status)
 		return
 	}
+	if acceptsHTML(r) {
+		http.Redirect(w, r, "/teams/"+teamID+"/webhooks?replayed="+url.QueryEscape(record.DeliveryID), http.StatusSeeOther)
+		return
+	}
 	newsplugin.WriteJSON(w, http.StatusOK, map[string]any{
 		"scope":       "team-webhook-replay",
 		"team_id":     teamID,
@@ -73,4 +82,15 @@ func handleAPITeamWebhookReplay(store *teamcore.Store, teamID, deliveryID string
 		"replayed_at": time.Now().UTC(),
 		"record":      record,
 	})
+}
+
+func acceptsHTML(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+	accept := strings.ToLower(strings.TrimSpace(r.Header.Get("Accept")))
+	if strings.Contains(accept, "text/html") {
+		return true
+	}
+	return strings.Contains(strings.ToLower(strings.TrimSpace(r.Referer())), "/webhooks")
 }
