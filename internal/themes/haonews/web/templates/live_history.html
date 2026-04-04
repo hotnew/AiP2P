@@ -43,7 +43,8 @@
                   <div class="story-card-main">
                     <div class="card-meta">
                       <span>{{.ArchivedAt}}</span>
-                      <span>{{.EventCount}} 条</span>
+                      <span>正文 {{if .NonHeartbeatCount}}{{.NonHeartbeatCount}}{{else}}{{.EventCount}}{{end}} 条</span>
+                      {{if .HeartbeatCount}}<span>心跳 {{.HeartbeatCount}} 条</span>{{end}}
                     </div>
                     <h2><a href="{{$.RoomLinks.HistoryURL}}/{{.ArchiveID}}">{{if .Label}}{{.Label}}{{else if .StartAt}}{{.StartAt}}{{else}}历史批次{{end}}{{if and (not .Label) .EndAt}} 至 {{.EndAt}}{{end}}</a></h2>
                   </div>
@@ -74,7 +75,8 @@
               <div><span class="stat-label">归档时间</span><strong>{{.Archive.ArchivedAt}}</strong></div>
               <div><span class="stat-label">起始时间</span><strong>{{if .Archive.StartAt}}{{.Archive.StartAt}}{{else}}-{{end}}</strong></div>
               <div><span class="stat-label">结束时间</span><strong>{{if .Archive.EndAt}}{{.Archive.EndAt}}{{else}}-{{end}}</strong></div>
-              <div><span class="stat-label">事件数</span><strong>{{.Archive.EventCount}}</strong></div>
+              <div><span class="stat-label">正文数</span><strong>{{if .Archive.NonHeartbeatCount}}{{.Archive.NonHeartbeatCount}}{{else}}{{.Archive.EventCount}}{{end}}</strong></div>
+              <div><span class="stat-label">心跳数</span><strong>{{.Archive.HeartbeatCount}}</strong></div>
             </div>
           </section>
 

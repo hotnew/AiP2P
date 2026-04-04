@@ -152,6 +152,17 @@ type liveRoomLinks struct {
 	APIArchiveURL string
 }
 
+type liveNetConfigSummary struct {
+	Path         string   `json:"path"`
+	Exists       bool     `json:"exists"`
+	NetworkMode  string   `json:"network_mode,omitempty"`
+	Listen       []string `json:"listen,omitempty"`
+	LANPeers     []string `json:"lan_peers,omitempty"`
+	PublicPeers  []string `json:"public_peers,omitempty"`
+	RelayPeers   []string `json:"relay_peers,omitempty"`
+	RedisEnabled bool     `json:"redis_enabled"`
+}
+
 type liveArchiveRoomSummary struct {
 	Room         live.RoomInfo
 	RoomLinks    liveRoomLinks

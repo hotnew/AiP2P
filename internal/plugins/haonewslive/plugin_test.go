@@ -46,7 +46,6 @@ func TestPluginBuildServesLiveIndex(t *testing.T) {
 }
 
 func TestLiveAnnouncementWatcherNetPath(t *testing.T) {
-	t.Parallel()
 	prevWatcherDisabled := liveAnnouncementWatcherDisabledForTests
 	liveAnnouncementWatcherDisabledForTests = false
 	defer func() {
@@ -127,7 +126,7 @@ func TestNewHandlerServesLiveBootstrap(t *testing.T) {
 			PeerID:    "12D3KooWLiveBootstrap",
 			DialAddrs: []string{"/ip4/192.168.102.74/tcp/51584/p2p/12D3KooWLiveBootstrap"},
 		}
-	})
+	}, "")
 	req := httptest.NewRequest(http.MethodGet, "/api/live/bootstrap", nil)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
@@ -137,6 +136,49 @@ func TestNewHandlerServesLiveBootstrap(t *testing.T) {
 	body := rec.Body.String()
 	if !strings.Contains(body, "\"network_id\": \"net-live\"") || !strings.Contains(body, "\"peer_id\": \"12D3KooWLiveBootstrap\"") {
 		t.Fatalf("unexpected bootstrap body = %q", body)
+	}
+}
+
+func TestPluginBuildServesLiveStatus(t *testing.T) {
+	t.Parallel()
+
+	site, root := buildLiveSite(t)
+	store, err := live.OpenLocalStore(filepath.Join(root, "store"))
+	if err != nil {
+		t.Fatalf("OpenLocalStore error = %v", err)
+	}
+	room := live.RoomInfo{
+		RoomID:    "public-live-time",
+		Title:     "Live-Time",
+		Creator:   "agent://pc75/now-time",
+		CreatedAt: "2026-04-04T00:00:00Z",
+		Channel:   "hao.news/live/public",
+	}
+	if err := store.SaveRoom(room); err != nil {
+		t.Fatalf("SaveRoom error = %v", err)
+	}
+	if err := store.AppendEvent(room.RoomID, live.LiveMessage{
+		Protocol:     live.ProtocolVersion,
+		Type:         live.TypeMessage,
+		RoomID:       room.RoomID,
+		Sender:       room.Creator,
+		SenderPubKey: strings.Repeat("a", 64),
+		Seq:          1,
+		Timestamp:    "2026-04-04T07:37:14Z",
+		Payload:      live.LivePayload{Content: "当前时间：2026-04-04 15:37:06 CST"},
+		Signature:    strings.Repeat("1", 128),
+	}); err != nil {
+		t.Fatalf("AppendEvent error = %v", err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/api/live/status/public-live-time", nil)
+	rec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "\"visible_event_count\": 1") || !strings.Contains(body, "\"latest_non_heartbeat_at\": \"2026-04-04T07:37:14Z\"") || !strings.Contains(body, "\"sender_config\":") {
+		t.Fatalf("unexpected status body = %s", body)
 	}
 }
 

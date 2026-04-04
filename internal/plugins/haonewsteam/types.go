@@ -19,30 +19,32 @@ type teamIndexPageData struct {
 }
 
 type teamPageData struct {
-	Project            string
-	Version            string
-	PageNav            []newsplugin.NavItem
-	NodeStatus         newsplugin.NodeStatus
-	Now                time.Time
-	Team               teamcore.Info
-	Policy             teamcore.Policy
-	Members            []teamcore.Member
-	ActiveMembers      []teamcore.Member
-	PendingMembers     []teamcore.Member
-	MutedMembers       []teamcore.Member
-	RemovedMembers     []teamcore.Member
-	Owners             []teamcore.Member
-	Maintainers        []teamcore.Member
-	Observers          []teamcore.Member
-	Messages           []teamcore.Message
-	Tasks              []teamcore.Task
-	Channels           []teamcore.ChannelSummary
-	Artifacts          []teamcore.Artifact
-	History            []teamcore.ChangeEvent
-	RecentConflicts    []corehaonews.TeamSyncConflictRecord
-	TaskStatusCounts   map[string]int
-	ArtifactKindCounts map[string]int
-	SummaryStats       []newsplugin.SummaryStat
+	Project             string
+	Version             string
+	PageNav             []newsplugin.NavItem
+	NodeStatus          newsplugin.NodeStatus
+	Now                 time.Time
+	Team                teamcore.Info
+	Policy              teamcore.Policy
+	Members             []teamcore.Member
+	ActiveMembers       []teamcore.Member
+	PendingMembers      []teamcore.Member
+	MutedMembers        []teamcore.Member
+	RemovedMembers      []teamcore.Member
+	Owners              []teamcore.Member
+	Maintainers         []teamcore.Member
+	Observers           []teamcore.Member
+	Messages            []teamcore.Message
+	Tasks               []teamcore.Task
+	Channels            []teamcore.ChannelSummary
+	Artifacts           []teamcore.Artifact
+	History             []teamcore.ChangeEvent
+	RecentConflicts     []corehaonews.TeamSyncConflictRecord
+	UnresolvedConflicts int
+	ResolvedConflicts   int
+	TaskStatusCounts    map[string]int
+	ArtifactKindCounts  map[string]int
+	SummaryStats        []newsplugin.SummaryStat
 }
 
 type teamMembersPageData struct {
@@ -67,22 +69,44 @@ type teamMembersPageData struct {
 }
 
 type teamHistoryPageData struct {
+	Project             string
+	Version             string
+	PageNav             []newsplugin.NavItem
+	NodeStatus          newsplugin.NodeStatus
+	Now                 time.Time
+	Team                teamcore.Info
+	History             []teamcore.ChangeEvent
+	FilterScope         string
+	FilterSource        string
+	FilterActor         string
+	AppliedFilters      []string
+	Scopes              []string
+	Sources             []string
+	RecentConflicts     []corehaonews.TeamSyncConflictRecord
+	UnresolvedConflicts int
+	ResolvedConflicts   int
+	ScopeCounts         map[string]int
+	SourceCounts        map[string]int
+	SummaryStats        []newsplugin.SummaryStat
+}
+
+type teamSyncConflictView struct {
+	Record            corehaonews.TeamSyncConflictRecord `json:"record"`
+	AllowAcceptRemote bool                               `json:"allow_accept_remote"`
+	SuggestedAction   string                             `json:"suggested_action,omitempty"`
+}
+
+type teamSyncPageData struct {
 	Project         string
 	Version         string
 	PageNav         []newsplugin.NavItem
 	NodeStatus      newsplugin.NodeStatus
 	Now             time.Time
 	Team            teamcore.Info
-	History         []teamcore.ChangeEvent
-	FilterScope     string
-	FilterSource    string
-	FilterActor     string
-	AppliedFilters  []string
-	Scopes          []string
-	Sources         []string
+	SyncNotice      string
+	SyncStatus      corehaonews.SyncTeamSyncStatus
 	RecentConflicts []corehaonews.TeamSyncConflictRecord
-	ScopeCounts     map[string]int
-	SourceCounts    map[string]int
+	ConflictViews   []teamSyncConflictView
 	SummaryStats    []newsplugin.SummaryStat
 }
 

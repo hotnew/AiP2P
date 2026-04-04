@@ -17,6 +17,7 @@ import (
 	"time"
 	"unicode"
 
+	corehaonews "hao.news/internal/haonews"
 	"hao.news/internal/haonews/live"
 	newsplugin "hao.news/internal/plugins/haonews"
 )
@@ -813,6 +814,102 @@ func handleAPILiveRoom(app *newsplugin.App, store *live.LocalStore, roomID strin
 		"total_event_count":                len(filteredEvents),
 		"show_heartbeats":                  showHeartbeats,
 	})
+}
+
+func handleAPILiveStatus(app *newsplugin.App, store *live.LocalStore, roomID string, watcherStatus func() *live.BootstrapStatus, senderNetPath string, w http.ResponseWriter, r *http.Request) {
+	room, err := loadLiveRoom(store, roomID)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	events, err := store.ReadEvents(roomID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	rules := newsplugin.SubscriptionRules{}
+	if app != nil {
+		rules, _ = app.SubscriptionRules()
+	}
+	filteredEvents := filterLiveEvents(events, false, rules)
+	if isPublicLiveRoomID(room.RoomID) {
+		filteredEvents, _, _ = applyPublicLiveGuards(filteredEvents, rules)
+	}
+	displayEvents := limitVisibleLiveEvents(filteredEvents, live.LiveRoomDisplayNonHeartbeatEvents, live.LiveRoomRetainHeartbeatEvents)
+	archive, err := store.LoadArchiveResult(roomID)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	historyArchives, err := store.ListHistoryArchives(roomID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	latestEventAt := ""
+	latestEventType := ""
+	latestContent := ""
+	if count := len(filteredEvents); count > 0 {
+		latest := filteredEvents[count-1]
+		latestEventAt = latest.Timestamp
+		latestEventType = latest.Type
+		latestContent = strings.TrimSpace(latest.Payload.Content)
+	}
+	latestVisibleAt := ""
+	if count := len(displayEvents); count > 0 {
+		latestVisibleAt = displayEvents[count-1].Timestamp
+	}
+	latestNonHeartbeatAt := ""
+	for idx := len(filteredEvents) - 1; idx >= 0; idx-- {
+		if filteredEvents[idx].Type == live.TypeHeartbeat {
+			continue
+		}
+		latestNonHeartbeatAt = filteredEvents[idx].Timestamp
+		break
+	}
+	watcher := (*live.BootstrapStatus)(nil)
+	if watcherStatus != nil {
+		watcher = watcherStatus()
+	}
+	resp := map[string]any{
+		"room":                    room,
+		"room_links":              liveRoomLinksFor(roomID),
+		"room_file_path":          filepath.Join(store.RoomDir(roomID), "events.jsonl"),
+		"watcher":                 watcher,
+		"sender_config":           summarizeLiveNetConfig(senderNetPath),
+		"visible_event_count":     len(displayEvents),
+		"total_event_count":       len(filteredEvents),
+		"latest_event_at":         latestEventAt,
+		"latest_visible_at":       latestVisibleAt,
+		"latest_non_heartbeat_at": latestNonHeartbeatAt,
+		"latest_event_type":       latestEventType,
+		"latest_content":          latestContent,
+		"archive":                 archive,
+		"history_archives":        formatHistoryArchives(historyArchives),
+	}
+	newsplugin.WriteJSON(w, http.StatusOK, resp)
+}
+
+func summarizeLiveNetConfig(path string) liveNetConfigSummary {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return liveNetConfigSummary{}
+	}
+	cfg, err := corehaonews.LoadNetworkBootstrapConfig(path)
+	if err != nil {
+		return liveNetConfigSummary{Path: path}
+	}
+	return liveNetConfigSummary{
+		Path:         cfg.Path,
+		Exists:       cfg.Exists,
+		NetworkMode:  cfg.NetworkMode,
+		Listen:       append([]string{}, cfg.LibP2PListen...),
+		LANPeers:     append([]string{}, cfg.LANPeers...),
+		PublicPeers:  append([]string{}, cfg.PublicPeers...),
+		RelayPeers:   append([]string{}, cfg.RelayPeers...),
+		RedisEnabled: cfg.Redis.Enabled,
+	}
 }
 
 func handleAPILiveRoomHistory(store *live.LocalStore, roomID, archiveID string, w http.ResponseWriter, r *http.Request) {

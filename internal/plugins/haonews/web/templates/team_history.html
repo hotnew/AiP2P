@@ -86,6 +86,7 @@
           <div class="team-section-actions">
             <a class="filter-chip" href="#history-filter-form">筛选历史</a>
             <a class="filter-chip" href="#history-workbench">治理工作台</a>
+            <a class="filter-chip" href="/teams/{{.Team.TeamID}}/sync">Sync 健康页</a>
             <a class="filter-chip" href="/archive/team/{{.Team.TeamID}}">查看 Team 归档</a>
             <a class="filter-chip" href="/teams/{{.Team.TeamID}}">返回 Team 概览</a>
           </div>
@@ -195,6 +196,8 @@
           <div class="panel-head">
             <p class="panel-label">最近复制冲突</p>
             <div class="story-links team-interface-links">
+              <a href="/teams/{{.Team.TeamID}}/sync">未处理 {{.UnresolvedConflicts}}</a>
+              <a href="/teams/{{.Team.TeamID}}/sync">Sync 健康页</a>
               <a href="/api/teams/{{.Team.TeamID}}/sync/conflicts">冲突 JSON</a>
               <a href="/teams/{{.Team.TeamID}}">返回 Team</a>
             </div>
@@ -212,6 +215,7 @@
                   <h2>复制冲突：{{if .SubjectID}}{{.SubjectID}}{{else}}{{.Key}}{{end}}</h2>
                   {{if .Resolution}}<p class="micro-copy">处理结果：{{.Resolution}}{{if .ResolvedBy}} · {{.ResolvedBy}}{{end}}</p>{{end}}
                   <div class="team-card-links">
+                    <a href="/teams/{{$.Team.TeamID}}/sync">Sync 健康页</a>
                     <a href="/api/teams/{{$.Team.TeamID}}/sync/conflicts">查看冲突 JSON</a>
                     <a href="/teams/{{$.Team.TeamID}}/history">保留在历史页</a>
                   </div>
@@ -219,7 +223,7 @@
               {{end}}
             </section>
           {{else}}
-            <p class="team-empty-note">当前还没有 Team 复制冲突。发生复制分叉、签名拒绝或版本覆盖时，会先显示在这里再进入治理动作。</p>
+            <p class="team-empty-note">当前还没有 Team 复制冲突。已处理 {{.ResolvedConflicts}} 条；发生复制分叉、签名拒绝或版本覆盖时，会先显示在这里再进入治理动作。</p>
           {{end}}
         </section>
         <section class="panel panel-inline">

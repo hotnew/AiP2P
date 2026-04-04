@@ -1,0 +1,195 @@
+{{define "team_sync.html"}}
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>好牛Ai Team Sync 健康</title>
+  <link rel="stylesheet" href="/static/styles.css?v=20260330b">
+</head>
+<body>
+  <div class="app-shell">
+    {{template "appSidebar" .}}
+    <div class="page-shell">
+      {{template "sidebarToggle" .}}
+      <header class="hero hero-dashboard live-room-hero">
+        <div class="live-room-topline">
+          <a class="back-link" href="/teams/{{.Team.TeamID}}">返回 Team</a>
+          <p class="eyebrow">Team Sync 健康</p>
+        </div>
+        <div class="hero-heading">
+          <div class="live-room-heading-main">
+            <h1>{{if .Team.Title}}{{.Team.Title}}{{else}}{{.Team.TeamID}}{{end}} / Sync</h1>
+            <p class="hero-copy">这里直接看 Team P2P 的订阅、发布、应用、ack 和冲突状态，不再只靠 bootstrap 调试字段或手工 curl 推断。</p>
+            <div class="live-room-summary-strip">
+              <span><strong>Team ID</strong>{{.Team.TeamID}}</span>
+              <span><strong>Node</strong>{{if .SyncStatus.NodeID}}{{.SyncStatus.NodeID}}{{else}}unknown{{end}}</span>
+              <span><strong>State</strong>{{if .SyncStatus.StateLoaded}}loaded{{else}}cold{{end}}</span>
+            </div>
+          </div>
+          <div class="hero-actions hero-actions-compact live-room-actions">
+            <a class="button-link" href="/api/teams/{{.Team.TeamID}}/sync">Sync JSON</a>
+            <a class="button-link button-link-muted" href="/api/teams/{{.Team.TeamID}}/sync/conflicts">冲突 JSON</a>
+            <a class="button-link button-link-muted" href="/teams/{{.Team.TeamID}}/history">历史</a>
+            <a class="button-link button-link-muted" href="/teams/{{.Team.TeamID}}">Team 详情</a>
+          </div>
+        </div>
+      </header>
+      <main class="feed">
+        {{if .SyncNotice}}
+          <section class="panel panel-inline">
+            <p class="panel-label">最近动作</p>
+            <p class="team-empty-note">最近一次复制冲突处理结果：<strong>{{.SyncNotice}}</strong></p>
+          </section>
+        {{end}}
+        <section class="panel panel-inline">
+          <p class="panel-label">健康摘要</p>
+          <div class="hero-stats hero-stats-wide">
+            {{range .SummaryStats}}
+              <div class="hero-stat-card">
+                <span class="stat-label">{{.Label}}</span>
+                <strong>{{.Value}}</strong>
+              </div>
+            {{end}}
+          </div>
+        </section>
+        <section class="panel panel-inline">
+          <div class="panel-head">
+            <p class="panel-label">当前上下文</p>
+            <span class="micro-copy">从 Team 工作区直接进入复制治理，不再和普通历史、普通成员治理混在一起。</span>
+          </div>
+          <div class="team-section-actions">
+            <a class="filter-chip" href="/teams/{{.Team.TeamID}}">Team 概览</a>
+            <a class="filter-chip" href="/teams/{{.Team.TeamID}}/history">历史</a>
+            <a class="filter-chip" href="/archive/team/{{.Team.TeamID}}">归档</a>
+            <a class="filter-chip" href="/api/teams/{{.Team.TeamID}}/sync">Sync JSON</a>
+          </div>
+        </section>
+        <section class="panel panel-inline">
+          <div class="panel-head">
+            <p class="panel-label">复制状态</p>
+            <span class="micro-copy">看订阅、游标、ack 和最近一次 publish / receive / apply 是否都在前进。</span>
+          </div>
+          <div class="story-list">
+            <article class="story-card">
+              <div class="card-meta">
+                <span>subscriptions</span>
+                <span>{{.SyncStatus.SubscribedTeams}} team</span>
+                <span>{{.SyncStatus.AckPeers}} peers</span>
+              </div>
+              <h2>订阅与游标</h2>
+              <p class="micro-copy">persisted cursors：{{.SyncStatus.PersistedCursors}} · persisted peer acks：{{.SyncStatus.PersistedPeerAcks}}</p>
+              <p class="micro-copy">primed channels：{{.SyncStatus.PrimedChannels}} · primed history：{{.SyncStatus.PrimedHistoryTeams}}</p>
+              <p class="micro-copy">last subscription：{{if .SyncStatus.LastSubscriptionTeam}}{{.SyncStatus.LastSubscriptionTeam}}{{else}}暂无{{end}} / {{if .SyncStatus.LastSubscriptionAt}}{{.SyncStatus.LastSubscriptionAt.Local.Format "2006-01-02 15:04"}}{{else}}暂无{{end}}</p>
+            </article>
+            <article class="story-card">
+              <div class="card-meta">
+                <span>throughput</span>
+                <span>message {{.SyncStatus.PublishedMessages}}</span>
+                <span>apply {{.SyncStatus.AppliedMessages}}</span>
+              </div>
+              <h2>消息 / 历史主线</h2>
+              <p class="micro-copy">published：message {{.SyncStatus.PublishedMessages}} · history {{.SyncStatus.PublishedHistory}}</p>
+              <p class="micro-copy">received：message {{.SyncStatus.ReceivedMessages}} · history {{.SyncStatus.ReceivedHistory}}</p>
+              <p class="micro-copy">applied：message {{.SyncStatus.AppliedMessages}} · history {{.SyncStatus.AppliedHistory}}</p>
+            </article>
+            <article class="story-card">
+              <div class="card-meta">
+                <span>ack</span>
+                <span>pending {{.SyncStatus.PendingAcks}}</span>
+                <span>retried {{.SyncStatus.RetriedPublishes}}</span>
+              </div>
+              <h2>Ack 与 pending</h2>
+              <p class="micro-copy">published acks：{{.SyncStatus.PublishedAcks}} · received acks：{{.SyncStatus.ReceivedAcks}} · applied acks：{{.SyncStatus.AppliedAcks}}</p>
+              <p class="micro-copy">expired pending：{{.SyncStatus.ExpiredPending}} · superseded pending：{{.SyncStatus.SupersededPending}}</p>
+              <p class="micro-copy">last acked key：{{if .SyncStatus.LastAckedKey}}<code>{{.SyncStatus.LastAckedKey}}</code>{{else}}暂无{{end}}</p>
+            </article>
+            <article class="story-card">
+              <div class="card-meta">
+                <span>cleanup</span>
+                <span>peer ack prunes {{.SyncStatus.PeerAckPrunes}}</span>
+                <span>conflicts {{.SyncStatus.Conflicts}}</span>
+              </div>
+              <h2>压缩与清理</h2>
+              <p class="micro-copy">expired pending：{{.SyncStatus.ExpiredPending}} · superseded：{{.SyncStatus.SupersededPending}}</p>
+              <p class="micro-copy">last pruned ack peer：{{if .SyncStatus.LastPrunedAckPeer}}{{.SyncStatus.LastPrunedAckPeer}}{{else}}暂无{{end}}</p>
+              <p class="micro-copy">last pruned ack key：{{if .SyncStatus.LastPrunedAckKey}}<code>{{.SyncStatus.LastPrunedAckKey}}</code>{{else}}暂无{{end}}</p>
+            </article>
+          </div>
+        </section>
+        <section class="panel panel-inline">
+          <div class="panel-head">
+            <p class="panel-label">最近关键状态</p>
+            <span class="micro-copy">用于判断是 publish 卡住、receive 卡住，还是 apply / resolve 卡住。</span>
+          </div>
+          <div class="story-list">
+            <article class="story-card">
+              <h2>最近 publish / receive / apply</h2>
+              <p class="micro-copy">last published：{{if .SyncStatus.LastPublishedAt}}{{.SyncStatus.LastPublishedAt.Local.Format "2006-01-02 15:04:05"}}{{else}}暂无{{end}}</p>
+              <p class="micro-copy">last received：{{if .SyncStatus.LastReceivedAt}}{{.SyncStatus.LastReceivedAt.Local.Format "2006-01-02 15:04:05"}}{{else}}暂无{{end}}</p>
+              <p class="micro-copy">last applied：{{if .SyncStatus.LastAppliedAt}}{{.SyncStatus.LastAppliedAt.Local.Format "2006-01-02 15:04:05"}}{{else}}暂无{{end}}</p>
+              <p class="micro-copy">last state write：{{if .SyncStatus.LastStateWriteAt}}{{.SyncStatus.LastStateWriteAt.Local.Format "2006-01-02 15:04:05"}}{{else}}暂无{{end}}</p>
+            </article>
+            <article class="story-card">
+              <h2>最近 key</h2>
+              <p class="micro-copy">published：{{if .SyncStatus.LastPublishedKey}}<code>{{.SyncStatus.LastPublishedKey}}</code>{{else}}暂无{{end}}</p>
+              <p class="micro-copy">received：{{if .SyncStatus.LastReceivedKey}}<code>{{.SyncStatus.LastReceivedKey}}</code>{{else}}暂无{{end}}</p>
+              <p class="micro-copy">applied：{{if .SyncStatus.LastAppliedKey}}<code>{{.SyncStatus.LastAppliedKey}}</code>{{else}}暂无{{end}}</p>
+              <p class="micro-copy">retried：{{if .SyncStatus.LastRetriedKey}}<code>{{.SyncStatus.LastRetriedKey}}</code>{{else}}暂无{{end}}</p>
+            </article>
+            <article class="story-card">
+              <h2>最近错误 / 冲突</h2>
+              <p class="micro-copy">last conflict：{{if .SyncStatus.LastConflictKey}}<code>{{.SyncStatus.LastConflictKey}}</code>{{else}}暂无{{end}}</p>
+              <p class="micro-copy">reason：{{if .SyncStatus.LastConflictReason}}{{.SyncStatus.LastConflictReason}}{{else}}暂无{{end}}</p>
+              <p class="micro-copy">last error：{{if .SyncStatus.LastError}}{{.SyncStatus.LastError}}{{else}}暂无{{end}}</p>
+            </article>
+          </div>
+        </section>
+        <section class="panel panel-inline">
+          <div class="panel-head">
+            <p class="panel-label">最近复制冲突</p>
+            <div class="story-links team-interface-links">
+              <a href="/api/teams/{{.Team.TeamID}}/sync/conflicts">冲突 JSON</a>
+              <a href="/teams/{{.Team.TeamID}}/history">去历史页处理</a>
+            </div>
+          </div>
+          {{if .ConflictViews}}
+            <section class="story-list">
+              {{range .ConflictViews}}
+                <article class="story-card team-history-item">
+                  <div class="card-meta">
+                    {{if .Record.SyncType}}<span>{{.Record.SyncType}}</span>{{end}}
+                    {{if .Record.Reason}}<span>{{.Record.Reason}}</span>{{end}}
+                    {{if .Record.SourceNode}}<span>{{.Record.SourceNode}}</span>{{end}}
+                    {{if .Record.UpdatedAt.IsZero}}{{else}}<span>{{.Record.UpdatedAt.Local.Format "2006-01-02 15:04"}}</span>{{end}}
+                  </div>
+                  <h2>复制冲突：{{if .Record.SubjectID}}{{.Record.SubjectID}}{{else}}{{.Record.Key}}{{end}}</h2>
+                  <p class="micro-copy">建议动作：{{if .SuggestedAction}}{{.SuggestedAction}}{{else}}review{{end}}</p>
+                  {{if .Record.Resolution}}<p class="micro-copy">处理结果：{{.Record.Resolution}}{{if .Record.ResolvedBy}} · {{.Record.ResolvedBy}}{{end}}</p>{{end}}
+                  <div class="team-card-links">
+                    <form method="post" action="/teams/{{$.Team.TeamID}}/sync/conflicts/{{urlquery .Record.Key}}/resolve">
+                      <input type="hidden" name="actor_agent_id" value="{{$.Team.OwnerAgentID}}">
+                      <input type="hidden" name="action" value="dismiss">
+                      <button class="button-link button-link-muted" type="submit">dismiss</button>
+                    </form>
+                    {{if and .AllowAcceptRemote (not .Record.Resolution)}}
+                      <form method="post" action="/teams/{{$.Team.TeamID}}/sync/conflicts/{{urlquery .Record.Key}}/resolve">
+                        <input type="hidden" name="actor_agent_id" value="{{$.Team.OwnerAgentID}}">
+                        <input type="hidden" name="action" value="accept_remote">
+                        <button class="button-link" type="submit">accept_remote</button>
+                      </form>
+                    {{end}}
+                  </div>
+                </article>
+              {{end}}
+            </section>
+          {{else}}
+            <p class="team-empty-note">当前还没有新的 Team 复制冲突。后续如果 pending、ack 或对象版本分叉异常，会先在这里聚合。</p>
+          {{end}}
+        </section>
+      </main>
+    </div>
+  </div>
+</body>
+</html>
+{{end}}

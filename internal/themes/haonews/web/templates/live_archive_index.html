@@ -46,6 +46,9 @@
                 </div>
                 <h2><a href="{{.RoomLinks.HistoryURL}}">{{if .Room.Title}}{{.Room.Title}}{{else}}{{.Room.RoomID}}{{end}}</a></h2>
                 <p class="micro-copy">{{.Room.RoomID}}</p>
+                {{if .Room.Archive}}
+                  <p class="micro-copy">最近归档正文 {{if .Room.Archive.NonHeartbeatCount}}{{.Room.Archive.NonHeartbeatCount}}{{else}}{{.Room.Archive.EventCount}}{{end}} 条{{if .Room.Archive.HeartbeatCount}}，心跳 {{.Room.Archive.HeartbeatCount}} 条{{end}}</p>
+                {{end}}
                 <div class="story-links">
                   <a href="{{.RoomLinks.HistoryURL}}">查看 Live 归档</a>
                   <a href="{{.RoomLinks.RoomURL}}">返回房间</a>

@@ -141,3 +141,25 @@ func TestEnsureArchiveEntryWritesMissingFileOnDemand(t *testing.T) {
 		t.Fatalf("archive missing title: %s", string(data))
 	}
 }
+
+func TestArchiveEntryUsesTopicsArchiveNamespace(t *testing.T) {
+	t.Parallel()
+
+	bundle := Bundle{
+		InfoHash: "abc123",
+		Message: Message{
+			Kind:      "post",
+			Title:     "Namespace test",
+			CreatedAt: "2026-03-12T01:00:00+08:00",
+		},
+		CreatedAt: time.Date(2026, 3, 11, 17, 0, 0, 0, time.UTC),
+	}
+
+	entry := archiveEntry(bundle)
+	if entry.ViewerURL != "/archive/topics/messages/abc123" {
+		t.Fatalf("viewer url = %q", entry.ViewerURL)
+	}
+	if entry.RawURL != "/archive/topics/raw/abc123" {
+		t.Fatalf("raw url = %q", entry.RawURL)
+	}
+}

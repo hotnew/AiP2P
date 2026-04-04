@@ -1729,6 +1729,88 @@ func TestPluginBuildServesAndResolvesTeamSyncConflicts(t *testing.T) {
 	}
 }
 
+func TestPluginBuildServesTeamSyncHealthPageAndAPI(t *testing.T) {
+	t.Parallel()
+
+	site, root := buildTeamSite(t)
+	teamRoot := filepath.Join(root, "store", "team", "sync-health-team")
+	if err := os.MkdirAll(teamRoot, 0o755); err != nil {
+		t.Fatalf("MkdirAll(teamRoot) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(teamRoot, "team.json"), []byte(`{
+  "team_id":"sync-health-team",
+  "title":"Sync Health Team",
+  "visibility":"private",
+  "owner_agent_id":"agent://pc75/live-alpha"
+}`), 0o644); err != nil {
+		t.Fatalf("WriteFile(team.json) error = %v", err)
+	}
+	writeSyncRuntimeStatusFixture(t, root, map[string]any{
+		"team_sync": map[string]any{
+			"enabled":              true,
+			"node_id":              "node-75",
+			"state_loaded":         true,
+			"persisted_cursors":    9,
+			"persisted_peer_acks":  4,
+			"ack_peers":            2,
+			"pending_acks":         3,
+			"conflicts":            1,
+			"subscribed_teams":     1,
+			"published_messages":   7,
+			"applied_messages":     6,
+			"last_published_key":   "message:sync-health-team:main:msg-1",
+			"last_conflict_key":    "task:sync-health-task:2026-04-04T15:00:00Z",
+			"last_conflict_reason": "local_newer",
+		},
+	})
+	writeTeamSyncStateFixture(t, root, map[string]any{
+		"conflicts": map[string]any{
+			"task:sync-health-task:2026-04-04T15:00:00Z": map[string]any{
+				"key":         "task:sync-health-task:2026-04-04T15:00:00Z",
+				"type":        "task",
+				"team_id":     "sync-health-team",
+				"subject_id":  "sync-health-task",
+				"source_node": "node-74",
+				"reason":      "local_newer",
+				"updated_at":  "2026-04-04T15:01:00Z",
+			},
+		},
+	})
+
+	pageReq := httptest.NewRequest(http.MethodGet, "/teams/sync-health-team/sync", nil)
+	pageRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(pageRec, pageReq)
+	if pageRec.Code != http.StatusOK {
+		t.Fatalf("team sync page status = %d, body = %s", pageRec.Code, pageRec.Body.String())
+	}
+	if !strings.Contains(pageRec.Body.String(), "Team Sync 健康") || !strings.Contains(pageRec.Body.String(), "pending ack") || !strings.Contains(pageRec.Body.String(), "最近复制冲突") {
+		t.Fatalf("expected sync health page content, got %q", pageRec.Body.String())
+	}
+
+	apiReq := httptest.NewRequest(http.MethodGet, "/api/teams/sync-health-team/sync", nil)
+	apiRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(apiRec, apiReq)
+	if apiRec.Code != http.StatusOK {
+		t.Fatalf("team sync api status = %d, body = %s", apiRec.Code, apiRec.Body.String())
+	}
+	if !strings.Contains(apiRec.Body.String(), `"scope": "team-sync-health"`) || !strings.Contains(apiRec.Body.String(), `"pending_acks": 3`) || !strings.Contains(apiRec.Body.String(), `"conflict_count": 1`) || !strings.Contains(apiRec.Body.String(), `"allow_accept_remote": true`) {
+		t.Fatalf("expected sync health api body, got %q", apiRec.Body.String())
+	}
+
+	resolveReq := httptest.NewRequest(http.MethodPost, "/teams/sync-health-team/sync/conflicts/"+url.PathEscape("task:sync-health-task:2026-04-04T15:00:00Z")+"/resolve", strings.NewReader("actor_agent_id=agent%3A%2F%2Fpc75%2Flive-alpha&action=dismiss"))
+	resolveReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resolveReq.RemoteAddr = "127.0.0.1:12345"
+	resolveRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(resolveRec, resolveReq)
+	if resolveRec.Code != http.StatusSeeOther {
+		t.Fatalf("team sync page resolve status = %d, body = %s", resolveRec.Code, resolveRec.Body.String())
+	}
+	location := resolveRec.Header().Get("Location")
+	if !strings.Contains(location, "/teams/sync-health-team/sync") || !strings.Contains(location, "resolved=dismiss") {
+		t.Fatalf("expected sync page redirect, got %q", location)
+	}
+}
+
 func buildTeamSite(t *testing.T) (*apphost.Site, string) {
 	t.Helper()
 
@@ -1763,5 +1845,21 @@ func writeTeamSyncStateFixture(t *testing.T, root string, payload map[string]any
 	}
 	if err := os.WriteFile(filepath.Join(syncRoot, "team_sync_state.json"), data, 0o644); err != nil {
 		t.Fatalf("WriteFile(team_sync_state.json) error = %v", err)
+	}
+}
+
+func writeSyncRuntimeStatusFixture(t *testing.T, root string, payload map[string]any) {
+	t.Helper()
+
+	syncRoot := filepath.Join(root, "store", "sync")
+	if err := os.MkdirAll(syncRoot, 0o755); err != nil {
+		t.Fatalf("MkdirAll(syncRoot) error = %v", err)
+	}
+	data, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		t.Fatalf("MarshalIndent(syncRuntimeStatus) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(syncRoot, "status.json"), data, 0o644); err != nil {
+		t.Fatalf("WriteFile(status.json) error = %v", err)
 	}
 }

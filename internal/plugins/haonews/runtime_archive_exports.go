@@ -260,8 +260,8 @@ func archiveEntry(bundle Bundle) ArchiveEntry {
 		ArchiveMD:  bundle.ArchiveMD,
 		Day:        day,
 		ThreadURL:  bundleThreadURL(bundle),
-		ViewerURL:  "/archive/messages/" + bundle.InfoHash,
-		RawURL:     "/archive/raw/" + bundle.InfoHash,
+		ViewerURL:  "/archive/topics/messages/" + bundle.InfoHash,
+		RawURL:     "/archive/topics/raw/" + bundle.InfoHash,
 		Channel:    bundle.Message.Channel,
 		SourceName: nestedString(bundle.Message.Extensions, "source", "name"),
 	}

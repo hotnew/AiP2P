@@ -661,7 +661,7 @@ func TestCreateManualAndDailyHistoryArchives(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateManualHistoryArchive error = %v", err)
 	}
-	if manual == nil || manual.Kind != "manual" || manual.EventCount != 2 || manual.MessageCount != 1 || manual.TaskUpdateCount != 1 {
+	if manual == nil || manual.Kind != "manual" || manual.EventCount != 2 || manual.NonHeartbeatCount != 2 || manual.HeartbeatCount != 1 || manual.MessageCount != 1 || manual.TaskUpdateCount != 1 {
 		t.Fatalf("manual archive = %#v", manual)
 	}
 	created, err := store.EnsureDailyHistoryArchives(room.RoomID, time.Date(2026, 4, 3, 6, 0, 0, 0, time.FixedZone("CST", 8*60*60)))
@@ -674,7 +674,7 @@ func TestCreateManualAndDailyHistoryArchives(t *testing.T) {
 	if created[0].Kind != "daily" || created[0].ArchiveID != "daily-20260403-0530" {
 		t.Fatalf("daily archive = %#v", created[0])
 	}
-	if created[0].EventCount != 2 || created[0].MessageCount != 1 || created[0].TaskUpdateCount != 1 {
+	if created[0].EventCount != 2 || created[0].NonHeartbeatCount != 2 || created[0].HeartbeatCount != 1 || created[0].MessageCount != 1 || created[0].TaskUpdateCount != 1 {
 		t.Fatalf("daily counters = %#v", created[0])
 	}
 	again, err := store.EnsureDailyHistoryArchives(room.RoomID, time.Date(2026, 4, 3, 6, 10, 0, 0, time.FixedZone("CST", 8*60*60)))
@@ -749,7 +749,7 @@ func TestHistoryArchivesKeepAllVisibleEventsBeyondDisplayWindow(t *testing.T) {
 	if manual == nil {
 		t.Fatal("manual archive = nil, want record")
 	}
-	if manual.EventCount != 105 || len(manual.Events) != 105 || manual.MessageCount != 105 {
+	if manual.EventCount != 105 || manual.NonHeartbeatCount != 105 || manual.HeartbeatCount != 20 || len(manual.Events) != 105 || manual.MessageCount != 105 {
 		t.Fatalf("manual archive counts = %#v, want 105 visible events", manual)
 	}
 
@@ -760,7 +760,7 @@ func TestHistoryArchivesKeepAllVisibleEventsBeyondDisplayWindow(t *testing.T) {
 	if len(created) != 1 {
 		t.Fatalf("len(created) = %d, want 1", len(created))
 	}
-	if created[0].EventCount != 105 || len(created[0].Events) != 105 || created[0].MessageCount != 105 {
+	if created[0].EventCount != 105 || created[0].NonHeartbeatCount != 105 || created[0].HeartbeatCount != 20 || len(created[0].Events) != 105 || created[0].MessageCount != 105 {
 		t.Fatalf("daily archive counts = %#v, want 105 visible events", created[0])
 	}
 }

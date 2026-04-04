@@ -55,18 +55,20 @@ type ArchiveRecord struct {
 }
 
 type RoomHistoryArchive struct {
-	ArchiveID       string        `json:"archive_id"`
-	RoomID          string        `json:"room_id"`
-	Kind            string        `json:"kind,omitempty"`
-	Label           string        `json:"label,omitempty"`
-	ArchivedAt      string        `json:"archived_at"`
-	StartAt         string        `json:"start_at,omitempty"`
-	EndAt           string        `json:"end_at,omitempty"`
-	EventCount      int           `json:"event_count"`
-	MessageCount    int           `json:"message_count,omitempty"`
-	TaskUpdateCount int           `json:"task_update_count,omitempty"`
-	Participants    []string      `json:"participants,omitempty"`
-	Events          []LiveMessage `json:"events,omitempty"`
+	ArchiveID         string        `json:"archive_id"`
+	RoomID            string        `json:"room_id"`
+	Kind              string        `json:"kind,omitempty"`
+	Label             string        `json:"label,omitempty"`
+	ArchivedAt        string        `json:"archived_at"`
+	StartAt           string        `json:"start_at,omitempty"`
+	EndAt             string        `json:"end_at,omitempty"`
+	EventCount        int           `json:"event_count"`
+	NonHeartbeatCount int           `json:"non_heartbeat_count,omitempty"`
+	HeartbeatCount    int           `json:"heartbeat_count,omitempty"`
+	MessageCount      int           `json:"message_count,omitempty"`
+	TaskUpdateCount   int           `json:"task_update_count,omitempty"`
+	Participants      []string      `json:"participants,omitempty"`
+	Events            []LiveMessage `json:"events,omitempty"`
 }
 
 type roomRecord struct {
@@ -769,8 +771,10 @@ func (s *LocalStore) withHistoryArchive(roomID, archiveID, kind, label string, s
 	if err != nil {
 		return nil, err
 	}
+	windowEvents := events
 	visible := archiveDisplayEvents(events)
 	if !start.IsZero() || !end.IsZero() {
+		windowEvents = filterArchiveEventsByWindow(windowEvents, start, end)
 		visible = filterArchiveEventsByWindow(visible, start, end)
 	}
 	if len(visible) == 0 {
@@ -782,11 +786,12 @@ func (s *LocalStore) withHistoryArchive(roomID, archiveID, kind, label string, s
 		return nil, err
 	}
 	record := RoomHistoryArchive{
-		ArchiveID: archiveID,
-		RoomID:    strings.TrimSpace(roomID),
-		Kind:      strings.TrimSpace(kind),
-		Label:     strings.TrimSpace(label),
-		Events:    visible,
+		ArchiveID:      archiveID,
+		RoomID:         strings.TrimSpace(roomID),
+		Kind:           strings.TrimSpace(kind),
+		Label:          strings.TrimSpace(label),
+		Events:         visible,
+		HeartbeatCount: max(0, len(windowEvents)-len(visible)),
 	}
 	return s.saveHistoryArchiveRecord(roomID, record, archivedAt)
 }
@@ -824,6 +829,7 @@ func (s *LocalStore) saveHistoryArchiveRecord(roomID string, record RoomHistoryA
 		record.StartAt = firstNonEmpty(record.StartAt, startAt)
 		record.EndAt = firstNonEmpty(record.EndAt, endAt)
 		record.EventCount = len(record.Events)
+		record.NonHeartbeatCount = len(record.Events)
 		record.MessageCount = archiveCountByType(record.Events, TypeMessage)
 		record.TaskUpdateCount = archiveCountByType(record.Events, TypeTaskUpdate)
 		record.Participants = archiveParticipants(record.Events)
