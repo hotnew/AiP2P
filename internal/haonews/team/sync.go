@@ -226,7 +226,7 @@ func (s *Store) DetectReplicatedConflict(sync TeamSyncMessage) (TeamSyncConflict
 		if sync.Task == nil {
 			return TeamSyncConflict{}, false, nil
 		}
-		current, err := s.LoadTask(sync.TeamID, sync.Task.TaskID)
+		current, err := s.loadTaskNoCtx(sync.TeamID, sync.Task.TaskID)
 		switch {
 		case errors.Is(err, os.ErrNotExist):
 			return TeamSyncConflict{}, false, nil
@@ -255,7 +255,7 @@ func (s *Store) DetectReplicatedConflict(sync TeamSyncMessage) (TeamSyncConflict
 		if sync.Artifact == nil {
 			return TeamSyncConflict{}, false, nil
 		}
-		current, err := s.LoadArtifact(sync.TeamID, sync.Artifact.ArtifactID)
+		current, err := s.loadArtifactNoCtx(sync.TeamID, sync.Artifact.ArtifactID)
 		switch {
 		case errors.Is(err, os.ErrNotExist):
 			return TeamSyncConflict{}, false, nil
@@ -281,7 +281,7 @@ func (s *Store) DetectReplicatedConflict(sync TeamSyncMessage) (TeamSyncConflict
 			}, true, nil
 		}
 	case TeamSyncTypeMember:
-		current, currentVersion, err := s.LoadMembersSnapshot(sync.TeamID)
+		current, currentVersion, err := s.loadMembersSnapshotNoCtx(sync.TeamID)
 		if err != nil {
 			return TeamSyncConflict{}, false, err
 		}
@@ -309,7 +309,7 @@ func (s *Store) DetectReplicatedConflict(sync TeamSyncMessage) (TeamSyncConflict
 		if sync.Policy == nil {
 			return TeamSyncConflict{}, false, nil
 		}
-		current, currentVersion, err := s.LoadPolicySnapshot(sync.TeamID)
+		current, currentVersion, err := s.loadPolicySnapshotNoCtx(sync.TeamID)
 		if err != nil {
 			return TeamSyncConflict{}, false, err
 		}
@@ -337,7 +337,7 @@ func (s *Store) DetectReplicatedConflict(sync TeamSyncMessage) (TeamSyncConflict
 		if sync.Channel == nil {
 			return TeamSyncConflict{}, false, nil
 		}
-		current, _, err := s.LoadChannelSnapshot(sync.TeamID, sync.Channel.ChannelID)
+		current, _, err := s.loadChannelSnapshotNoCtx(sync.TeamID, sync.Channel.ChannelID)
 		switch {
 		case errors.Is(err, os.ErrNotExist):
 			return TeamSyncConflict{}, false, nil
@@ -386,7 +386,7 @@ func (s *Store) ForceApplyReplicatedSync(sync TeamSyncMessage) (bool, error) {
 		}
 		return true, s.upsertReplicatedArtifact(sync.TeamID, normalizeReplicatedArtifact(sync.TeamID, *sync.Artifact))
 	case TeamSyncTypeMember:
-		if err := s.SaveMembers(sync.TeamID, normalizeReplicatedMembers(sync.Members)); err != nil {
+		if err := s.saveMembersNoCtx(sync.TeamID, normalizeReplicatedMembers(sync.Members)); err != nil {
 			return false, err
 		}
 		return true, nil
@@ -394,7 +394,7 @@ func (s *Store) ForceApplyReplicatedSync(sync TeamSyncMessage) (bool, error) {
 		if sync.Policy == nil {
 			return false, errors.New("missing policy payload")
 		}
-		if err := s.SavePolicy(sync.TeamID, normalizePolicy(*sync.Policy)); err != nil {
+		if err := s.savePolicyNoCtx(sync.TeamID, normalizePolicy(*sync.Policy)); err != nil {
 			return false, err
 		}
 		return true, nil
@@ -402,7 +402,7 @@ func (s *Store) ForceApplyReplicatedSync(sync TeamSyncMessage) (bool, error) {
 		if sync.Channel == nil {
 			return false, errors.New("missing channel payload")
 		}
-		if err := s.SaveChannel(sync.TeamID, normalizeChannel(*sync.Channel)); err != nil {
+		if err := s.saveChannelNoCtx(sync.TeamID, normalizeChannel(*sync.Channel)); err != nil {
 			return false, err
 		}
 		return true, nil
@@ -438,7 +438,7 @@ func (s *Store) ApplyReplicatedMessage(teamID string, msg Message) (bool, error)
 	if exists {
 		return false, nil
 	}
-	if err := s.AppendMessage(teamID, msg); err != nil {
+	if err := s.appendMessageNoCtx(teamID, msg); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -467,16 +467,16 @@ func (s *Store) ApplyReplicatedHistory(teamID string, event ChangeEvent) (bool, 
 	if exists {
 		return false, nil
 	}
-	if err := s.AppendHistory(teamID, event); err != nil {
+	if err := s.appendHistoryNoCtx(teamID, event); err != nil {
 		return false, err
 	}
 	switch event.Scope + ":" + event.Action {
 	case "task:delete":
-		if err := s.DeleteTask(teamID, event.SubjectID); err != nil && !errors.Is(err, os.ErrNotExist) {
+		if err := s.deleteTaskNoCtx(teamID, event.SubjectID); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return true, err
 		}
 	case "artifact:delete":
-		if err := s.DeleteArtifact(teamID, event.SubjectID); err != nil && !errors.Is(err, os.ErrNotExist) {
+		if err := s.deleteArtifactNoCtx(teamID, event.SubjectID); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return true, err
 		}
 	}
@@ -495,7 +495,7 @@ func (s *Store) ApplyReplicatedTask(teamID string, task Task) (bool, error) {
 	if strings.TrimSpace(task.TaskID) == "" {
 		return false, errors.New("empty replicated task id")
 	}
-	current, err := s.LoadTask(teamID, task.TaskID)
+	current, err := s.loadTaskNoCtx(teamID, task.TaskID)
 	switch {
 	case errors.Is(err, os.ErrNotExist):
 		if err := s.upsertReplicatedTask(teamID, task); err != nil {
@@ -526,7 +526,7 @@ func (s *Store) ApplyReplicatedArtifact(teamID string, artifact Artifact) (bool,
 	if strings.TrimSpace(artifact.ArtifactID) == "" {
 		return false, errors.New("empty replicated artifact id")
 	}
-	current, err := s.LoadArtifact(teamID, artifact.ArtifactID)
+	current, err := s.loadArtifactNoCtx(teamID, artifact.ArtifactID)
 	switch {
 	case errors.Is(err, os.ErrNotExist):
 		if err := s.upsertReplicatedArtifact(teamID, artifact); err != nil {
@@ -554,7 +554,7 @@ func (s *Store) ApplyReplicatedMembers(teamID string, members []Member, version 
 		return false, errors.New("empty team id")
 	}
 	members = normalizeReplicatedMembers(members)
-	current, currentVersion, err := s.LoadMembersSnapshot(teamID)
+	current, currentVersion, err := s.loadMembersSnapshotNoCtx(teamID)
 	if err != nil {
 		return false, err
 	}
@@ -567,7 +567,7 @@ func (s *Store) ApplyReplicatedMembers(teamID string, members []Member, version 
 	if !replicatedVersionAfter(version, currentVersion) {
 		return false, nil
 	}
-	if err := s.SaveMembers(teamID, members); err != nil {
+	if err := s.saveMembersNoCtx(teamID, members); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -585,7 +585,7 @@ func (s *Store) ApplyReplicatedPolicy(teamID string, policy Policy, version time
 	if version.IsZero() {
 		version = policySnapshotVersion(policy)
 	}
-	current, currentVersion, err := s.LoadPolicySnapshot(teamID)
+	current, currentVersion, err := s.loadPolicySnapshotNoCtx(teamID)
 	if err != nil {
 		return false, err
 	}
@@ -595,7 +595,7 @@ func (s *Store) ApplyReplicatedPolicy(teamID string, policy Policy, version time
 	if reflect.DeepEqual(current, policy) {
 		return false, nil
 	}
-	if err := s.SavePolicy(teamID, policy); err != nil {
+	if err := s.savePolicyNoCtx(teamID, policy); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -616,10 +616,10 @@ func (s *Store) ApplyReplicatedChannel(teamID string, channel Channel, version t
 	if version.IsZero() {
 		version = channelSnapshotVersion(channel)
 	}
-	current, _, err := s.LoadChannelSnapshot(teamID, channel.ChannelID)
+	current, _, err := s.loadChannelSnapshotNoCtx(teamID, channel.ChannelID)
 	switch {
 	case errors.Is(err, os.ErrNotExist):
-		if err := s.SaveChannel(teamID, channel); err != nil {
+		if err := s.saveChannelNoCtx(teamID, channel); err != nil {
 			return false, err
 		}
 		return true, nil
@@ -632,7 +632,7 @@ func (s *Store) ApplyReplicatedChannel(teamID string, channel Channel, version t
 	if reflect.DeepEqual(current, channel) {
 		return false, nil
 	}
-	if err := s.SaveChannel(teamID, channel); err != nil {
+	if err := s.saveChannelNoCtx(teamID, channel); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -648,7 +648,7 @@ func (s *Store) HasMessageID(teamID, channelID, messageID string) (bool, error) 
 	if teamID == "" || channelID == "" || messageID == "" {
 		return false, nil
 	}
-	items, err := s.LoadMessages(teamID, channelID, 0)
+	items, err := s.loadMessagesNoCtx(teamID, channelID, 0)
 	if err != nil {
 		return false, err
 	}
@@ -669,7 +669,7 @@ func (s *Store) HasHistoryEventID(teamID, eventID string) (bool, error) {
 	if teamID == "" || eventID == "" {
 		return false, nil
 	}
-	items, err := s.LoadHistory(teamID, 0)
+	items, err := s.loadHistoryNoCtx(teamID, 0)
 	if err != nil {
 		return false, err
 	}
@@ -878,50 +878,12 @@ func teamSyncChannelKey(teamID string, channel Channel) string {
 
 func (s *Store) upsertReplicatedTask(teamID string, task Task) error {
 	return s.withTeamLock(teamID, func() error {
-		if s.hasTaskIndex(teamID) {
-			return s.appendTaskIndexedLocked(teamID, task)
-		}
-		tasks, err := s.loadLegacyTasks(teamID)
-		if err != nil {
-			return err
-		}
-		updated := false
-		for i := range tasks {
-			if tasks[i].TaskID != task.TaskID {
-				continue
-			}
-			tasks[i] = task
-			updated = true
-			break
-		}
-		if !updated {
-			tasks = append(tasks, task)
-		}
-		return s.saveTasks(teamID, tasks)
+		return s.upsertReplicatedTaskCurrentLocked(teamID, task)
 	})
 }
 
 func (s *Store) upsertReplicatedArtifact(teamID string, artifact Artifact) error {
 	return s.withTeamLock(teamID, func() error {
-		if s.hasArtifactIndex(teamID) {
-			return s.appendArtifactIndexedLocked(teamID, artifact)
-		}
-		artifacts, err := s.loadLegacyArtifacts(teamID)
-		if err != nil {
-			return err
-		}
-		updated := false
-		for i := range artifacts {
-			if artifacts[i].ArtifactID != artifact.ArtifactID {
-				continue
-			}
-			artifacts[i] = artifact
-			updated = true
-			break
-		}
-		if !updated {
-			artifacts = append(artifacts, artifact)
-		}
-		return s.saveArtifacts(teamID, artifacts)
+		return s.upsertReplicatedArtifactCurrentLocked(teamID, artifact)
 	})
 }

@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -179,6 +180,123 @@ func TestPluginBuildRejectsUnsignedMessageWhenTeamPolicyRequiresSignature(t *tes
 	if !strings.Contains(msgRec.Body.String(), "signature verification failed") {
 		t.Fatalf("expected signature verification failure body, got %q", msgRec.Body.String())
 	}
+}
+
+func TestPluginBuildServesWebhookStatusAndReplay(t *testing.T) {
+	t.Parallel()
+
+	site, root := buildTeamSite(t)
+	teamRoot := filepath.Join(root, "store", "team", "webhook-status-team")
+	if err := os.MkdirAll(teamRoot, 0o755); err != nil {
+		t.Fatalf("MkdirAll error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(teamRoot, "team.json"), []byte(`{
+  "team_id":"webhook-status-team",
+  "title":"Webhook Status Team",
+  "owner_agent_id":"agent://pc75/openclaw01"
+}`), 0o644); err != nil {
+		t.Fatalf("WriteFile(team.json) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(teamRoot, "members.json"), []byte(`[
+  {"agent_id":"agent://pc75/openclaw01","role":"owner","status":"active"}
+]`), 0o644); err != nil {
+		t.Fatalf("WriteFile(members.json) error = %v", err)
+	}
+
+	var mu sync.Mutex
+	mode := "fail"
+	delivered := 0
+	hook := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		currentMode := mode
+		if currentMode == "ok" {
+			delivered++
+		}
+		mu.Unlock()
+		if currentMode == "fail" {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer hook.Close()
+
+	configReq := httptest.NewRequest(http.MethodPost, "/api/teams/webhook-status-team/webhooks", strings.NewReader(`{
+  "actor_agent_id":"agent://pc75/openclaw01",
+  "webhooks":[{"webhook_id":"hook-status","url":"`+hook.URL+`","token":"token-status","events":["message.create"]}]
+}`))
+	configReq.RemoteAddr = "127.0.0.1:12345"
+	configRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(configRec, configReq)
+	if configRec.Code != http.StatusOK {
+		t.Fatalf("webhook config status = %d, body = %s", configRec.Code, configRec.Body.String())
+	}
+
+	msgReq := httptest.NewRequest(http.MethodPost, "/api/teams/webhook-status-team/channels/main/messages", strings.NewReader(`{
+  "author_agent_id":"agent://pc75/openclaw01",
+  "message_type":"chat",
+  "content":"dead letter me"
+}`))
+	msgReq.RemoteAddr = "127.0.0.1:12345"
+	msgRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(msgRec, msgReq)
+	if msgRec.Code != http.StatusCreated {
+		t.Fatalf("message create status = %d, body = %s", msgRec.Code, msgRec.Body.String())
+	}
+
+	var deliveryID string
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		statusReq := httptest.NewRequest(http.MethodGet, "/api/teams/webhook-status-team/webhooks/status", nil)
+		statusRec := httptest.NewRecorder()
+		site.Handler.ServeHTTP(statusRec, statusReq)
+		if statusRec.Code != http.StatusOK {
+			t.Fatalf("status api code = %d, body = %s", statusRec.Code, statusRec.Body.String())
+		}
+		var payload struct {
+			DeadLetterCount  int `json:"dead_letter_count"`
+			RecentDeadLetter []struct {
+				DeliveryID string `json:"delivery_id"`
+			} `json:"recent_dead_letters"`
+		}
+		if err := json.Unmarshal(statusRec.Body.Bytes(), &payload); err != nil {
+			t.Fatalf("status json decode error = %v", err)
+		}
+		if payload.DeadLetterCount > 0 && len(payload.RecentDeadLetter) > 0 {
+			deliveryID = payload.RecentDeadLetter[0].DeliveryID
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if deliveryID == "" {
+		t.Fatal("timed out waiting for dead-letter webhook status")
+	}
+
+	mu.Lock()
+	mode = "ok"
+	mu.Unlock()
+
+	replayReq := httptest.NewRequest(http.MethodPost, "/api/teams/webhook-status-team/webhooks/replay/"+deliveryID, strings.NewReader(`{
+  "actor_agent_id":"agent://pc75/openclaw01"
+}`))
+	replayReq.RemoteAddr = "127.0.0.1:12345"
+	replayRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(replayRec, replayReq)
+	if replayRec.Code != http.StatusOK {
+		t.Fatalf("replay status = %d, body = %s", replayRec.Code, replayRec.Body.String())
+	}
+
+	deadline = time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		mu.Lock()
+		gotDelivered := delivered
+		mu.Unlock()
+		if gotDelivered > 0 {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	t.Fatal("timed out waiting for replayed webhook delivery")
 }
 
 func TestPluginBuildEnforcesTeamActionPermissions(t *testing.T) {

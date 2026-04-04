@@ -83,7 +83,7 @@ func warmTeamWorkspace(app *newsplugin.App, store *teamcore.Store) {
 	if err == nil {
 		_ = app.NodeStatus(index)
 	}
-	teams, err := store.ListTeams()
+	teams, err := store.ListTeamsCtx(context.Background())
 	if err != nil {
 		return
 	}
@@ -96,15 +96,15 @@ func warmTeamWorkspace(app *newsplugin.App, store *teamcore.Store) {
 		if teamID == "" {
 			continue
 		}
-		_, _ = store.LoadTeam(teamID)
-		_, _ = store.LoadMembers(teamID)
-		_, _ = store.LoadPolicy(teamID)
-		_, _ = store.LoadMessages(teamID, "main", 20)
-		_, _ = store.LoadTasks(teamID, 20)
-		_, _ = store.LoadArtifacts(teamID, 20)
-		_, _ = store.LoadHistory(teamID, 20)
-		_, _ = store.ListChannels(teamID)
-		_, _ = store.ListArchives(teamID)
+		_, _ = store.LoadTeamCtx(context.Background(), teamID)
+		_, _ = store.LoadMembersCtx(context.Background(), teamID)
+		_, _ = store.LoadPolicyCtx(context.Background(), teamID)
+		_, _ = store.LoadMessagesCtx(context.Background(), teamID, "main", 20)
+		_, _ = store.LoadTasksCtx(context.Background(), teamID, 20)
+		_, _ = store.LoadArtifactsCtx(context.Background(), teamID, 20)
+		_, _ = store.LoadHistoryCtx(context.Background(), teamID, 20)
+		_, _ = store.ListChannelsCtx(context.Background(), teamID)
+		_, _ = store.ListArchivesCtx(context.Background(), teamID)
 	}
 }
 
@@ -401,6 +401,14 @@ func newHandler(app *newsplugin.App, store *teamcore.Store, staticFS fs.FS) http
 		}
 		if len(parts) == 2 && parts[1] == "webhooks" {
 			handleAPITeamWebhooks(store, teamID, w, r)
+			return
+		}
+		if len(parts) == 3 && parts[1] == "webhooks" && parts[2] == "status" {
+			handleAPITeamWebhookStatus(store, teamID, w, r)
+			return
+		}
+		if len(parts) == 4 && parts[1] == "webhooks" && parts[2] == "replay" {
+			handleAPITeamWebhookReplay(store, teamID, parts[3], w, r)
 			return
 		}
 		if len(parts) == 2 && parts[1] == "events" {

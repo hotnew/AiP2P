@@ -16,7 +16,7 @@ func handleA2AWellKnownAgent(app *newsplugin.App, store *teamcore.Store, w http.
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	teams, err := store.ListTeams()
+	teams, err := store.ListTeamsCtx(r.Context())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -40,7 +40,7 @@ func handleA2AWellKnownAgent(app *newsplugin.App, store *teamcore.Store, w http.
 	teamIDs := make([]string, 0, len(teams))
 	for _, summary := range teams {
 		teamIDs = append(teamIDs, summary.TeamID)
-		cards, err := store.ListAgentCards(summary.TeamID)
+		cards, err := store.ListAgentCardsCtx(r.Context(), summary.TeamID)
 		if err != nil {
 			continue
 		}
@@ -114,7 +114,7 @@ func handleA2ATasks(store *teamcore.Store, teamID string, w http.ResponseWriter,
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	tasks, err := store.LoadTasks(teamID, clampTeamListLimit(r.URL.Query().Get("limit"), 50, 100))
+	tasks, err := store.LoadTasksCtx(r.Context(), teamID, clampTeamListLimit(r.URL.Query().Get("limit"), 50, 100))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -136,7 +136,7 @@ func handleA2ATask(store *teamcore.Store, teamID, taskID string, w http.Response
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	task, err := store.LoadTask(teamID, taskID)
+	task, err := store.LoadTaskCtx(r.Context(), teamID, taskID)
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -168,7 +168,7 @@ func handleA2AMessageSend(store *teamcore.Store, teamID string, w http.ResponseW
 		http.Error(w, err.Error(), http.StatusForbidden)
 		return
 	}
-	if err := store.AppendMessage(teamID, payload); err != nil {
+	if err := store.AppendMessageCtx(r.Context(), teamID, payload); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -188,7 +188,7 @@ func handleA2ATaskCancel(store *teamcore.Store, teamID, taskID string, w http.Re
 		http.Error(w, "a2a task cancel is limited to local or LAN requests", http.StatusForbidden)
 		return
 	}
-	task, err := store.LoadTask(teamID, taskID)
+	task, err := store.LoadTaskCtx(r.Context(), teamID, taskID)
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -206,11 +206,11 @@ func handleA2ATaskCancel(store *teamcore.Store, teamID, taskID string, w http.Re
 	}
 	task.Status = "cancelled"
 	task.UpdatedAt = time.Now().UTC()
-	if err := store.SaveTask(teamID, task); err != nil {
+	if err := store.SaveTaskCtx(r.Context(), teamID, task); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	updated, err := store.LoadTask(teamID, taskID)
+	updated, err := store.LoadTaskCtx(r.Context(), teamID, taskID)
 	if err != nil {
 		updated = task
 	}

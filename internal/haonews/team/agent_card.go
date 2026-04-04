@@ -38,7 +38,7 @@ type AgentCaps struct {
 	LongRunning       bool `json:"long_running,omitempty"`
 }
 
-func (s *Store) SaveAgentCard(teamID string, card AgentCard) error {
+func (s *Store) saveAgentCardNoCtx(teamID string, card AgentCard) error {
 	if s == nil {
 		return errors.New("nil team store")
 	}
@@ -66,7 +66,7 @@ func (s *Store) SaveAgentCard(teamID string, card AgentCard) error {
 	})
 }
 
-func (s *Store) LoadAgentCard(teamID, agentID string) (AgentCard, error) {
+func (s *Store) loadAgentCardNoCtx(teamID, agentID string) (AgentCard, error) {
 	if s == nil {
 		return AgentCard{}, errors.New("nil team store")
 	}
@@ -93,7 +93,7 @@ func (s *Store) LoadAgentCard(teamID, agentID string) (AgentCard, error) {
 	return card, nil
 }
 
-func (s *Store) ListAgentCards(teamID string) ([]AgentCard, error) {
+func (s *Store) listAgentCardsNoCtx(teamID string) ([]AgentCard, error) {
 	if s == nil {
 		return nil, errors.New("nil team store")
 	}

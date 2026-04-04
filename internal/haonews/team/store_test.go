@@ -1,6 +1,7 @@
 package team
 
 import (
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/hex"
@@ -12,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -295,6 +297,158 @@ func TestStoreWebhookReceivesPublishedEvent(t *testing.T) {
 	}
 }
 
+func TestStoreWebhookRetriesRetriableStatus(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "team", "webhook-retry"), 0o755); err != nil {
+		t.Fatalf("MkdirAll error = %v", err)
+	}
+	store, err := OpenStore(root)
+	if err != nil {
+		t.Fatalf("OpenStore error = %v", err)
+	}
+	var mu sync.Mutex
+	attempts := 0
+	done := make(chan struct{}, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		attempts++
+		current := attempts
+		mu.Unlock()
+		if current == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		done <- struct{}{}
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer server.Close()
+
+	store.webhookClient = &http.Client{Timeout: 2 * time.Second}
+	store.sendWebhook(PushNotificationConfig{URL: server.URL}, TeamEvent{
+		TeamID: "webhook-retry",
+		Kind:   "message",
+		Action: "create",
+	})
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for webhook retry")
+	}
+	mu.Lock()
+	gotAttempts := attempts
+	mu.Unlock()
+	if gotAttempts < 2 {
+		t.Fatalf("attempts = %d, want at least 2", gotAttempts)
+	}
+}
+
+func TestStoreWebhookPersistsDeadLetterAndReplay(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "team", "webhook-dead"), 0o755); err != nil {
+		t.Fatalf("MkdirAll error = %v", err)
+	}
+	store, err := OpenStore(root)
+	if err != nil {
+		t.Fatalf("OpenStore error = %v", err)
+	}
+	var mu sync.Mutex
+	mode := "fail"
+	attempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		attempts++
+		currentMode := mode
+		mu.Unlock()
+		if currentMode == "fail" {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer server.Close()
+
+	store.sendWebhook(PushNotificationConfig{WebhookID: "hook-dead", URL: server.URL}, TeamEvent{
+		TeamID:  "webhook-dead",
+		EventID: "evt-dead",
+		Kind:    "message",
+		Action:  "create",
+	})
+
+	status, err := store.LoadWebhookDeliveryStatusCtx(context.Background(), "webhook-dead")
+	if err != nil {
+		t.Fatalf("LoadWebhookDeliveryStatusCtx error = %v", err)
+	}
+	if status.DeadLetterCount != 1 {
+		t.Fatalf("DeadLetterCount = %d, want 1", status.DeadLetterCount)
+	}
+	if len(status.RecentDead) != 1 {
+		t.Fatalf("RecentDead len = %d, want 1", len(status.RecentDead))
+	}
+
+	mu.Lock()
+	mode = "ok"
+	mu.Unlock()
+	replayed, err := store.ReplayWebhookDeliveryCtx(context.Background(), "webhook-dead", status.RecentDead[0].DeliveryID)
+	if err != nil {
+		t.Fatalf("ReplayWebhookDeliveryCtx error = %v", err)
+	}
+	if replayed.ReplayedFrom != status.RecentDead[0].DeliveryID {
+		t.Fatalf("ReplayedFrom = %q, want %q", replayed.ReplayedFrom, status.RecentDead[0].DeliveryID)
+	}
+	status, err = store.LoadWebhookDeliveryStatusCtx(context.Background(), "webhook-dead")
+	if err != nil {
+		t.Fatalf("LoadWebhookDeliveryStatusCtx(after replay) error = %v", err)
+	}
+	if status.DeliveredCount < 1 {
+		t.Fatalf("DeliveredCount = %d, want at least 1", status.DeliveredCount)
+	}
+	mu.Lock()
+	gotAttempts := attempts
+	mu.Unlock()
+	if gotAttempts < 4 {
+		t.Fatalf("attempts = %d, want at least 4", gotAttempts)
+	}
+}
+
+func TestStoreWebhookPersistsNonRetriableFailure(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "team", "webhook-failed"), 0o755); err != nil {
+		t.Fatalf("MkdirAll error = %v", err)
+	}
+	store, err := OpenStore(root)
+	if err != nil {
+		t.Fatalf("OpenStore error = %v", err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+	}))
+	defer server.Close()
+
+	store.sendWebhook(PushNotificationConfig{WebhookID: "hook-failed", URL: server.URL}, TeamEvent{
+		TeamID:  "webhook-failed",
+		EventID: "evt-failed",
+		Kind:    "message",
+		Action:  "create",
+	})
+
+	status, err := store.LoadWebhookDeliveryStatusCtx(context.Background(), "webhook-failed")
+	if err != nil {
+		t.Fatalf("LoadWebhookDeliveryStatusCtx error = %v", err)
+	}
+	if status.FailedCount != 1 {
+		t.Fatalf("FailedCount = %d, want 1", status.FailedCount)
+	}
+	if status.DeadLetterCount != 0 {
+		t.Fatalf("DeadLetterCount = %d, want 0", status.DeadLetterCount)
+	}
+}
+
 func TestStoreLoadMembersNormalizesRoleAndStatus(t *testing.T) {
 	t.Parallel()
 
@@ -337,6 +491,168 @@ func TestNormalizeTeamID(t *testing.T) {
 	}
 	if strings.Contains(got, "/") || strings.Contains(got, "_") {
 		t.Fatalf("expected normalized team id, got %q", got)
+	}
+}
+
+func TestNormalizeTeamIDAndSanitizeArchiveIDRejectTraversal(t *testing.T) {
+	t.Parallel()
+
+	if got := NormalizeTeamID("../Team%2FAlpha"); got != "team-alpha" {
+		t.Fatalf("NormalizeTeamID traversal sanitize = %q", got)
+	}
+	if got := NormalizeTeamID("/../../"); got != "" {
+		t.Fatalf("NormalizeTeamID absolute traversal = %q, want empty", got)
+	}
+	if got := sanitizeArchiveID("../archive%2F2026-04-04"); got != "archive-2026-04-04" {
+		t.Fatalf("sanitizeArchiveID traversal sanitize = %q", got)
+	}
+}
+
+func TestReadLastJSONLLinesReturnsNewestNonEmptyLines(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "messages.jsonl")
+	var builder strings.Builder
+	for i := 0; i < 300; i++ {
+		if i%57 == 0 {
+			builder.WriteByte('\n')
+		}
+		builder.WriteString(fmt.Sprintf("{\"message_id\":\"msg-%03d\"}\n", i))
+	}
+	if err := os.WriteFile(path, []byte(builder.String()), 0o644); err != nil {
+		t.Fatalf("WriteFile error = %v", err)
+	}
+	lines, err := readLastJSONLLines(path, 3)
+	if err != nil {
+		t.Fatalf("readLastJSONLLines error = %v", err)
+	}
+	if len(lines) != 3 {
+		t.Fatalf("len(lines) = %d, want 3", len(lines))
+	}
+	if !strings.Contains(lines[0], "msg-299") || !strings.Contains(lines[1], "msg-298") || !strings.Contains(lines[2], "msg-297") {
+		t.Fatalf("unexpected newest lines: %#v", lines)
+	}
+}
+
+func TestStoreChannelSummaryCountsMessagesAndLatestTimestamp(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	teamRoot := filepath.Join(root, "team", "channel-stats")
+	if err := os.MkdirAll(teamRoot, 0o755); err != nil {
+		t.Fatalf("MkdirAll error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(teamRoot, "team.json"), []byte(`{"team_id":"channel-stats","title":"Channel Stats","channels":["main"]}`), 0o644); err != nil {
+		t.Fatalf("WriteFile(team.json) error = %v", err)
+	}
+	store, err := OpenStore(root)
+	if err != nil {
+		t.Fatalf("OpenStore error = %v", err)
+	}
+	t1 := time.Date(2026, 4, 4, 8, 0, 0, 0, time.UTC)
+	t2 := t1.Add(2 * time.Minute)
+	if err := store.AppendMessage("channel-stats", Message{ChannelID: "main", AuthorAgentID: "agent://pc75/a", Content: "one", CreatedAt: t1}); err != nil {
+		t.Fatalf("AppendMessage(one) error = %v", err)
+	}
+	if err := store.AppendMessage("channel-stats", Message{ChannelID: "main", AuthorAgentID: "agent://pc75/b", Content: "two", CreatedAt: t2}); err != nil {
+		t.Fatalf("AppendMessage(two) error = %v", err)
+	}
+	summary, err := store.channelSummary("channel-stats", "main")
+	if err != nil {
+		t.Fatalf("channelSummary error = %v", err)
+	}
+	if summary.MessageCount != 2 {
+		t.Fatalf("summary.MessageCount = %d, want 2", summary.MessageCount)
+	}
+	if !summary.LastMessageAt.Equal(t2) {
+		t.Fatalf("summary.LastMessageAt = %v, want %v", summary.LastMessageAt, t2)
+	}
+}
+
+func TestWithTeamLockTimeoutReturnsDeadlineExceededStyleError(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	teamRoot := filepath.Join(root, "team", "lock-timeout")
+	if err := os.MkdirAll(teamRoot, 0o755); err != nil {
+		t.Fatalf("MkdirAll error = %v", err)
+	}
+	store, err := OpenStore(root)
+	if err != nil {
+		t.Fatalf("OpenStore error = %v", err)
+	}
+	lockFile, err := os.OpenFile(filepath.Join(teamRoot, ".lock"), os.O_CREATE|os.O_RDWR, 0o644)
+	if err != nil {
+		t.Fatalf("OpenFile(lock) error = %v", err)
+	}
+	defer lockFile.Close()
+	if err := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		t.Fatalf("Flock lock holder error = %v", err)
+	}
+	defer func() { _ = syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN) }()
+
+	start := time.Now()
+	err = store.withTeamLockTimeout("lock-timeout", 150*time.Millisecond, func() error { return nil })
+	if err == nil || !strings.Contains(err.Error(), "team lock timeout") {
+		t.Fatalf("withTeamLockTimeout error = %v, want timeout", err)
+	}
+	if time.Since(start) < 150*time.Millisecond {
+		t.Fatalf("withTeamLockTimeout returned too early: %v", time.Since(start))
+	}
+}
+
+func TestWithTeamLockCtxCancelsWhileWaiting(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	teamRoot := filepath.Join(root, "team", "lock-ctx-timeout")
+	if err := os.MkdirAll(teamRoot, 0o755); err != nil {
+		t.Fatalf("MkdirAll error = %v", err)
+	}
+	store, err := OpenStore(root)
+	if err != nil {
+		t.Fatalf("OpenStore error = %v", err)
+	}
+	lockFile, err := os.OpenFile(filepath.Join(teamRoot, ".lock"), os.O_CREATE|os.O_RDWR, 0o644)
+	if err != nil {
+		t.Fatalf("OpenFile(lock) error = %v", err)
+	}
+	defer lockFile.Close()
+	if err := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		t.Fatalf("Flock lock holder error = %v", err)
+	}
+	defer func() { _ = syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN) }()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Millisecond)
+	defer cancel()
+
+	start := time.Now()
+	err = store.withTeamLockCtx(ctx, "lock-ctx-timeout", 5*time.Second, func() error { return nil })
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("withTeamLockCtx error = %v, want context deadline exceeded", err)
+	}
+	if elapsed := time.Since(start); elapsed < 100*time.Millisecond || elapsed > 700*time.Millisecond {
+		t.Fatalf("withTeamLockCtx elapsed = %v, want around context timeout", elapsed)
+	}
+}
+
+func TestMergeChannelPreservesEarliestCreatedAt(t *testing.T) {
+	t.Parallel()
+
+	baseCreated := time.Date(2026, 4, 4, 8, 0, 0, 0, time.UTC)
+	overrideCreated := baseCreated.Add(10 * time.Minute)
+	merged := mergeChannel(
+		Channel{ChannelID: "main", Title: "Main", CreatedAt: baseCreated},
+		Channel{ChannelID: "main", Title: "Renamed", CreatedAt: overrideCreated, UpdatedAt: overrideCreated},
+	)
+	if !merged.CreatedAt.Equal(baseCreated) {
+		t.Fatalf("merged.CreatedAt = %v, want %v", merged.CreatedAt, baseCreated)
+	}
+	if merged.Title != "Renamed" {
+		t.Fatalf("merged.Title = %q, want Renamed", merged.Title)
+	}
+	if !merged.UpdatedAt.Equal(overrideCreated) {
+		t.Fatalf("merged.UpdatedAt = %v, want %v", merged.UpdatedAt, overrideCreated)
 	}
 }
 
@@ -1269,6 +1585,55 @@ func TestStoreContextIDAutoGeneratedAndQueryable(t *testing.T) {
 	}
 }
 
+func TestStoreLoadMessagesByContextFallsBackBeyondPreferredChannels(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	teamRoot := filepath.Join(root, "team", "project-context-fallback")
+	if err := os.MkdirAll(teamRoot, 0o755); err != nil {
+		t.Fatalf("MkdirAll error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(teamRoot, "team.json"), []byte(`{"team_id":"project-context-fallback","title":"Project Context Fallback","channels":["main","research","ops"]}`), 0o644); err != nil {
+		t.Fatalf("WriteFile(team.json) error = %v", err)
+	}
+	store, err := OpenStore(root)
+	if err != nil {
+		t.Fatalf("OpenStore error = %v", err)
+	}
+	base := time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC)
+	if err := store.AppendTask("project-context-fallback", Task{
+		TaskID:    "task-context-fallback",
+		Title:     "Cross-channel context",
+		ChannelID: "research",
+		Status:    "open",
+		CreatedAt: base,
+		UpdatedAt: base,
+	}); err != nil {
+		t.Fatalf("AppendTask error = %v", err)
+	}
+	task, err := store.LoadTask("project-context-fallback", "task-context-fallback")
+	if err != nil {
+		t.Fatalf("LoadTask error = %v", err)
+	}
+	if err := store.AppendMessage("project-context-fallback", Message{
+		ChannelID:     "ops",
+		AuthorAgentID: "agent://pc75/live-charlie",
+		Content:       "fallback context note",
+		ContextID:     task.ContextID,
+		CreatedAt:     base.Add(30 * time.Minute),
+	}); err != nil {
+		t.Fatalf("AppendMessage(fallback context) error = %v", err)
+	}
+
+	messages, err := store.LoadMessagesByContext("project-context-fallback", task.ContextID, 10)
+	if err != nil {
+		t.Fatalf("LoadMessagesByContext error = %v", err)
+	}
+	if len(messages) != 1 || messages[0].Content != "fallback context note" {
+		t.Fatalf("unexpected context fallback messages: %#v", messages)
+	}
+}
+
 func TestStoreAppendMessageRequireSignature(t *testing.T) {
 	t.Parallel()
 
@@ -1482,6 +1847,54 @@ func TestStoreLoadTaskAndTaskMessagesAcrossChannels(t *testing.T) {
 	}
 	if messages[0].Content != "main comment for theta task" || messages[1].Content != "ops comment for theta task" {
 		t.Fatalf("unexpected task message order: %#v", messages)
+	}
+}
+
+func TestStoreLoadTaskMessagesFallsBackBeyondPreferredChannels(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	teamRoot := filepath.Join(root, "team", "project-task-fallback")
+	if err := os.MkdirAll(teamRoot, 0o755); err != nil {
+		t.Fatalf("MkdirAll error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(teamRoot, "team.json"), []byte(`{"team_id":"project-task-fallback","title":"Project Task Fallback","channels":["main","research","ops"]}`), 0o644); err != nil {
+		t.Fatalf("WriteFile(team.json) error = %v", err)
+	}
+	store, err := OpenStore(root)
+	if err != nil {
+		t.Fatalf("OpenStore error = %v", err)
+	}
+	task := Task{
+		TaskID:    "task-fallback-1",
+		Title:     "Fallback task messages",
+		ChannelID: "research",
+		Status:    "doing",
+		CreatedAt: time.Date(2026, 4, 1, 8, 0, 0, 0, time.UTC),
+		UpdatedAt: time.Date(2026, 4, 1, 8, 5, 0, 0, time.UTC),
+	}
+	if err := store.AppendTask("project-task-fallback", task); err != nil {
+		t.Fatalf("AppendTask error = %v", err)
+	}
+	if err := store.AppendMessage("project-task-fallback", Message{
+		ChannelID:     "ops",
+		AuthorAgentID: "agent://pc75/live-delta",
+		MessageType:   "comment",
+		Content:       "ops fallback task comment",
+		StructuredData: map[string]any{
+			"task_id": task.TaskID,
+		},
+		CreatedAt: time.Date(2026, 4, 1, 8, 10, 0, 0, time.UTC),
+	}); err != nil {
+		t.Fatalf("AppendMessage(ops) error = %v", err)
+	}
+
+	messages, err := store.LoadTaskMessages("project-task-fallback", task.TaskID, 10)
+	if err != nil {
+		t.Fatalf("LoadTaskMessages error = %v", err)
+	}
+	if len(messages) != 1 || messages[0].Content != "ops fallback task comment" {
+		t.Fatalf("unexpected task fallback messages: %#v", messages)
 	}
 }
 
