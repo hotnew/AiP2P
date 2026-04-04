@@ -737,7 +737,7 @@ func (s *session) findPeersOnce(ctx context.Context, namespace string) {
 
 func startTransport(ctx context.Context, cfg haonews.NetworkBootstrapConfig) (host.Host, *kaddht.IpfsDHT, mdns.Service, *routingdisc.RoutingDiscovery, *pubsub.PubSub, error) {
 	var options []libp2p.Option
-	resolvedLANPeers, _ := haonews.ResolveLANBootstrapPeers(ctx, cfg)
+	resolvedLANPeers, _ := resolveLiveLANBootstrapPeers(ctx, cfg)
 	resolvedPublicPeers, _ := haonews.ResolveExplicitBootstrapPeers(ctx, cfg.PublicPeers, cfg.NetworkID, "public_peer")
 	resolvedRelayPeers, _ := haonews.ResolveExplicitBootstrapPeers(ctx, cfg.RelayPeers, cfg.NetworkID, "relay_peer")
 	if factory := haonews.BuildLibP2PAddrsFactory(cfg); factory != nil {
@@ -767,12 +767,9 @@ func startTransport(ctx context.Context, cfg haonews.NetworkBootstrapConfig) (ho
 	if err != nil {
 		return nil, nil, nil, nil, nil, err
 	}
-	knownGoodPeers, _ := haonews.LoadKnownGoodLibP2PBootstrapPeers(cfg)
-	bootstrapPeers, err := parseBootstrapPeers(haonews.EffectiveLibP2PBootstrapPeersWithKnownGood(
-		append(append([]string{}, resolvedLANPeers...), append(resolvedPublicPeers, resolvedRelayPeers...)...),
-		knownGoodPeers,
-		cfg.LibP2PBootstrap,
-	))
+	bootstrapValues := append(append([]string{}, resolvedLANPeers...), append(resolvedPublicPeers, resolvedRelayPeers...)...)
+	bootstrapValues = append(bootstrapValues, cfg.LibP2PBootstrap...)
+	bootstrapPeers, err := parseBootstrapPeers(bootstrapValues)
 	if err != nil {
 		_ = h.Close()
 		return nil, nil, nil, nil, nil, err

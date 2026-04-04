@@ -88,10 +88,18 @@ func (Plugin) Build(ctx context.Context, cfg apphost.Config, theme apphost.WebTh
 		cancelWatch()
 		return nil, err
 	}
+	watcherStatus := func() *live.BootstrapStatus {
+		watcherMu.Lock()
+		defer watcherMu.Unlock()
+		if watcher == nil {
+			return nil
+		}
+		return watcher.BootstrapStatus()
+	}
 	return &apphost.Site{
 		Manifest: Plugin{}.Manifest(),
 		Theme:    theme.Manifest(),
-		Handler:  newHandler(app, store, staticFS),
+		Handler:  newHandler(app, store, staticFS, watcherStatus),
 		Close: func(context.Context) error {
 			cancelWatch()
 			watcherMu.Lock()
@@ -172,8 +180,19 @@ func disableLiveArchiveLoop() bool {
 		strings.EqualFold(strings.TrimSpace(os.Getenv("HAONEWS_DISABLE_LIVE_ARCHIVE_LOOP")), "true")
 }
 
-func newHandler(app *newsplugin.App, store *live.LocalStore, staticFS fs.FS) http.Handler {
+func newHandler(app *newsplugin.App, store *live.LocalStore, staticFS fs.FS, watcherStatus func() *live.BootstrapStatus) http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("/api/live/bootstrap", func(w http.ResponseWriter, r *http.Request) {
+		status := (*live.BootstrapStatus)(nil)
+		if watcherStatus != nil {
+			status = watcherStatus()
+		}
+		if status == nil {
+			http.NotFound(w, r)
+			return
+		}
+		newsplugin.WriteJSON(w, http.StatusOK, status)
+	})
 	mux.HandleFunc("/live", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/live" {
 			http.NotFound(w, r)

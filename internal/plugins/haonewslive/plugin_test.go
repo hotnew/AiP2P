@@ -52,6 +52,17 @@ func TestLiveAnnouncementWatcherNetPath(t *testing.T) {
 	defer func() {
 		liveAnnouncementWatcherDisabledForTests = prevWatcherDisabled
 	}()
+	prevEnv, hadEnv := os.LookupEnv("HAONEWS_DISABLE_LIVE_ANNOUNCEMENT_WATCHER")
+	if err := os.Unsetenv("HAONEWS_DISABLE_LIVE_ANNOUNCEMENT_WATCHER"); err != nil {
+		t.Fatalf("Unsetenv error = %v", err)
+	}
+	defer func() {
+		if hadEnv {
+			_ = os.Setenv("HAONEWS_DISABLE_LIVE_ANNOUNCEMENT_WATCHER", prevEnv)
+			return
+		}
+		_ = os.Unsetenv("HAONEWS_DISABLE_LIVE_ANNOUNCEMENT_WATCHER")
+	}()
 
 	root := t.TempDir()
 	netPath := filepath.Join(root, "haonews_net.inf")
@@ -104,6 +115,28 @@ func TestPluginBuildServesLiveAPI(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "room-2") {
 		t.Fatalf("expected room id in API body, got %q", rec.Body.String())
+	}
+}
+
+func TestNewHandlerServesLiveBootstrap(t *testing.T) {
+	t.Parallel()
+
+	handler := newHandler(nil, nil, os.DirFS(t.TempDir()), func() *live.BootstrapStatus {
+		return &live.BootstrapStatus{
+			NetworkID: "net-live",
+			PeerID:    "12D3KooWLiveBootstrap",
+			DialAddrs: []string{"/ip4/192.168.102.74/tcp/51584/p2p/12D3KooWLiveBootstrap"},
+		}
+	})
+	req := httptest.NewRequest(http.MethodGet, "/api/live/bootstrap", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "\"network_id\": \"net-live\"") || !strings.Contains(body, "\"peer_id\": \"12D3KooWLiveBootstrap\"") {
+		t.Fatalf("unexpected bootstrap body = %q", body)
 	}
 }
 

@@ -29,6 +29,13 @@ type AnnouncementWatcher struct {
 	discovery *routingdisc.RoutingDiscovery
 	topic     *pubsub.Topic
 	sub       *pubsub.Subscription
+	networkID string
+}
+
+type BootstrapStatus struct {
+	NetworkID string   `json:"network_id,omitempty"`
+	PeerID    string   `json:"peer_id,omitempty"`
+	DialAddrs []string `json:"dial_addrs,omitempty"`
 }
 
 func StartAnnouncementWatcher(parent context.Context, storeRoot, netPath string) (*AnnouncementWatcher, error) {
@@ -78,6 +85,7 @@ func StartAnnouncementWatcher(parent context.Context, storeRoot, netPath string)
 		discovery: discoveryRuntime,
 		topic:     topic,
 		sub:       sub,
+		networkID: strings.TrimSpace(netCfg.NetworkID),
 	}
 	if discoveryRuntime != nil {
 		discutil.Advertise(ctx, discoveryRuntime, GlobalNamespace)
@@ -85,6 +93,29 @@ func StartAnnouncementWatcher(parent context.Context, storeRoot, netPath string)
 	}
 	go watcher.run(ctx)
 	return watcher, nil
+}
+
+func (w *AnnouncementWatcher) BootstrapStatus() *BootstrapStatus {
+	if w == nil || w.host == nil {
+		return nil
+	}
+	addrs := w.host.Addrs()
+	dialAddrs := make([]string, 0, len(addrs))
+	for _, addr := range addrs {
+		value := strings.TrimSpace(addr.String())
+		if value == "" {
+			continue
+		}
+		if !strings.Contains(value, "/p2p/") {
+			value += "/p2p/" + w.host.ID().String()
+		}
+		dialAddrs = append(dialAddrs, value)
+	}
+	return &BootstrapStatus{
+		NetworkID: w.networkID,
+		PeerID:    w.host.ID().String(),
+		DialAddrs: dialAddrs,
+	}
 }
 
 func (w *AnnouncementWatcher) Close() error {
