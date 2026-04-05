@@ -11,10 +11,10 @@ import (
 
 	teamcore "hao.news/internal/haonews/team"
 	newsplugin "hao.news/internal/plugins/haonews"
-	roomminimal "hao.news/internal/themes/room-themes/minimal"
+	roomthemes "hao.news/internal/themes/room-themes"
 )
 
-func handleTeamChannel(app *newsplugin.App, store *teamcore.Store, teamID, channelID string, w http.ResponseWriter, r *http.Request) {
+func handleTeamChannel(app *newsplugin.App, store *teamcore.Store, themeRegistry *roomthemes.Registry, teamID, channelID string, w http.ResponseWriter, r *http.Request) {
 	info, err := store.LoadTeamCtx(r.Context(), teamID)
 	if err != nil {
 		http.NotFound(w, r)
@@ -86,28 +86,41 @@ func handleTeamChannel(app *newsplugin.App, store *teamcore.Store, teamID, chann
 			{Label: "状态", Value: channelStateLabel(current.Hidden)},
 		},
 	}
-	if err := renderTeamChannelPage(app, w, data); err != nil {
+	if err := renderTeamChannelPage(app, themeRegistry, w, data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
 
-func renderTeamChannelPage(app *newsplugin.App, w http.ResponseWriter, data teamChannelPageData) error {
+func renderTeamChannelPage(app *newsplugin.App, themeRegistry *roomthemes.Registry, w http.ResponseWriter, data teamChannelPageData) error {
 	themeID := strings.TrimSpace(data.ChannelConfig.Theme)
-	switch themeID {
-	case "":
-		return app.Templates().ExecuteTemplate(w, "team_channel.html", data)
-	case "minimal":
-		tmpl, err := roomminimal.Template(template.FuncMap{
-			"structuredJSON": func(value map[string]any) string {
-				body, err := json.MarshalIndent(value, "", "  ")
-				if err != nil {
-					return fmt.Sprintf("%v", value)
+	if themeID != "" && themeRegistry != nil {
+		if theme, ok := themeRegistry.Get(themeID); ok {
+			tmpl, err := theme.Templates(template.FuncMap{
+				"structuredJSON": func(value map[string]any) string {
+					body, err := json.MarshalIndent(value, "", "  ")
+					if err != nil {
+						return fmt.Sprintf("%v", value)
+					}
+					return string(body)
+				},
+				"roomMessageKindLabel": func(messageType string) string {
+					switch strings.TrimSpace(messageType) {
+					case "plan":
+						return "[PLAN]"
+					case "skill":
+						return "[SKILL]"
+					case "snippet":
+						return "[SNIPPET]"
+					default:
+						return "[MESSAGE]"
+					}
+				},
+			})
+			if err == nil {
+				if err := tmpl.ExecuteTemplate(w, "room_channel.html", data); err == nil {
+					return nil
 				}
-				return string(body)
-			},
-		})
-		if err == nil {
-			return tmpl.ExecuteTemplate(w, "room_channel.html", data)
+			}
 		}
 	}
 	if err := app.Templates().ExecuteTemplate(w, "room_channel_default.html", data); err == nil {

@@ -1,0 +1,17 @@
+<section class="card">
+  <h3>发布 Snippet</h3>
+  <form method="post" action="/teams/{{.TeamID}}/r/plan-exchange/messages">
+    <input type="hidden" name="channel_id" value="{{.ChannelID}}">
+    <input type="hidden" name="kind" value="snippet">
+    <input type="text" name="author_agent_id" value="{{.ActorAgentID}}" placeholder="author_agent_id">
+    <input type="text" name="title" placeholder="标题">
+    <textarea name="summary" placeholder="摘要"></textarea>
+    <textarea name="pseudocode" placeholder="伪代码"></textarea>
+    <textarea name="examples_go" placeholder="Go 示例"></textarea>
+    <textarea name="examples_python" placeholder="Python 示例"></textarea>
+    <textarea name="examples_typescript" placeholder="TypeScript 示例"></textarea>
+    <input type="text" name="language" placeholder="language，例如 multi">
+    <input type="text" name="related_to" placeholder="关联 plan / task id">
+    <button type="submit">发布 Snippet</button>
+  </form>
+</section>

@@ -3,6 +3,11 @@
   "name": "规划交流插件",
   "version": "1.0.0",
   "description": "用于多 Agent 之间交换规划、Skill 描述和代码片段的专属插件。不要求完整代码，只交流意图和知识。",
+  "minTeamVersion": "0.2.0",
+  "routes": {
+    "web": "/teams/{teamID}/r/plan-exchange",
+    "api": "/api/teams/{teamID}/r/plan-exchange"
+  },
   "messageKinds": ["plan", "skill", "snippet"],
   "artifactKinds": ["skill-doc", "plan-summary"]
 }

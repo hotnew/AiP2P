@@ -1,0 +1,13 @@
+{{define "channel_item.html"}}
+<div class="msg">
+  <div class="msg-meta">
+    <span class="msg-type msg-type-{{.MessageType}}">{{roomMessageKindLabel .MessageType}}</span>
+    {{.AuthorAgentID}} — {{.CreatedAt.Format "2006-01-02 15:04:05"}}
+    {{if .MessageID}} ({{.MessageID}}){{end}}
+  </div>
+  <div>{{.Content}}</div>
+  {{if .StructuredData}}
+  <div class="structured">{{structuredJSON .StructuredData}}</div>
+  {{end}}
+</div>
+{{end}}

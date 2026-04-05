@@ -47,12 +47,20 @@ func normalizeChannelConfig(cfg ChannelConfig) ChannelConfig {
 	return cfg
 }
 
-func (s *Store) channelConfigDir(teamID string) string {
+func (s *Store) channelConfigLegacyDir(teamID string) string {
 	return filepath.Join(s.root, NormalizeTeamID(teamID), "channel-configs")
 }
 
+func (s *Store) channelConfigLegacyPath(teamID, channelID string) string {
+	return filepath.Join(s.channelConfigLegacyDir(teamID), normalizeChannelID(channelID)+".json")
+}
+
+func (s *Store) channelConfigDir(teamID, channelID string) string {
+	return filepath.Join(s.root, NormalizeTeamID(teamID), "channels", normalizeChannelID(channelID))
+}
+
 func (s *Store) channelConfigPath(teamID, channelID string) string {
-	return filepath.Join(s.channelConfigDir(teamID), normalizeChannelID(channelID)+".json")
+	return filepath.Join(s.channelConfigDir(teamID, channelID), "channel_config.json")
 }
 
 func (s *Store) loadChannelConfigNoCtx(teamID, channelID string) (ChannelConfig, error) {
@@ -64,20 +72,32 @@ func (s *Store) loadChannelConfigNoCtx(teamID, channelID string) (ChannelConfig,
 	if teamID == "" || channelID == "" {
 		return ChannelConfig{}, fmt.Errorf("empty team_id or channel_id")
 	}
-	data, err := os.ReadFile(s.channelConfigPath(teamID, channelID))
-	if errors.Is(err, os.ErrNotExist) {
-		return ChannelConfig{ChannelID: channelID}, nil
+	paths := []string{
+		s.channelConfigPath(teamID, channelID),
+		s.channelConfigLegacyPath(teamID, channelID),
 	}
-	if err != nil {
-		return ChannelConfig{}, err
+	var readErr error
+	for _, path := range paths {
+		data, err := os.ReadFile(path)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			readErr = err
+			break
+		}
+		var cfg ChannelConfig
+		if err := json.Unmarshal(data, &cfg); err != nil {
+			return ChannelConfig{}, fmt.Errorf("invalid channel config json for %s/%s: %w", teamID, channelID, err)
+		}
+		cfg = normalizeChannelConfig(cfg)
+		cfg.ChannelID = channelID
+		return cfg, nil
 	}
-	var cfg ChannelConfig
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		return ChannelConfig{}, fmt.Errorf("invalid channel config json for %s/%s: %w", teamID, channelID, err)
+	if readErr != nil {
+		return ChannelConfig{}, readErr
 	}
-	cfg = normalizeChannelConfig(cfg)
-	cfg.ChannelID = channelID
-	return cfg, nil
+	return ChannelConfig{ChannelID: channelID}, nil
 }
 
 func (s *Store) saveChannelConfigNoCtx(teamID string, cfg ChannelConfig) error {
@@ -100,7 +120,7 @@ func (s *Store) saveChannelConfigNoCtx(teamID string, cfg ChannelConfig) error {
 			}
 		}
 		cfg.UpdatedAt = now
-		dir := s.channelConfigDir(teamID)
+		dir := s.channelConfigDir(teamID, cfg.ChannelID)
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return err
 		}
@@ -121,23 +141,59 @@ func (s *Store) listChannelConfigsNoCtx(teamID string) ([]ChannelConfig, error) 
 	if teamID == "" {
 		return nil, errors.New("empty team id")
 	}
-	entries, err := os.ReadDir(s.channelConfigDir(teamID))
-	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
-	}
-	if err != nil {
+	seen := map[string]struct{}{}
+	configs := make([]ChannelConfig, 0)
+
+	channelEntries, err := os.ReadDir(filepath.Join(s.root, teamID, "channels"))
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, err
 	}
-	configs := make([]ChannelConfig, 0, len(entries))
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+	for _, entry := range channelEntries {
+		if !entry.IsDir() {
 			continue
 		}
-		channelID := strings.TrimSuffix(entry.Name(), ".json")
+		channelID := normalizeChannelID(entry.Name())
+		if channelID == "" {
+			continue
+		}
+		if _, ok := seen[channelID]; ok {
+			continue
+		}
+		if _, err := os.Stat(s.channelConfigPath(teamID, channelID)); err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				continue
+			}
+			return nil, err
+		}
 		cfg, err := s.loadChannelConfigNoCtx(teamID, channelID)
 		if err != nil {
 			continue
 		}
+		seen[channelID] = struct{}{}
+		configs = append(configs, cfg)
+	}
+
+	legacyEntries, err := os.ReadDir(s.channelConfigLegacyDir(teamID))
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, err
+	}
+	for _, entry := range legacyEntries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+		channelID := strings.TrimSuffix(entry.Name(), ".json")
+		channelID = normalizeChannelID(channelID)
+		if channelID == "" {
+			continue
+		}
+		if _, ok := seen[channelID]; ok {
+			continue
+		}
+		cfg, err := s.loadChannelConfigNoCtx(teamID, channelID)
+		if err != nil {
+			continue
+		}
+		seen[channelID] = struct{}{}
 		configs = append(configs, cfg)
 	}
 	sort.SliceStable(configs, func(i, j int) bool {

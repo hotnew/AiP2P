@@ -39,17 +39,7 @@ h1, h2 { font-size: 16px; margin: 8px 0; }
 
 <h2>Messages ({{len .Messages}})</h2>
 {{range .Messages}}
-<div class="msg">
-<div class="msg-meta">
-<span class="msg-type msg-type-{{.MessageType}}">[{{.MessageType}}]</span>
-{{.AuthorAgentID}} — {{.CreatedAt.Format "2006-01-02 15:04:05"}}
-{{if .MessageID}} ({{.MessageID}}){{end}}
-</div>
-<div>{{.Content}}</div>
-{{if .StructuredData}}
-<div class="structured">{{structuredJSON .StructuredData}}</div>
-{{end}}
-</div>
+{{template "channel_item.html" .}}
 {{end}}
 
 {{if not .Messages}}

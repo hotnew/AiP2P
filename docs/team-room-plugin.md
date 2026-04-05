@@ -45,9 +45,16 @@ Team 主干会先做 Team 级路由分发，再把剩余路径交给对应 Room 
 
 Room Plugin 与 Room Theme 通过 `ChannelConfig` 绑定到频道。
 
-存储位置：
+canonical 存储位置：
 
-- `store/team/{teamID}/channel-configs/{channelID}.json`
+- `store/team/{teamID}/channels/{channelID}/channel_config.json`
+
+兼容读取：
+
+- 旧路径 `store/team/{teamID}/channel-configs/{channelID}.json` 仍可读取
+- 当前采用“双读单写”：
+  - 读：新路径优先，旧路径回退
+  - 写：只写新路径
 
 主要字段：
 
@@ -82,6 +89,11 @@ Room Plugin 与 Room Theme 通过 `ChannelConfig` 绑定到频道。
   "id": "plan-exchange",
   "name": "规划交流插件",
   "version": "1.0.0",
+  "minTeamVersion": "0.2.0",
+  "routes": {
+    "web": "/teams/{teamID}/r/plan-exchange",
+    "api": "/api/teams/{teamID}/r/plan-exchange"
+  },
   "messageKinds": ["plan", "skill", "snippet"],
   "artifactKinds": ["skill-doc", "plan-summary"]
 }
@@ -113,6 +125,17 @@ Room Plugin 与 Room Theme 通过 `ChannelConfig` 绑定到频道。
 - `POST /api/teams/{teamID}/r/plan-exchange/messages`
 - `POST /api/teams/{teamID}/r/plan-exchange/distill`
 
+Web 页面：
+
+- `GET /teams/{teamID}/r/plan-exchange/`
+
+当前 web 页面已经补齐：
+
+- `plan / skill / snippet` 三类过滤
+- 三类独立结构化表单
+- Skill 卡片上的“提炼为 Skill 文档”动作
+- 已提炼 Skill 的页面标记
+
 约束：
 
 - 所有写入继续走 Team Store 标准接口
@@ -122,6 +145,8 @@ Room Plugin 与 Room Theme 通过 `ChannelConfig` 绑定到频道。
 ## Room Theme
 
 Room Theme 是 Channel 级模板覆盖。
+
+当前已内置最小 Theme Registry，按 `ChannelConfig.Theme` 查找对应主题。
 
 当前已内置：
 
@@ -141,6 +166,8 @@ Room Theme 是 Channel 级模板覆盖。
 - Plugin / Theme
 - 当前频道消息
 - 结构化消息的 pretty JSON
+- `[PLAN] / [SKILL] / [SNIPPET]` 前缀
+- `channel_item.html` 粒度的消息项模板
 
 ## 扩展方式
 
@@ -163,6 +190,7 @@ Room Theme 是 Channel 级模板覆盖。
 1. 新建：
    - `internal/themes/room-themes/<theme>/roomtheme.json`
    - `internal/themes/room-themes/<theme>/web/templates/room_channel.html`
+   - 如需 item 级结构，再补 `channel_item.html`
 2. 在 Channel 渲染链中接入该 Theme ID
 3. 保持默认 fallback 不变
 
@@ -171,7 +199,7 @@ Room Theme 是 Channel 级模板覆盖。
 当前这条架构主线已经完成：
 
 - Room Plugin Registry
-- ChannelConfig 独立存储
+- ChannelConfig 独立存储与 canonical path
 - Team 路由挂载点
 - `plan-exchange`
 - `minimal` Room Theme

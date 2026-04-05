@@ -29,8 +29,19 @@ func (s *Store) channelShardPath(teamID, channelID string, at time.Time) string 
 }
 
 func (s *Store) isShardedChannel(teamID, channelID string) bool {
-	info, err := os.Stat(s.channelShardDir(teamID, channelID))
-	return err == nil && info.IsDir()
+	entries, err := os.ReadDir(s.channelShardDir(teamID, channelID))
+	if err != nil {
+		return false
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		if filepath.Ext(entry.Name()) == ".jsonl" {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Store) channelsConfigPath(teamID string) string {

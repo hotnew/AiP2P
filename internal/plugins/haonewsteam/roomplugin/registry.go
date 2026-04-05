@@ -17,13 +17,20 @@ type RoomPlugin interface {
 	Handler(store *teamcore.Store, teamID string) http.Handler
 }
 
+type RouteSet struct {
+	Web string `json:"web,omitempty"`
+	API string `json:"api,omitempty"`
+}
+
 type Manifest struct {
-	ID            string   `json:"id"`
-	Name          string   `json:"name"`
-	Version       string   `json:"version"`
-	Description   string   `json:"description,omitempty"`
-	MessageKinds  []string `json:"messageKinds,omitempty"`
-	ArtifactKinds []string `json:"artifactKinds,omitempty"`
+	ID             string   `json:"id"`
+	Name           string   `json:"name"`
+	Version        string   `json:"version"`
+	Description    string   `json:"description,omitempty"`
+	MinTeamVersion string   `json:"minTeamVersion,omitempty"`
+	Routes         RouteSet `json:"routes,omitempty"`
+	MessageKinds   []string `json:"messageKinds,omitempty"`
+	ArtifactKinds  []string `json:"artifactKinds,omitempty"`
 }
 
 func LoadManifestJSON(data []byte) (Manifest, error) {

@@ -52,3 +52,24 @@ func TestRegistryRegisterGetAndDuplicate(t *testing.T) {
 		t.Fatalf("Manifests = %#v", manifests)
 	}
 }
+
+func TestLoadManifestJSONIncludesRoutesAndMinTeamVersion(t *testing.T) {
+	t.Parallel()
+
+	manifest, err := LoadManifestJSON([]byte(`{
+  "id":"plan-exchange",
+  "name":"Plan Exchange",
+  "version":"1.0.0",
+  "minTeamVersion":"0.2.0",
+  "routes":{"web":"/teams/{teamID}/r/plan-exchange","api":"/api/teams/{teamID}/r/plan-exchange"}
+}`))
+	if err != nil {
+		t.Fatalf("LoadManifestJSON error = %v", err)
+	}
+	if manifest.MinTeamVersion != "0.2.0" {
+		t.Fatalf("MinTeamVersion = %q", manifest.MinTeamVersion)
+	}
+	if manifest.Routes.Web == "" || manifest.Routes.API == "" {
+		t.Fatalf("Routes = %#v", manifest.Routes)
+	}
+}

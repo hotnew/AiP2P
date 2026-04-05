@@ -4,16 +4,49 @@ import (
 	"embed"
 	"html/template"
 	"io/fs"
+
+	roomthemes "hao.news/internal/themes/room-themes"
 )
 
-//go:embed roomtheme.json web/templates/room_channel.html
+//go:embed roomtheme.json web/templates/*.html
 var assets embed.FS
 
-func Template(funcMap template.FuncMap) (*template.Template, error) {
+type Theme struct{}
+
+func New() *Theme {
+	return &Theme{}
+}
+
+func (t *Theme) ID() string {
+	return "minimal"
+}
+
+func (t *Theme) Manifest() roomthemes.Manifest {
+	manifest, err := roomthemes.LoadManifestJSON(roomthemeJSON)
+	if err != nil {
+		return roomthemes.Manifest{
+			ID:          "minimal",
+			Name:        "Minimal",
+			Version:     "1.0.0",
+			Description: "Minimal channel theme",
+			Overrides:   []string{"room_channel.html", "channel_item.html"},
+		}
+	}
+	return manifest
+}
+
+//go:embed roomtheme.json
+var roomthemeJSON []byte
+
+func (t *Theme) Templates(funcMap template.FuncMap) (*template.Template, error) {
 	if funcMap == nil {
 		funcMap = template.FuncMap{}
 	}
-	return template.New("room_channel.html").Funcs(funcMap).ParseFS(assets, "web/templates/room_channel.html")
+	return template.New("room_channel.html").Funcs(funcMap).ParseFS(assets, "web/templates/*.html")
+}
+
+func Template(funcMap template.FuncMap) (*template.Template, error) {
+	return New().Templates(funcMap)
 }
 
 func Assets() fs.FS {

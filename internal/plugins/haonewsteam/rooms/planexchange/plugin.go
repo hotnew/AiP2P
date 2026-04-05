@@ -24,7 +24,16 @@ func (p *Plugin) ID() string {
 func (p *Plugin) Manifest() roomplugin.Manifest {
 	m, err := roomplugin.LoadManifestJSON(manifestJSON)
 	if err != nil {
-		return roomplugin.Manifest{ID: "plan-exchange", Name: "Plan Exchange", Version: "1.0.0"}
+		return roomplugin.Manifest{
+			ID:             "plan-exchange",
+			Name:           "Plan Exchange",
+			Version:        "1.0.0",
+			MinTeamVersion: "0.2.0",
+			Routes: roomplugin.RouteSet{
+				Web: "/teams/{teamID}/r/plan-exchange",
+				API: "/api/teams/{teamID}/r/plan-exchange",
+			},
+		}
 	}
 	return m
 }

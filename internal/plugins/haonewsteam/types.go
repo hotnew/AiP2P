@@ -104,6 +104,16 @@ type teamChangePreview struct {
 	CreatedAt  time.Time
 }
 
+type teamChannelConfigSummary struct {
+	ChannelID       string    `json:"channel_id"`
+	Plugin          string    `json:"plugin,omitempty"`
+	PluginID        string    `json:"plugin_id,omitempty"`
+	Theme           string    `json:"theme,omitempty"`
+	AgentOnboarding string    `json:"agent_onboarding,omitempty"`
+	Rules           []string  `json:"rules,omitempty"`
+	UpdatedAt       time.Time `json:"updated_at,omitempty"`
+}
+
 type teamMembersPageData struct {
 	Project        string
 	Version        string

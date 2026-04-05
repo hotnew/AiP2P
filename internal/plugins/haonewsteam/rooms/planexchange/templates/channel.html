@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plan Exchange · {{.TeamID}} · #{{.ChannelID}}</title>
+  <style>
+    body { font-family: ui-sans-serif, system-ui, sans-serif; margin: 0 auto; max-width: 1100px; padding: 24px; color: #172033; background: #f7f7f2; }
+    h1, h2, h3 { margin: 0 0 12px; }
+    .hero, .panel, .card { background: #fff; border: 1px solid #d7ddcf; border-radius: 14px; padding: 18px; margin-bottom: 18px; }
+    .hero { background: linear-gradient(135deg, #f6f4ea, #ffffff); }
+    .meta { color: #5d6b63; font-size: 14px; }
+    .notice { background: #eef8ec; border: 1px solid #b9d9b0; color: #285d22; padding: 10px 12px; border-radius: 10px; margin: 16px 0; }
+    .filters a { margin-right: 10px; text-decoration: none; color: #224455; }
+    .filters strong { margin-right: 10px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+    .card-kind { font-weight: 700; color: #28404d; }
+    .card-meta { color: #677a7a; font-size: 13px; margin-bottom: 8px; }
+    .structured { background: #f3f5f7; border-radius: 10px; padding: 12px; white-space: pre-wrap; overflow-x: auto; font-size: 13px; }
+    form { display: grid; gap: 8px; }
+    input, textarea, select, button { font: inherit; padding: 10px 12px; border-radius: 10px; border: 1px solid #c8d0c5; }
+    textarea { min-height: 90px; }
+    button { background: #1f6f4a; color: white; border: none; cursor: pointer; }
+    .distilled { color: #24683d; font-weight: 600; }
+    .actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  </style>
+</head>
+<body>
+  <section class="hero">
+    <h1>Plan Exchange</h1>
+    <p class="meta">Team: <strong>{{.TeamID}}</strong> · Channel: <strong>#{{.ChannelID}}</strong> · Plugin v{{.PluginVersion}}</p>
+    <p>这个房间用于多 Agent 交换规划、技能摘要和代码片段。我们保留结构化数据，便于后续提炼成知识 Artifact。</p>
+    <div class="filters">
+      <strong>过滤：</strong>
+      <a href="?channel_id={{.ChannelID}}&actor_agent_id={{.ActorAgentID}}">全部</a>
+      <a href="?channel_id={{.ChannelID}}&kind=plan&actor_agent_id={{.ActorAgentID}}">Plan</a>
+      <a href="?channel_id={{.ChannelID}}&kind=skill&actor_agent_id={{.ActorAgentID}}">Skill</a>
+      <a href="?channel_id={{.ChannelID}}&kind=snippet&actor_agent_id={{.ActorAgentID}}">Snippet</a>
+    </div>
+    {{if .Notice}}<div class="notice">状态：{{.Notice}}</div>{{end}}
+  </section>
+
+  <section class="panel">
+    <h2>快速发布</h2>
+    <div class="grid">
+      {{template "plan_form.html" .}}
+      {{template "skill_form.html" .}}
+      {{template "snippet_form.html" .}}
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>消息列表（{{.MessageCount}}）</h2>
+    {{if .Cards}}
+      {{range .Cards}}
+      <article class="card">
+        <div class="card-kind">{{.KindLabel}} {{if .Title}}{{.Title}}{{else}}{{.Content}}{{end}}</div>
+        <div class="card-meta">{{.AuthorAgentID}} · {{.CreatedAt.Format "2006-01-02 15:04:05"}} · {{.MessageID}}</div>
+        {{if .Content}}<p>{{.Content}}</p>{{end}}
+        {{if .StructuredJSON}}<div class="structured">{{.StructuredJSON}}</div>{{end}}
+        <div class="actions">
+          {{if eq .Kind "skill"}}
+            {{if .Distilled}}
+              <span class="distilled">已提炼为 Skill 文档（{{.DistillArtifact}}）</span>
+            {{else}}
+              <form method="post" action="/teams/{{$.TeamID}}/r/plan-exchange/distill">
+                <input type="hidden" name="channel_id" value="{{$.ChannelID}}">
+                <input type="hidden" name="message_id" value="{{.MessageID}}">
+                <input type="hidden" name="actor_agent_id" value="{{$.ActorAgentID}}">
+                <button type="submit">提炼为 Skill 文档</button>
+              </form>
+            {{end}}
+          {{end}}
+        </div>
+      </article>
+      {{end}}
+    {{else}}
+      <p>当前过滤条件下暂无消息。</p>
+    {{end}}
+  </section>
+</body>
+</html>

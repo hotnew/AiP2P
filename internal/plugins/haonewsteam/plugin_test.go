@@ -860,6 +860,16 @@ func TestPluginBuildServesPlanExchangeRoomPlugin(t *testing.T) {
 		t.Fatalf("expected skill messages in list body, got %q", listRec.Body.String())
 	}
 
+	webReq := httptest.NewRequest(http.MethodGet, "/teams/plan-room-team/r/plan-exchange/?channel_id=main&kind=skill&actor_agent_id=agent://pc75/live-bravo", nil)
+	webRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(webRec, webReq)
+	if webRec.Code != http.StatusOK {
+		t.Fatalf("plan-exchange web status = %d, body = %s", webRec.Code, webRec.Body.String())
+	}
+	if !strings.Contains(webRec.Body.String(), "Plan Exchange") || !strings.Contains(webRec.Body.String(), "发布 Skill") || !strings.Contains(webRec.Body.String(), "提炼为 Skill 文档") {
+		t.Fatalf("unexpected plan-exchange web body: %q", webRec.Body.String())
+	}
+
 	messages, err := store.LoadMessages("plan-room-team", "main", 20)
 	if err != nil {
 		t.Fatalf("LoadMessages error = %v", err)
@@ -890,6 +900,35 @@ func TestPluginBuildServesPlanExchangeRoomPlugin(t *testing.T) {
 	}
 	if len(artifacts) == 0 || artifacts[0].Kind != "skill-doc" {
 		t.Fatalf("expected distilled artifact, got %#v", artifacts)
+	}
+
+	webAfterDistillReq := httptest.NewRequest(http.MethodGet, "/teams/plan-room-team/r/plan-exchange/?channel_id=main&kind=skill&actor_agent_id=agent://pc75/live-bravo", nil)
+	webAfterDistillRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(webAfterDistillRec, webAfterDistillReq)
+	if webAfterDistillRec.Code != http.StatusOK {
+		t.Fatalf("plan-exchange web after distill status = %d, body = %s", webAfterDistillRec.Code, webAfterDistillRec.Body.String())
+	}
+	if !strings.Contains(webAfterDistillRec.Body.String(), "已提炼为 Skill 文档") {
+		t.Fatalf("expected distilled marker in web body, got %q", webAfterDistillRec.Body.String())
+	}
+
+	formReq := httptest.NewRequest(http.MethodPost, "/teams/plan-room-team/r/plan-exchange/messages", strings.NewReader("channel_id=main&author_agent_id=agent://pc75/live-bravo&kind=snippet&title=Snippet+via+form&summary=Show+forms+work&language=multi"))
+	formReq.RemoteAddr = "127.0.0.1:12345"
+	formReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	formRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(formRec, formReq)
+	if formRec.Code != http.StatusSeeOther {
+		t.Fatalf("plan-exchange web form create status = %d, body = %s", formRec.Code, formRec.Body.String())
+	}
+
+	webSnippetReq := httptest.NewRequest(http.MethodGet, "/teams/plan-room-team/r/plan-exchange/?channel_id=main&kind=snippet&actor_agent_id=agent://pc75/live-bravo", nil)
+	webSnippetRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(webSnippetRec, webSnippetReq)
+	if webSnippetRec.Code != http.StatusOK {
+		t.Fatalf("plan-exchange web snippet status = %d, body = %s", webSnippetRec.Code, webSnippetRec.Body.String())
+	}
+	if !strings.Contains(webSnippetRec.Body.String(), "Snippet via form") {
+		t.Fatalf("expected form-created snippet in web body, got %q", webSnippetRec.Body.String())
 	}
 }
 
@@ -1225,7 +1264,7 @@ func TestPluginBuildServesTeamDetailAndAPI(t *testing.T) {
 	if teamDetailRec.Code != http.StatusOK {
 		t.Fatalf("team detail after config status = %d, body = %s", teamDetailRec.Code, teamDetailRec.Body.String())
 	}
-	if !strings.Contains(teamDetailRec.Body.String(), `"channel_config_count": 1`) || !strings.Contains(teamDetailRec.Body.String(), `"channel_configs"`) || !strings.Contains(teamDetailRec.Body.String(), `"plugin": "plan-exchange@1.0"`) {
+	if !strings.Contains(teamDetailRec.Body.String(), `"channel_config_count": 1`) || !strings.Contains(teamDetailRec.Body.String(), `"channel_configs"`) || !strings.Contains(teamDetailRec.Body.String(), `"channels_config"`) || !strings.Contains(teamDetailRec.Body.String(), `"plugin_id": "plan-exchange"`) || !strings.Contains(teamDetailRec.Body.String(), `"plugin": "plan-exchange@1.0"`) {
 		t.Fatalf("expected team detail to include channel configs, got %q", teamDetailRec.Body.String())
 	}
 

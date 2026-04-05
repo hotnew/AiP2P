@@ -1,0 +1,15 @@
+<section class="card">
+  <h3>发布 Skill</h3>
+  <form method="post" action="/teams/{{.TeamID}}/r/plan-exchange/messages">
+    <input type="hidden" name="channel_id" value="{{.ChannelID}}">
+    <input type="hidden" name="kind" value="skill">
+    <input type="text" name="author_agent_id" value="{{.ActorAgentID}}" placeholder="author_agent_id">
+    <input type="text" name="title" placeholder="标题">
+    <textarea name="summary" placeholder="摘要"></textarea>
+    <textarea name="steps" placeholder="步骤（每行一条）"></textarea>
+    <textarea name="traps" placeholder="陷阱（每行一条）"></textarea>
+    <input type="text" name="validated_by" placeholder="validated_by">
+    <input type="text" name="language" placeholder="language，例如 language-agnostic">
+    <button type="submit">发布 Skill</button>
+  </form>
+</section>

@@ -15,6 +15,8 @@ import (
 	newsplugin "hao.news/internal/plugins/haonews"
 	"hao.news/internal/plugins/haonewsteam/roomplugin"
 	"hao.news/internal/plugins/haonewsteam/rooms/planexchange"
+	roomthemes "hao.news/internal/themes/room-themes"
+	roomminimal "hao.news/internal/themes/room-themes/minimal"
 )
 
 type Plugin struct{}
@@ -53,13 +55,15 @@ func (Plugin) Build(_ context.Context, cfg apphost.Config, theme apphost.WebThem
 	}
 	registry := roomplugin.NewRegistry()
 	registry.MustRegister(planexchange.New())
+	themeRegistry := roomthemes.NewRegistry()
+	themeRegistry.MustRegister(roomminimal.New())
 	if !strings.HasSuffix(filepathBase(os.Args[0]), ".test") {
 		startTeamWorkspaceWarmup(ctx, app, store)
 	}
 	return &apphost.Site{
 		Manifest: Plugin{}.Manifest(),
 		Theme:    theme.Manifest(),
-		Handler:  newHandler(app, store, staticFS, registry),
+		Handler:  newHandler(app, store, staticFS, registry, themeRegistry),
 	}, nil
 }
 
@@ -126,7 +130,7 @@ func filepathBase(path string) string {
 	return path
 }
 
-func newHandler(app *newsplugin.App, store *teamcore.Store, staticFS fs.FS, roomRegistry *roomplugin.Registry) http.Handler {
+func newHandler(app *newsplugin.App, store *teamcore.Store, staticFS fs.FS, roomRegistry *roomplugin.Registry, themeRegistry *roomthemes.Registry) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/.well-known/agent.json", func(w http.ResponseWriter, r *http.Request) {
 		handleA2AWellKnownAgent(app, store, w, r)
@@ -336,7 +340,7 @@ func newHandler(app *newsplugin.App, store *teamcore.Store, staticFS fs.FS, room
 				http.NotFound(w, r)
 				return
 			}
-			handleTeamChannel(app, store, teamID, channelID, w, r)
+			handleTeamChannel(app, store, themeRegistry, teamID, channelID, w, r)
 			return
 		}
 		if len(parts) == 5 && parts[1] == "channels" && parts[3] == "messages" && parts[4] == "create" && r.Method == http.MethodPost {

@@ -622,6 +622,7 @@ func handleAPITeam(store *teamcore.Store, teamID string, w http.ResponseWriter, 
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	channelConfigSummary := summarizeTeamChannelConfigs(channelConfigs)
 	newsplugin.WriteJSON(w, http.StatusOK, map[string]any{
 		"scope":                "team-detail",
 		"team_id":              info.TeamID,
@@ -631,7 +632,27 @@ func handleAPITeam(store *teamcore.Store, teamID string, w http.ResponseWriter, 
 		"members":              members,
 		"channel_config_count": len(channelConfigs),
 		"channel_configs":      channelConfigs,
+		"channels_config":      channelConfigSummary,
 	})
+}
+
+func summarizeTeamChannelConfigs(configs []teamcore.ChannelConfig) []teamChannelConfigSummary {
+	if len(configs) == 0 {
+		return []teamChannelConfigSummary{}
+	}
+	out := make([]teamChannelConfigSummary, 0, len(configs))
+	for _, cfg := range configs {
+		out = append(out, teamChannelConfigSummary{
+			ChannelID:       cfg.ChannelID,
+			Plugin:          cfg.Plugin,
+			PluginID:        cfg.PluginID(),
+			Theme:           cfg.Theme,
+			AgentOnboarding: cfg.AgentOnboarding,
+			Rules:           append([]string(nil), cfg.Rules...),
+			UpdatedAt:       cfg.UpdatedAt,
+		})
+	}
+	return out
 }
 
 func handleAPITeamHistory(store *teamcore.Store, teamID string, w http.ResponseWriter, r *http.Request) {
