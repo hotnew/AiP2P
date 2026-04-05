@@ -161,6 +161,13 @@ func (s *Store) LoadChannelSnapshotCtx(ctx context.Context, teamID, channelID st
 	return s.loadChannelSnapshotNoCtx(teamID, channelID)
 }
 
+func (s *Store) LoadChannelConfigCtx(ctx context.Context, teamID, channelID string) (ChannelConfig, error) {
+	if err := ctxErr(ctx); err != nil {
+		return ChannelConfig{}, err
+	}
+	return s.loadChannelConfigNoCtx(teamID, channelID)
+}
+
 func (s *Store) LoadMessagesCtx(ctx context.Context, teamID, channelID string, limit int) ([]Message, error) {
 	if err := ctxErr(ctx); err != nil {
 		return nil, err
@@ -184,6 +191,13 @@ func (s *Store) ListChannelsCtx(ctx context.Context, teamID string) ([]ChannelSu
 		return nil, err
 	}
 	return s.listChannelsNoCtx(teamID)
+}
+
+func (s *Store) ListChannelConfigsCtx(ctx context.Context, teamID string) ([]ChannelConfig, error) {
+	if err := ctxErr(ctx); err != nil {
+		return nil, err
+	}
+	return s.listChannelConfigsNoCtx(teamID)
 }
 
 func (s *Store) LoadTasksCtx(ctx context.Context, teamID string, limit int) ([]Task, error) {
@@ -356,6 +370,13 @@ func (s *Store) SavePolicyCtx(ctx context.Context, teamID string, policy Policy)
 		return err
 	}
 	return s.savePolicyNoCtx(teamID, policy)
+}
+
+func (s *Store) SaveChannelConfigCtx(ctx context.Context, teamID string, cfg ChannelConfig) error {
+	if err := ctxErr(ctx); err != nil {
+		return err
+	}
+	return s.saveChannelConfigNoCtx(teamID, cfg)
 }
 
 func (s *Store) AppendMessageCtx(ctx context.Context, teamID string, msg Message) error {

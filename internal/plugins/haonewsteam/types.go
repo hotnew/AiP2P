@@ -290,6 +290,7 @@ type teamChannelPageData struct {
 	Messages       []teamcore.Message
 	Tasks          []teamcore.Task
 	Artifacts      []teamcore.Artifact
+	ChannelConfig  teamcore.ChannelConfig
 	RelatedHistory []teamcore.ChangeEvent
 	SummaryStats   []newsplugin.SummaryStat
 }

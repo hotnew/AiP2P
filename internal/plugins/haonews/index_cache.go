@@ -26,6 +26,10 @@ func (a *App) buildIndex() (Index, error) {
 	if err != nil {
 		return Index{}, err
 	}
+	index, err = a.governanceIndex(index)
+	if err != nil {
+		return Index{}, err
+	}
 	rules := SubscriptionRules{}
 	if a.loadRules != nil {
 		rules, err = a.loadRules(a.rulesPath)
@@ -33,10 +37,6 @@ func (a *App) buildIndex() (Index, error) {
 			return Index{}, err
 		}
 		index = ApplySubscriptionRules(index, a.project, rules)
-	}
-	index, err = a.governanceIndex(index)
-	if err != nil {
-		return Index{}, err
 	}
 	PrepareMarkdownArchive(&index, a.archive)
 	decisions, err := LoadModerationDecisions(ModerationDecisionsPath(a.writerPath))

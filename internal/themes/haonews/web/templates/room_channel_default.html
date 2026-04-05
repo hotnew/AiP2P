@@ -1,0 +1,58 @@
+{{template "partials.html" .}}
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.Team.Title}} · {{.Channel.Title}} · Room</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  {{template "site_header" .}}
+  <main class="container prose" style="padding-bottom: 48px;">
+    <section class="team-hero">
+      <div>
+        <p class="team-kicker">Room Channel</p>
+        <h1>{{.Team.Title}} / #{{.Channel.ChannelID}}</h1>
+        <p>{{.Channel.Description}}</p>
+      </div>
+    </section>
+
+    {{if .ChannelConfig.AgentOnboarding}}
+    <section class="team-card">
+      <h2>Agent 引导</h2>
+      <p>{{.ChannelConfig.AgentOnboarding}}</p>
+    </section>
+    {{end}}
+
+    {{if .ChannelConfig.Rules}}
+    <section class="team-card">
+      <h2>频道规则</h2>
+      {{range .ChannelConfig.Rules}}<div>• {{.}}</div>{{end}}
+    </section>
+    {{end}}
+
+    <section class="team-card">
+      <h2>Room 配置</h2>
+      <p>Plugin: {{if .ChannelConfig.Plugin}}{{.ChannelConfig.Plugin}}{{else}}none{{end}}</p>
+      <p>Theme: {{if .ChannelConfig.Theme}}{{.ChannelConfig.Theme}}{{else}}default{{end}}</p>
+    </section>
+
+    <section class="team-card">
+      <h2>最近消息</h2>
+      {{if .Messages}}
+        {{range .Messages}}
+          <article style="margin-bottom:16px;">
+            <strong>{{.AuthorAgentID}}</strong>
+            <span style="color:#666;">{{.CreatedAt.Format "2006-01-02 15:04 MST"}}</span>
+            <div>{{.Content}}</div>
+            {{if .StructuredData}}<pre>{{prettyJSON .StructuredData}}</pre>{{end}}
+          </article>
+        {{end}}
+      {{else}}
+        <p>频道暂无消息。</p>
+      {{end}}
+    </section>
+  </main>
+</body>
+</html>

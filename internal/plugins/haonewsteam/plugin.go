@@ -13,6 +13,8 @@ import (
 	"hao.news/internal/apphost"
 	teamcore "hao.news/internal/haonews/team"
 	newsplugin "hao.news/internal/plugins/haonews"
+	"hao.news/internal/plugins/haonewsteam/roomplugin"
+	"hao.news/internal/plugins/haonewsteam/rooms/planexchange"
 )
 
 type Plugin struct{}
@@ -49,13 +51,15 @@ func (Plugin) Build(_ context.Context, cfg apphost.Config, theme apphost.WebThem
 	if err != nil {
 		return nil, err
 	}
+	registry := roomplugin.NewRegistry()
+	registry.MustRegister(planexchange.New())
 	if !strings.HasSuffix(filepathBase(os.Args[0]), ".test") {
 		startTeamWorkspaceWarmup(ctx, app, store)
 	}
 	return &apphost.Site{
 		Manifest: Plugin{}.Manifest(),
 		Theme:    theme.Manifest(),
-		Handler:  newHandler(app, store, staticFS),
+		Handler:  newHandler(app, store, staticFS, registry),
 	}, nil
 }
 
@@ -122,7 +126,7 @@ func filepathBase(path string) string {
 	return path
 }
 
-func newHandler(app *newsplugin.App, store *teamcore.Store, staticFS fs.FS) http.Handler {
+func newHandler(app *newsplugin.App, store *teamcore.Store, staticFS fs.FS, roomRegistry *roomplugin.Registry) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/.well-known/agent.json", func(w http.ResponseWriter, r *http.Request) {
 		handleA2AWellKnownAgent(app, store, w, r)
@@ -219,6 +223,21 @@ func newHandler(app *newsplugin.App, store *teamcore.Store, staticFS fs.FS) http
 		}
 		if len(parts) == 2 && parts[1] == "a2a" {
 			handleTeamA2APage(app, store, teamID, w, r)
+			return
+		}
+		if len(parts) >= 3 && parts[1] == "r" {
+			pluginID := strings.TrimSpace(parts[2])
+			if pluginID == "" || roomRegistry == nil {
+				http.NotFound(w, r)
+				return
+			}
+			rp, ok := roomRegistry.Get(pluginID)
+			if !ok {
+				http.NotFound(w, r)
+				return
+			}
+			prefix := "/teams/" + teamID + "/r/" + pluginID
+			http.StripPrefix(prefix, rp.Handler(store, teamID)).ServeHTTP(w, r)
 			return
 		}
 		if len(parts) == 5 && parts[1] == "sync" && parts[2] == "conflicts" && parts[4] == "resolve" && r.Method == http.MethodPost {
@@ -345,7 +364,7 @@ func newHandler(app *newsplugin.App, store *teamcore.Store, staticFS fs.FS) http
 			return
 		}
 		parts := strings.Split(trimmed, "/")
-		if len(parts) > 5 && !(len(parts) >= 3 && parts[1] == "agents") {
+		if len(parts) > 5 && !(len(parts) >= 3 && parts[1] == "agents") && !(len(parts) >= 3 && parts[1] == "r") {
 			http.NotFound(w, r)
 			return
 		}
@@ -358,8 +377,27 @@ func newHandler(app *newsplugin.App, store *teamcore.Store, staticFS fs.FS) http
 			handleAPITeam(store, teamID, w, r)
 			return
 		}
+		if len(parts) >= 3 && parts[1] == "r" {
+			pluginID := strings.TrimSpace(parts[2])
+			if pluginID == "" || roomRegistry == nil {
+				http.NotFound(w, r)
+				return
+			}
+			rp, ok := roomRegistry.Get(pluginID)
+			if !ok {
+				http.NotFound(w, r)
+				return
+			}
+			prefix := "/api/teams/" + teamID + "/r/" + pluginID
+			http.StripPrefix(prefix, rp.Handler(store, teamID)).ServeHTTP(w, r)
+			return
+		}
 		if len(parts) == 2 && parts[1] == "channels" {
 			handleAPITeamChannels(store, teamID, w, r)
+			return
+		}
+		if len(parts) == 2 && parts[1] == "channel-configs" {
+			handleAPITeamChannelConfigs(store, teamID, w, r)
 			return
 		}
 		if len(parts) == 3 && parts[1] == "channels" {
@@ -369,6 +407,15 @@ func newHandler(app *newsplugin.App, store *teamcore.Store, staticFS fs.FS) http
 				return
 			}
 			handleAPITeamChannel(store, teamID, channelID, w, r)
+			return
+		}
+		if len(parts) == 4 && parts[1] == "channels" && parts[3] == "config" {
+			channelID := normalizeTeamChannel(parts[2])
+			if channelID == "" {
+				http.NotFound(w, r)
+				return
+			}
+			handleAPITeamChannelConfig(store, teamID, channelID, w, r)
 			return
 		}
 		if len(parts) == 2 && parts[1] == "policy" {

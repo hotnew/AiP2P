@@ -1,13 +1,17 @@
 package haonewsteam
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
+	"html/template"
 	"net/http"
 	"strings"
 	"time"
 
 	teamcore "hao.news/internal/haonews/team"
 	newsplugin "hao.news/internal/plugins/haonews"
+	roomminimal "hao.news/internal/themes/room-themes/minimal"
 )
 
 func handleTeamChannel(app *newsplugin.App, store *teamcore.Store, teamID, channelID string, w http.ResponseWriter, r *http.Request) {
@@ -71,6 +75,7 @@ func handleTeamChannel(app *newsplugin.App, store *teamcore.Store, teamID, chann
 		Messages:       messages,
 		Tasks:          relatedTasksByChannel(tasks, channelID, 12),
 		Artifacts:      relatedArtifactsByChannel(artifacts, channelID, 12),
+		ChannelConfig:  loadChannelConfigSafe(r.Context(), store, teamID, channelID),
 		RelatedHistory: channelHistory(history, channelID, 12),
 		SummaryStats: []newsplugin.SummaryStat{
 			{Label: "频道", Value: current.Title},
@@ -81,9 +86,48 @@ func handleTeamChannel(app *newsplugin.App, store *teamcore.Store, teamID, chann
 			{Label: "状态", Value: channelStateLabel(current.Hidden)},
 		},
 	}
-	if err := app.Templates().ExecuteTemplate(w, "team_channel.html", data); err != nil {
+	if err := renderTeamChannelPage(app, w, data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+func renderTeamChannelPage(app *newsplugin.App, w http.ResponseWriter, data teamChannelPageData) error {
+	themeID := strings.TrimSpace(data.ChannelConfig.Theme)
+	switch themeID {
+	case "":
+		return app.Templates().ExecuteTemplate(w, "team_channel.html", data)
+	case "minimal":
+		tmpl, err := roomminimal.Template(template.FuncMap{
+			"structuredJSON": func(value map[string]any) string {
+				body, err := json.MarshalIndent(value, "", "  ")
+				if err != nil {
+					return fmt.Sprintf("%v", value)
+				}
+				return string(body)
+			},
+		})
+		if err == nil {
+			return tmpl.ExecuteTemplate(w, "room_channel.html", data)
+		}
+	}
+	if err := app.Templates().ExecuteTemplate(w, "room_channel_default.html", data); err == nil {
+		return nil
+	}
+	return app.Templates().ExecuteTemplate(w, "team_channel.html", data)
+}
+
+func loadChannelConfigSafe(ctx context.Context, store *teamcore.Store, teamID, channelID string) teamcore.ChannelConfig {
+	if store == nil {
+		return teamcore.ChannelConfig{ChannelID: channelID}
+	}
+	cfg, err := store.LoadChannelConfigCtx(ctx, teamID, channelID)
+	if err != nil {
+		return teamcore.ChannelConfig{ChannelID: channelID}
+	}
+	if strings.TrimSpace(cfg.ChannelID) == "" {
+		cfg.ChannelID = channelID
+	}
+	return cfg
 }
 
 func handleTeamChannelCreate(store *teamcore.Store, teamID string, w http.ResponseWriter, r *http.Request) {
@@ -232,6 +276,70 @@ func handleAPITeamChannelMessages(store *teamcore.Store, teamID, channelID strin
 		"limit":         limit,
 		"message_count": len(messages),
 		"messages":      messages,
+	})
+}
+
+func handleAPITeamChannelConfig(store *teamcore.Store, teamID, channelID string, w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		cfg, err := store.LoadChannelConfigCtx(r.Context(), teamID, channelID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		newsplugin.WriteJSON(w, http.StatusOK, cfg)
+	case http.MethodPut:
+		if !teamRequestTrusted(r) {
+			http.Error(w, "channel config update is limited to local or LAN requests", http.StatusForbidden)
+			return
+		}
+		actorAgentID := strings.TrimSpace(r.Header.Get("X-Actor-Agent-ID"))
+		if actorAgentID == "" {
+			actorAgentID = strings.TrimSpace(r.URL.Query().Get("actor_agent_id"))
+		}
+		if err := requireTeamAction(store, teamID, actorAgentID, "channel.update"); err != nil {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
+		var cfg teamcore.ChannelConfig
+		if err := json.NewDecoder(r.Body).Decode(&cfg); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		cfg.ChannelID = channelID
+		if err := store.SaveChannelConfigCtx(r.Context(), teamID, cfg); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		saved, err := store.LoadChannelConfigCtx(r.Context(), teamID, channelID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		newsplugin.WriteJSON(w, http.StatusOK, saved)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func handleAPITeamChannelConfigs(store *teamcore.Store, teamID string, w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	configs, err := store.ListChannelConfigsCtx(r.Context(), teamID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if configs == nil {
+		configs = []teamcore.ChannelConfig{}
+	}
+	newsplugin.WriteJSON(w, http.StatusOK, map[string]any{
+		"scope":   "team-channel-configs",
+		"team_id": teamID,
+		"count":   len(configs),
+		"configs": configs,
 	})
 }
 

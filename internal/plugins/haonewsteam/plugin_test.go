@@ -795,6 +795,104 @@ func TestPluginBuildServesA2ABridge(t *testing.T) {
 	}
 }
 
+func TestPluginBuildServesPlanExchangeRoomPlugin(t *testing.T) {
+	t.Parallel()
+
+	site, root := buildTeamSite(t)
+	store, err := teamcore.OpenStore(filepath.Join(root, "store"))
+	if err != nil {
+		t.Fatalf("OpenStore error = %v", err)
+	}
+	teamRoot := filepath.Join(root, "store", "team", "plan-room-team")
+	if err := os.MkdirAll(teamRoot, 0o755); err != nil {
+		t.Fatalf("MkdirAll error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(teamRoot, "team.json"), []byte(`{
+  "team_id":"plan-room-team",
+  "title":"Plan Room Team",
+  "owner_agent_id":"agent://pc75/live-bravo"
+}`), 0o644); err != nil {
+		t.Fatalf("WriteFile(team.json) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(teamRoot, "members.json"), []byte(`[
+  {"agent_id":"agent://pc75/live-bravo","role":"owner","status":"active"}
+]`), 0o644); err != nil {
+		t.Fatalf("WriteFile(members.json) error = %v", err)
+	}
+	if err := store.SaveChannelConfig("plan-room-team", teamcore.ChannelConfig{
+		ChannelID: "main",
+		Plugin:    "plan-exchange@1.0",
+		Theme:     "minimal",
+	}); err != nil {
+		t.Fatalf("SaveChannelConfig error = %v", err)
+	}
+
+	postReq := httptest.NewRequest(http.MethodPost, "/api/teams/plan-room-team/r/plan-exchange/messages", strings.NewReader(`{
+  "channel_id":"main",
+  "author_agent_id":"agent://pc75/live-bravo",
+  "kind":"skill",
+  "content":"Skill to distill",
+  "structured_data":{
+    "kind":"skill",
+    "title":"Skill to distill",
+    "summary":"Use small patches first",
+    "steps":["inspect","patch","verify"]
+  }
+}`))
+	postReq.RemoteAddr = "127.0.0.1:12345"
+	postReq.Header.Set("Content-Type", "application/json")
+	postRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(postRec, postReq)
+	if postRec.Code != http.StatusCreated {
+		t.Fatalf("plan-exchange post status = %d, body = %s", postRec.Code, postRec.Body.String())
+	}
+	if !strings.Contains(postRec.Body.String(), `"status":"created"`) {
+		t.Fatalf("unexpected plan-exchange post body: %q", postRec.Body.String())
+	}
+
+	listReq := httptest.NewRequest(http.MethodGet, "/api/teams/plan-room-team/r/plan-exchange/?channel_id=main&kind=skill", nil)
+	listRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(listRec, listReq)
+	if listRec.Code != http.StatusOK {
+		t.Fatalf("plan-exchange list status = %d, body = %s", listRec.Code, listRec.Body.String())
+	}
+	if !strings.Contains(listRec.Body.String(), `"message_type":"skill"`) && !strings.Contains(listRec.Body.String(), `"message_type": "skill"`) {
+		t.Fatalf("expected skill messages in list body, got %q", listRec.Body.String())
+	}
+
+	messages, err := store.LoadMessages("plan-room-team", "main", 20)
+	if err != nil {
+		t.Fatalf("LoadMessages error = %v", err)
+	}
+	if len(messages) == 0 || messages[0].MessageID == "" {
+		t.Fatalf("expected stored message id, got %#v", messages)
+	}
+
+	distillReq := httptest.NewRequest(http.MethodPost, "/api/teams/plan-room-team/r/plan-exchange/distill", strings.NewReader(`{
+  "channel_id":"main",
+  "message_id":"`+messages[0].MessageID+`",
+  "actor_agent_id":"agent://pc75/live-bravo"
+}`))
+	distillReq.RemoteAddr = "127.0.0.1:12345"
+	distillReq.Header.Set("Content-Type", "application/json")
+	distillRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(distillRec, distillReq)
+	if distillRec.Code != http.StatusCreated {
+		t.Fatalf("plan-exchange distill status = %d, body = %s", distillRec.Code, distillRec.Body.String())
+	}
+	if !strings.Contains(distillRec.Body.String(), `"artifact_kind":"skill-doc"`) {
+		t.Fatalf("unexpected distill body: %q", distillRec.Body.String())
+	}
+
+	artifacts, err := store.LoadArtifacts("plan-room-team", 20)
+	if err != nil {
+		t.Fatalf("LoadArtifacts error = %v", err)
+	}
+	if len(artifacts) == 0 || artifacts[0].Kind != "skill-doc" {
+		t.Fatalf("expected distilled artifact, got %#v", artifacts)
+	}
+}
+
 func TestPluginBuildConfiguresAndFiresTeamWebhook(t *testing.T) {
 	t.Parallel()
 
@@ -1082,6 +1180,65 @@ func TestPluginBuildServesTeamDetailAndAPI(t *testing.T) {
 		t.Fatalf("expected team channel update api body, got %q", channelUpdateRec.Body.String())
 	}
 
+	channelConfigPutReq := httptest.NewRequest(http.MethodPut, "/api/teams/project-beta/channels/research/config", strings.NewReader(`{
+  "plugin": "plan-exchange@1.0",
+  "theme": "minimal",
+  "agent_onboarding": "Use plan mode first.",
+  "rules": ["Keep decisions explicit"],
+  "metadata": {"owner":"pm"}
+}`))
+	channelConfigPutReq.RemoteAddr = "127.0.0.1:12345"
+	channelConfigPutReq.Header.Set("Content-Type", "application/json")
+	channelConfigPutReq.Header.Set("X-Actor-Agent-ID", "agent://pc75/live-bravo")
+	channelConfigPutRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(channelConfigPutRec, channelConfigPutReq)
+	if channelConfigPutRec.Code != http.StatusOK {
+		t.Fatalf("channel config put status = %d, body = %s", channelConfigPutRec.Code, channelConfigPutRec.Body.String())
+	}
+	if !strings.Contains(channelConfigPutRec.Body.String(), `"plugin": "plan-exchange@1.0"`) || !strings.Contains(channelConfigPutRec.Body.String(), `"theme": "minimal"`) {
+		t.Fatalf("expected channel config put body, got %q", channelConfigPutRec.Body.String())
+	}
+
+	channelConfigGetReq := httptest.NewRequest(http.MethodGet, "/api/teams/project-beta/channels/research/config", nil)
+	channelConfigGetRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(channelConfigGetRec, channelConfigGetReq)
+	if channelConfigGetRec.Code != http.StatusOK {
+		t.Fatalf("channel config get status = %d, body = %s", channelConfigGetRec.Code, channelConfigGetRec.Body.String())
+	}
+	if !strings.Contains(channelConfigGetRec.Body.String(), `"channel_id": "research"`) || !strings.Contains(channelConfigGetRec.Body.String(), `"agent_onboarding": "Use plan mode first."`) {
+		t.Fatalf("expected channel config get body, got %q", channelConfigGetRec.Body.String())
+	}
+
+	channelConfigsReq := httptest.NewRequest(http.MethodGet, "/api/teams/project-beta/channel-configs", nil)
+	channelConfigsRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(channelConfigsRec, channelConfigsReq)
+	if channelConfigsRec.Code != http.StatusOK {
+		t.Fatalf("channel configs status = %d, body = %s", channelConfigsRec.Code, channelConfigsRec.Body.String())
+	}
+	if !strings.Contains(channelConfigsRec.Body.String(), `"scope": "team-channel-configs"`) || !strings.Contains(channelConfigsRec.Body.String(), `"count": 1`) || !strings.Contains(channelConfigsRec.Body.String(), `"channel_id": "research"`) {
+		t.Fatalf("expected channel configs body, got %q", channelConfigsRec.Body.String())
+	}
+
+	teamDetailReq := httptest.NewRequest(http.MethodGet, "/api/teams/project-beta", nil)
+	teamDetailRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(teamDetailRec, teamDetailReq)
+	if teamDetailRec.Code != http.StatusOK {
+		t.Fatalf("team detail after config status = %d, body = %s", teamDetailRec.Code, teamDetailRec.Body.String())
+	}
+	if !strings.Contains(teamDetailRec.Body.String(), `"channel_config_count": 1`) || !strings.Contains(teamDetailRec.Body.String(), `"channel_configs"`) || !strings.Contains(teamDetailRec.Body.String(), `"plugin": "plan-exchange@1.0"`) {
+		t.Fatalf("expected team detail to include channel configs, got %q", teamDetailRec.Body.String())
+	}
+
+	channelThemeReq := httptest.NewRequest(http.MethodGet, "/teams/project-beta/channels/research", nil)
+	channelThemeRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(channelThemeRec, channelThemeReq)
+	if channelThemeRec.Code != http.StatusOK {
+		t.Fatalf("channel themed page status = %d, body = %s", channelThemeRec.Code, channelThemeRec.Body.String())
+	}
+	if !strings.Contains(channelThemeRec.Body.String(), "Agent Onboarding:") || !strings.Contains(channelThemeRec.Body.String(), "Use plan mode first.") || !strings.Contains(channelThemeRec.Body.String(), "Plugin:</strong> plan-exchange@1.0") {
+		t.Fatalf("expected minimal themed channel body, got %q", channelThemeRec.Body.String())
+	}
+
 	channelDeleteReq := httptest.NewRequest(http.MethodDelete, "/api/teams/project-beta/channels/planning", nil)
 	channelDeleteReq.RemoteAddr = "127.0.0.1:12345"
 	channelDeleteRec := httptest.NewRecorder()
@@ -1293,7 +1450,7 @@ func TestPluginBuildServesTeamDetailAndAPI(t *testing.T) {
 	if channelRec.Code != http.StatusOK {
 		t.Fatalf("channel page status(after create) = %d, body = %s", channelRec.Code, channelRec.Body.String())
 	}
-	if !strings.Contains(channelRec.Body.String(), "发送 TeamMessage") || !strings.Contains(channelRec.Body.String(), "Channel page form message") || !strings.Contains(channelRec.Body.String(), "Team channel message stays inside Team.") {
+	if !strings.Contains(channelRec.Body.String(), "Agent Onboarding:") || !strings.Contains(channelRec.Body.String(), "Channel page form message") || !strings.Contains(channelRec.Body.String(), "Team channel message stays inside Team.") {
 		t.Fatalf("expected team channel page body after create, got %q", channelRec.Body.String())
 	}
 

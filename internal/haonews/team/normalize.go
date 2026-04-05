@@ -160,6 +160,10 @@ func normalizeArtifactKind(value string) string {
 		return "link"
 	case "post":
 		return "post"
+	case "skill-doc":
+		return "skill-doc"
+	case "plan-summary":
+		return "plan-summary"
 	default:
 		return "markdown"
 	}

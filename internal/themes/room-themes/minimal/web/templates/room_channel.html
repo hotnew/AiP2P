@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>{{.Team.Title}} — {{.Channel.Title}} (minimal)</title>
+<style>
+body { font-family: monospace; max-width: 900px; margin: 0 auto; padding: 16px; background: #fafafa; color: #222; }
+h1, h2 { font-size: 16px; margin: 8px 0; }
+.msg { border-bottom: 1px solid #ddd; padding: 8px 0; }
+.msg-meta { color: #888; font-size: 12px; }
+.msg-type { font-weight: bold; text-transform: uppercase; }
+.msg-type-plan { color: #2563eb; }
+.msg-type-skill { color: #059669; }
+.msg-type-snippet { color: #d97706; }
+.structured { background: #f0f0f0; padding: 8px; margin: 4px 0; white-space: pre-wrap; font-size: 13px; overflow-x: auto; }
+.onboarding { background: #eff6ff; border-left: 3px solid #2563eb; padding: 8px 12px; margin: 12px 0; }
+.rules { background: #f0fdf4; border-left: 3px solid #059669; padding: 8px 12px; margin: 12px 0; }
+</style>
+</head>
+<body>
+<h1>[{{.Team.TeamID}}] {{.Team.Title}} / #{{.Channel.ChannelID}} {{.Channel.Title}}</h1>
+
+{{if .ChannelConfig.AgentOnboarding}}
+<div class="onboarding">
+<strong>Agent Onboarding:</strong> {{.ChannelConfig.AgentOnboarding}}
+</div>
+{{end}}
+
+{{if .ChannelConfig.Rules}}
+<div class="rules">
+<strong>Rules:</strong>
+{{range .ChannelConfig.Rules}}<div>- {{.}}</div>{{end}}
+</div>
+{{end}}
+
+{{if .ChannelConfig.Plugin}}
+<div><strong>Plugin:</strong> {{.ChannelConfig.Plugin}} | <strong>Theme:</strong> {{.ChannelConfig.Theme}}</div>
+{{end}}
+
+<h2>Messages ({{len .Messages}})</h2>
+{{range .Messages}}
+<div class="msg">
+<div class="msg-meta">
+<span class="msg-type msg-type-{{.MessageType}}">[{{.MessageType}}]</span>
+{{.AuthorAgentID}} — {{.CreatedAt.Format "2006-01-02 15:04:05"}}
+{{if .MessageID}} ({{.MessageID}}){{end}}
+</div>
+<div>{{.Content}}</div>
+{{if .StructuredData}}
+<div class="structured">{{structuredJSON .StructuredData}}</div>
+{{end}}
+</div>
+{{end}}
+
+{{if not .Messages}}
+<p>频道暂无消息。</p>
+{{end}}
+</body>
+</html>

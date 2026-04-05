@@ -8,8 +8,6 @@ import (
 )
 
 func TestAppIndexCachesUntilStoreSignatureChanges(t *testing.T) {
-	t.Parallel()
-
 	storeRoot := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(storeRoot, "data"), 0o755); err != nil {
 		t.Fatalf("mkdir data: %v", err)
@@ -74,8 +72,6 @@ func TestAppIndexCachesUntilStoreSignatureChanges(t *testing.T) {
 }
 
 func TestCurrentIndexSignatureUsesQuickProbeCacheBetweenDeepChecks(t *testing.T) {
-	t.Parallel()
-
 	storeRoot := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(storeRoot, "data"), 0o755); err != nil {
 		t.Fatalf("mkdir data: %v", err)
@@ -129,8 +125,6 @@ func TestCurrentIndexSignatureUsesQuickProbeCacheBetweenDeepChecks(t *testing.T)
 }
 
 func TestAppIndexReturnsStaleWhileRefreshingAfterProbeExpiry(t *testing.T) {
-	t.Parallel()
-
 	storeRoot := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(storeRoot, "data"), 0o755); err != nil {
 		t.Fatalf("mkdir data: %v", err)
@@ -227,8 +221,6 @@ func TestAppIndexReturnsStaleWhileRefreshingAfterProbeExpiry(t *testing.T) {
 }
 
 func TestContentSignatureForIndexIgnoresProbeOnlyChanges(t *testing.T) {
-	t.Parallel()
-
 	now := time.Date(2026, 3, 28, 12, 0, 0, 0, time.UTC)
 	indexA := Index{
 		Posts: []Post{

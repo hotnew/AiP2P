@@ -790,10 +790,10 @@ func (r *teamPubSubRuntime) shouldRetryPending(syncKey string) bool {
 		item.Status = "pending"
 	}
 	if item.Status != "pending" {
-		return true
+		return false
 	}
 	now := time.Now().UTC()
-	if !item.VersionAt.IsZero() && item.VersionAt.Before(now.Add(-teamSyncPendingMaxAge)) {
+	if !item.UpdatedAt.IsZero() && item.UpdatedAt.Before(now.Add(-teamSyncPendingMaxAge)) {
 		_ = r.markPendingStatus(syncKey, "expired")
 		return false
 	}
@@ -1623,7 +1623,7 @@ func compactTeamSyncState(state *teamSyncPersistedState) (int, string, string, i
 			item.Status = status
 		}
 		if status == "pending" {
-			if (!item.VersionAt.IsZero() && item.VersionAt.Before(now.Add(-teamSyncPendingMaxAge))) || item.RetryCount >= teamSyncPendingMaxRetry {
+			if (!item.UpdatedAt.IsZero() && item.UpdatedAt.Before(now.Add(-teamSyncPendingMaxAge))) || item.RetryCount >= teamSyncPendingMaxRetry {
 				item.Status = "expired"
 				item.UpdatedAt = now
 				stateValue.Pending[key] = item

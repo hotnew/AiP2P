@@ -46,6 +46,10 @@ func (s *Store) LoadChannelSnapshot(teamID, channelID string) (Channel, time.Tim
 	return s.LoadChannelSnapshotCtx(context.Background(), teamID, channelID)
 }
 
+func (s *Store) LoadChannelConfig(teamID, channelID string) (ChannelConfig, error) {
+	return s.LoadChannelConfigCtx(context.Background(), teamID, channelID)
+}
+
 func (s *Store) LoadWebhookConfigs(teamID string) ([]PushNotificationConfig, error) {
 	return s.LoadWebhookConfigsCtx(context.Background(), teamID)
 }
@@ -86,6 +90,10 @@ func (s *Store) ListChannels(teamID string) ([]ChannelSummary, error) {
 	return s.ListChannelsCtx(context.Background(), teamID)
 }
 
+func (s *Store) ListChannelConfigs(teamID string) ([]ChannelConfig, error) {
+	return s.ListChannelConfigsCtx(context.Background(), teamID)
+}
+
 func (s *Store) AppendTask(teamID string, task Task) error {
 	return s.AppendTaskCtx(context.Background(), teamID, task)
 }
@@ -100,6 +108,10 @@ func (s *Store) LoadTask(teamID, taskID string) (Task, error) {
 
 func (s *Store) SaveTask(teamID string, task Task) error {
 	return s.SaveTaskCtx(context.Background(), teamID, task)
+}
+
+func (s *Store) SaveChannelConfig(teamID string, cfg ChannelConfig) error {
+	return s.SaveChannelConfigCtx(context.Background(), teamID, cfg)
 }
 
 func (s *Store) DeleteTask(teamID, taskID string) error {

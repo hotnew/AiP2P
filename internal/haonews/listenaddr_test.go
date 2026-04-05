@@ -10,20 +10,16 @@ import (
 func TestResolveLibP2PListenAddrsIncrementsSharedPort(t *testing.T) {
 	t.Parallel()
 
-	tcpListener, err := net.Listen("tcp", "127.0.0.1:0")
+	tcpListener, udpConn, err := listenSharedTCPUDP("127.0.0.1")
 	if err != nil {
-		t.Fatalf("Listen() error = %v", err)
+		t.Fatalf("listenSharedTCPUDP() error = %v", err)
 	}
 	defer tcpListener.Close()
-	host, portText, err := net.SplitHostPort(tcpListener.Addr().String())
+	defer udpConn.Close()
+	_, portText, err := net.SplitHostPort(tcpListener.Addr().String())
 	if err != nil {
 		t.Fatalf("SplitHostPort() error = %v", err)
 	}
-	udpConn, err := net.ListenPacket("udp", net.JoinHostPort(host, portText))
-	if err != nil {
-		t.Fatalf("ListenPacket() error = %v", err)
-	}
-	defer udpConn.Close()
 
 	addrs := []string{
 		"/ip4/127.0.0.1/tcp/" + portText,
@@ -47,4 +43,24 @@ func TestResolveLibP2PListenAddrsIncrementsSharedPort(t *testing.T) {
 	if _, err := strconv.Atoi(tcpPort); err != nil {
 		t.Fatalf("resolved port = %q, want integer", tcpPort)
 	}
+}
+
+func listenSharedTCPUDP(host string) (net.Listener, net.PacketConn, error) {
+	for attempt := 0; attempt < 32; attempt++ {
+		tcpListener, err := net.Listen("tcp", net.JoinHostPort(host, "0"))
+		if err != nil {
+			return nil, nil, err
+		}
+		_, portText, err := net.SplitHostPort(tcpListener.Addr().String())
+		if err != nil {
+			_ = tcpListener.Close()
+			return nil, nil, err
+		}
+		udpConn, err := net.ListenPacket("udp", net.JoinHostPort(host, portText))
+		if err == nil {
+			return tcpListener, udpConn, nil
+		}
+		_ = tcpListener.Close()
+	}
+	return nil, nil, &net.AddrError{Err: "no shared tcp/udp port found", Addr: host}
 }

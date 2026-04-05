@@ -295,6 +295,17 @@ func TestStoreWebhookReceivesPublishedEvent(t *testing.T) {
 	case <-time.After(3 * time.Second):
 		t.Fatal("timed out waiting for webhook delivery")
 	}
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		status, err := store.LoadWebhookDeliveryStatusCtx(context.Background(), "webhook-team")
+		if err == nil && status.DeliveredCount == 1 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for webhook delivery status: status=%#v err=%v", status, err)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
 }
 
 func TestStoreWebhookRetriesRetriableStatus(t *testing.T) {

@@ -617,13 +617,20 @@ func handleAPITeam(store *teamcore.Store, teamID string, w http.ResponseWriter, 
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	channelConfigs, err := store.ListChannelConfigsCtx(r.Context(), teamID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	newsplugin.WriteJSON(w, http.StatusOK, map[string]any{
-		"scope":        "team-detail",
-		"team_id":      info.TeamID,
-		"team":         info,
-		"policy":       policy,
-		"member_count": len(members),
-		"members":      members,
+		"scope":                "team-detail",
+		"team_id":              info.TeamID,
+		"team":                 info,
+		"policy":               policy,
+		"member_count":         len(members),
+		"members":              members,
+		"channel_config_count": len(channelConfigs),
+		"channel_configs":      channelConfigs,
 	})
 }
 
