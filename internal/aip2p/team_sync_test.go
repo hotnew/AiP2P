@@ -1009,6 +1009,8 @@ func TestWriteTeamSyncStatePreservesNewerResolvedConflict(t *testing.T) {
 	t.Parallel()
 
 	path := filepath.Join(t.TempDir(), "sync", "team_sync_state.json")
+	baseUpdatedAt := time.Now().UTC().Add(-2 * time.Hour)
+	resolvedAt := baseUpdatedAt.Add(5 * time.Minute)
 	base := newTeamSyncPersistedState()
 	base.Conflicts["message:conflict-1"] = teamSyncConflict{
 		Key:       "message:conflict-1",
@@ -1016,7 +1018,7 @@ func TestWriteTeamSyncStatePreservesNewerResolvedConflict(t *testing.T) {
 		TeamID:    "project-team-sync",
 		SubjectID: "conflict-1",
 		Reason:    "signature_rejected",
-		UpdatedAt: time.Date(2026, 4, 4, 12, 0, 0, 0, time.UTC),
+		UpdatedAt: baseUpdatedAt,
 	}
 	if err := writeTeamSyncState(path, base); err != nil {
 		t.Fatalf("writeTeamSyncState(base) error = %v", err)
@@ -1031,8 +1033,8 @@ func TestWriteTeamSyncStatePreservesNewerResolvedConflict(t *testing.T) {
 		Reason:     "signature_rejected",
 		Resolution: "dismiss",
 		ResolvedBy: "agent://pc75/openclaw01",
-		ResolvedAt: time.Date(2026, 4, 4, 12, 5, 0, 0, time.UTC),
-		UpdatedAt:  time.Date(2026, 4, 4, 12, 5, 0, 0, time.UTC),
+		ResolvedAt: resolvedAt,
+		UpdatedAt:  resolvedAt,
 	}
 	if err := writeTeamSyncState(path, resolved); err != nil {
 		t.Fatalf("writeTeamSyncState(resolved) error = %v", err)
@@ -1045,7 +1047,7 @@ func TestWriteTeamSyncStatePreservesNewerResolvedConflict(t *testing.T) {
 		TeamID:    "project-team-sync",
 		SubjectID: "conflict-1",
 		Reason:    "signature_rejected",
-		UpdatedAt: time.Date(2026, 4, 4, 12, 0, 0, 0, time.UTC),
+		UpdatedAt: baseUpdatedAt,
 	}
 	if err := writeTeamSyncState(path, stale); err != nil {
 		t.Fatalf("writeTeamSyncState(stale) error = %v", err)
