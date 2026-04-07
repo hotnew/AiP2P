@@ -1,0 +1,22 @@
+{
+  "entries": {
+    "lan_peer|192.168.102.74": {
+      "last_success_at": "0001-01-01T00:00:00Z",
+      "last_failure_at": "2026-04-04T01:59:14.820373Z",
+      "consecutive_failure": 15,
+      "last_error": "lan_peer \"192.168.102.74\" reported network_id e081c1de8d42f4f19f2c32fbebf6079b45a48bc0152f2fa3faf0706d7a89e418, want b2090347cee0ff1a577b1101d4adbd664c309932d3c2578971c11997fdd2164e"
+    },
+    "lan_peer|192.168.102.75": {
+      "last_success_at": "0001-01-01T00:00:00Z",
+      "last_failure_at": "2026-04-04T01:59:14.820375Z",
+      "consecutive_failure": 15,
+      "last_error": "lan_peer \"192.168.102.75\" reported network_id e081c1de8d42f4f19f2c32fbebf6079b45a48bc0152f2fa3faf0706d7a89e418, want b2090347cee0ff1a577b1101d4adbd664c309932d3c2578971c11997fdd2164e"
+    },
+    "lan_peer|192.168.102.76": {
+      "last_success_at": "0001-01-01T00:00:00Z",
+      "last_failure_at": "2026-04-04T01:59:14.820375Z",
+      "consecutive_failure": 15,
+      "last_error": "lan_peer \"192.168.102.76\" query http://192.168.102.76:51818/api/network/bootstrap: Get \"http://192.168.102.76:51818/api/network/bootstrap\": dial tcp 192.168.102.76:51818: connect: connection refused"
+    }
+  }
+}

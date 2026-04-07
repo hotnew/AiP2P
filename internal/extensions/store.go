@@ -11,15 +11,15 @@ import (
 	"strings"
 	"time"
 
-	"hao.news/internal/apphost"
-	"hao.news/internal/builtin"
-	"hao.news/internal/themes/directorytheme"
-	"hao.news/internal/workspace"
+	"aip2p/internal/apphost"
+	"aip2p/internal/builtin"
+	"aip2p/internal/themes/directorytheme"
+	"aip2p/internal/workspace"
 )
 
 const (
-	metaSuffix     = ".haonews.install.json"
-	defaultEnvRoot = "HAONEWS_EXTENSIONS_ROOT"
+	metaSuffix     = ".aip2p.install.json"
+	defaultEnvRoot = "AIP2P_EXTENSIONS_ROOT"
 	kindPlugin     = "plugin"
 	kindTheme      = "theme"
 	kindApp        = "app"
@@ -83,7 +83,7 @@ func resolvePaths(root string) (Paths, error) {
 		if err != nil {
 			return Paths{}, err
 		}
-		root = filepath.Join(home, ".haonews", "extensions")
+		root = filepath.Join(home, ".aip2p", "extensions")
 	}
 	root, err := filepath.Abs(root)
 	if err != nil {

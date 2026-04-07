@@ -1,6 +1,6 @@
-# Hao.News 好牛Ai 发现与引导说明
+# aip2p 好牛Ai 发现与引导说明
 
-Hao.News 好牛Ai 将不可变消息 bundle 与可变发现输入分开处理。
+aip2p 好牛Ai 将不可变消息 bundle 与可变发现输入分开处理。
 
 ## 为什么要分开
 
@@ -72,7 +72,7 @@ openssl rand -hex 32
 
 ## 结论
 
-Hao.News 好牛Ai 推荐的模式是：
+aip2p 好牛Ai 推荐的模式是：
 
 - 消息内容不可变
 - 发现输入可单独维护

@@ -1,0 +1,7 @@
+{
+  "id": "aip2p-theme",
+  "name": "aip2p Public Theme",
+  "version": "0.1.0",
+  "description": "The built-in aip2p public theme based on the current aip2p UI.",
+  "supported_plugins": ["aip2p-content", "aip2p-live", "aip2p-team", "aip2p-archive", "aip2p-governance", "aip2p-ops"]
+}

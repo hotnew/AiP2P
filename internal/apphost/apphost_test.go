@@ -208,7 +208,7 @@ func TestRegistryScopesRuntimePathsPerPlugin(t *testing.T) {
 		ArchiveRoot:      "/tmp/archive",
 		RulesPath:        "/tmp/config/subscriptions.json",
 		WriterPolicyPath: "/tmp/config/writer_policy.json",
-		NetPath:          "/tmp/config/haonews_net.inf",
+		NetPath:          "/tmp/config/aip2p_net.inf",
 		TrackerPath:      "/tmp/config/Trackerlist.inf",
 	})
 	if err != nil {
@@ -233,7 +233,7 @@ func TestRegistryScopesRuntimePathsPerPlugin(t *testing.T) {
 	if firstCfg.WriterPolicyPath != "/tmp/config/writer_policy.json" || secondCfg.WriterPolicyPath != "/tmp/config/writer_policy.json" {
 		t.Fatalf("writer policy paths = %q / %q", firstCfg.WriterPolicyPath, secondCfg.WriterPolicyPath)
 	}
-	if firstCfg.NetPath != "/tmp/config/haonews_net.inf" || secondCfg.NetPath != "/tmp/config/haonews_net.inf" {
+	if firstCfg.NetPath != "/tmp/config/aip2p_net.inf" || secondCfg.NetPath != "/tmp/config/aip2p_net.inf" {
 		t.Fatalf("net paths = %q / %q", firstCfg.NetPath, secondCfg.NetPath)
 	}
 	if firstCfg.TrackerPath != "/tmp/config/Trackerlist.inf" || secondCfg.TrackerPath != "/tmp/config/Trackerlist.inf" {
@@ -291,18 +291,18 @@ func TestRegistryAcceptsThemeCompatibilityViaBasePlugin(t *testing.T) {
 	registry := NewRegistry()
 	registry.MustRegisterTheme(themeWithManifest{
 		manifest: ThemeManifest{
-			ID:               "hao-news-theme",
-			Name:             "Hao.News Public Theme",
-			SupportedPlugins: []string{"hao-news-content"},
-			RequiredPlugins:  []string{"hao-news-content"},
+			ID:               "aip2p-theme",
+			Name:             "aip2p Public Theme",
+			SupportedPlugins: []string{"aip2p-content"},
+			RequiredPlugins:  []string{"aip2p-content"},
 		},
 	})
 	registry.MustRegisterPlugin(pluginWithManifest{
 		manifest: PluginManifest{
 			ID:           "sample-content",
 			Name:         "Sample Content",
-			BasePlugin:   "hao-news-content",
-			DefaultTheme: "hao-news-theme",
+			BasePlugin:   "aip2p-content",
+			DefaultTheme: "aip2p-theme",
 		},
 		build: func(context.Context, Config, WebTheme) (*Site, error) {
 			return &Site{Handler: http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})}, nil
@@ -311,7 +311,7 @@ func TestRegistryAcceptsThemeCompatibilityViaBasePlugin(t *testing.T) {
 
 	if _, err := registry.Build(context.Background(), Config{
 		Plugin: "sample-content",
-		Theme:  "hao-news-theme",
+		Theme:  "aip2p-theme",
 	}); err != nil {
 		t.Fatalf("build with base-plugin compatibility: %v", err)
 	}

@@ -473,7 +473,7 @@ func mergeSites(sites []*Site, manifests []PluginManifest, theme ThemeManifest) 
 		Manifest: PluginManifest{
 			ID:           strings.Join(ids, "+"),
 			Name:         strings.Join(names, " + "),
-			Description:  "Composite Hao.News application built from multiple plugins.",
+			Description:  "Composite aip2p application built from multiple plugins.",
 			DefaultTheme: theme.ID,
 		},
 		Theme:   theme,

@@ -1,71 +1,103 @@
-# Hao.News 好牛Ai 发布说明
+# aip2p Release Guide
 
-这份文档用于维护 Hao.News 好牛Ai 仓库发布时的检查项和输出边界。
+This document defines the release-facing scope for the `aip2p` repository.
 
-当前仓库既是协议主仓库，也是带内置插件和主题的宿主实现，因此一次发布通常同时覆盖：
+This repository currently acts as both:
 
-- 协议草案
-- Go 宿主
-- 内置示例应用
-- 内置插件与主题
+- the protocol repository
+- the runnable host with built-in plugins, themes, and example apps
 
-## 发布中应包含的内容
+So one release usually covers all of the following:
 
-- 当前版本号与 tag
-- 本次协议或宿主层变化摘要
-- 重要的兼容性变更
-- 安装、更新、回退方式
-- 是否需要迁移配置、身份文件或工作区结构
+- protocol draft updates
+- Go host/runtime changes
+- built-in plugins and themes
+- bundled example apps and operational docs
 
-## 发布中不应包含的内容
+## Default Language Policy
 
-- 下游项目的运营公告
-- 项目私有部署细节
-- 非仓库主线的实验性内容
+For GitHub-facing distribution, use English by default:
 
-这些内容应由下游项目自己维护。
+- `README.md` in the repository root should stay English-first
+- GitHub `main` and tag pages should show the English `README.md`
+- GitHub Release titles and release notes should be written in English by default
 
-## 发布前检查清单
+Chinese material can still be published, but it should be linked as an additional reference instead of replacing the English default.
 
-- 确认 `go test ./...` 全部通过
-- 确认 `README.md`、`docs/release.md` 同步更新
-- 确认 [haonews-message.schema.json](haonews-message.schema.json) 与协议草案一致
-- 确认 `go run ./cmd/haonews serve` 本地可以启动
-- 确认 `go run ./cmd/haonews publish ...` 本地流程正常
-- 确认需要的 tag 已创建
-- 确认 GitHub 仓库主页文案与当前品牌一致
+Chinese reference:
 
-## 发布说明建议结构
+- [release.zh-CN.md](release.zh-CN.md)
 
-### 1. 版本信息
+## Release Must Include
 
-- 版本号
-- 发布时间
-- 对应 tag
+- current version and tag
+- summary of the protocol/runtime changes in this release
+- important compatibility changes
+- install, upgrade, and rollback guidance
+- whether config, identities, or workspace layout must be migrated
 
-### 2. 本次重点
+## Release Must Not Include
 
-- 协议层变化
-- 宿主层变化
-- 插件与主题变化
-- CLI / API / 页面变化
+- downstream project operations announcements
+- private deployment details
+- experimental material outside the repository mainline
 
-### 3. 升级注意事项
+Those belong in downstream repos or separate project notes.
 
-- 是否需要迁移目录
-- 是否需要重建本地工作区
-- 是否需要更新 `network_id`、bootstrap 或身份文件
+## Pre-Release Checklist
 
-### 4. 参考入口
+- confirm `go test ./...` passes
+- confirm `README.md` and `docs/release.md` are updated
+- confirm [aip2p-message.schema.json](../aip2p-message.schema.json) matches the current protocol draft
+- confirm `go run ./cmd/aip2p serve` starts locally
+- confirm `go run ./cmd/aip2p publish ...` still works locally
+- confirm the intended tag has been created
+- confirm the GitHub repository homepage matches current branding and default language policy
 
-- 主入口：`README.md`
-- 协议草案：`docs/protocol-v0.1.md`
-- 升级说明：`docs/v0.2.5.1.3_to_v0.2.5.1.5-chs.md`
+## Recommended Release Notes Structure
 
-## 当前品牌文案
+### 1. Version
 
-对外文档中，旧品牌文案已经统一迁移到：
+- version number
+- release date
+- tag
 
-- `Hao.News 好牛Ai`
+### 2. Highlights
 
-命令名、协议字段、文件名中仍保留的 `haonews`，属于兼容性和实现字面量，不应在发布时随意改动。
+- protocol changes
+- host/runtime changes
+- plugin/theme changes
+- CLI, API, and page changes
+
+### 3. Upgrade Notes
+
+- whether directories must be migrated
+- whether the local workspace must be rebuilt
+- whether `network_id`, bootstrap peers, or identity files must be updated
+
+### 4. References
+
+- main entry: `README.md`
+- protocol draft: `docs/protocol-v0.1.md`
+- upgrade notes: `docs/v0.2.5.1.3_to_v0.2.5.1.5-chs.md`
+- release notes template: `docs/release-template.md`
+
+## GitHub Release Notes Default
+
+When creating a GitHub Release, prefer an English body built from `docs/release-template.md`.
+
+Suggested process:
+
+1. fill in the version, date, and tag
+2. write concise English highlights first
+3. add upgrade or migration notes only when necessary
+4. add Chinese links only as optional supplemental references
+
+## Branding
+
+Public-facing docs should use:
+
+- `aip2p`
+- `aip2p Haoniu AI` where a longer name is useful
+
+Command names, protocol fields, and file names that still use `aip2p` are compatibility/runtime literals and should not be casually changed during release work.

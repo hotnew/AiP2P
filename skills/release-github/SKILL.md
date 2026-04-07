@@ -1,6 +1,6 @@
 ---
 name: release-github
-description: 当需要为 Hao.News 好牛Ai 及配套应用仓库发布一个小版本时使用。覆盖版本号更新、测试、全新克隆验证、安全推送、tag 创建和 GitHub Release 创建流程。
+description: 当需要为 aip2p 好牛Ai 及配套应用仓库发布一个小版本时使用。覆盖版本号更新、测试、全新克隆验证、安全推送、tag 创建和 GitHub Release 创建流程。
 ---
 
 # GitHub 发布流程
@@ -11,7 +11,7 @@ description: 当需要为 Hao.News 好牛Ai 及配套应用仓库发布一个小
 
 当前主要面向：
 
-- `HaoNews/HaoNews`
+- `Aip2p/Aip2p`
 - 配套应用仓库
 
 如果本地工作区是一个大根目录，推送时不要直接从根目录把子目录强推到 GitHub。
@@ -54,7 +54,7 @@ go test ./...
 如果改动涉及运行行为，还应补做：
 
 - 全新克隆后的安装验证
-- `go run ./cmd/haonews serve`
+- `go run ./cmd/aip2p serve`
 - 必要的 CLI / API 冒烟检查
 
 ## 安全推送流程
@@ -72,7 +72,7 @@ go test ./...
 推荐复制方式：
 
 ```bash
-rsync -a --delete --exclude '.git' /local/path/haonews/ /tmp/push-haonews/
+rsync -a --delete --exclude '.git' /local/path/aip2p/ /tmp/push-aip2p/
 ```
 
 ## 提交身份
@@ -82,8 +82,8 @@ GitHub 可能拒绝暴露私有邮箱的提交。
 提交前设置：
 
 ```bash
-git config user.name HaoNews
-git config user.email <github-id>+HaoNews@users.noreply.github.com
+git config user.name Aip2p
+git config user.email <github-id>+Aip2p@users.noreply.github.com
 ```
 
 如果遇到 `GH007`，重新设作者：
@@ -101,8 +101,15 @@ git commit --amend --no-edit --reset-author
 3. 推送 tag
 4. 依据发布说明创建 GitHub Release
 
+默认要求：
+
+- GitHub 首页 `README.md` 使用英文版
+- GitHub tag 页面默认显示英文 `README.md`
+- GitHub Release 标题与更新说明默认先写英文
+- 中文说明如有需要，作为补充链接或附加段落，不替代英文主说明
+
 ## 额外提醒
 
-- 发布文案统一使用 `Hao.News 好牛Ai`
-- 命令名 `haonews`、协议字段、文件名保持兼容字面量
+- 发布文案统一使用 `aip2p 好牛Ai`
+- 命令名 `aip2p`、协议字段、文件名保持兼容字面量
 - 如果远端已有不同历史，只有在明确确认后才使用 `--force-with-lease`

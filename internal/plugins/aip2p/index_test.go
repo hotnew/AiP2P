@@ -1,0 +1,427 @@
+package newsplugin
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestFilterPostsSupportsQueryAndSort(t *testing.T) {
+	t.Parallel()
+
+	truthA := 0.8
+	truthB := 0.5
+	const pubKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	index := Index{
+		Posts: []Post{
+			{
+				Bundle: Bundle{
+					InfoHash:  "a",
+					CreatedAt: time.Date(2026, 3, 12, 10, 0, 0, 0, time.UTC),
+					Message: Message{
+						Title:  "Oil rises in Europe",
+						Author: "agent://collector/a",
+					},
+					Body: "Energy markets moved higher.",
+				},
+				ChannelGroup:      "world",
+				SourceName:        pubKey,
+				SourceSiteName:    "BBC News",
+				OriginPublicKey:   pubKey,
+				HasSourcePage:     true,
+				Topics:            []string{"energy", "world"},
+				TruthScoreAverage: &truthA,
+			},
+			{
+				Bundle: Bundle{
+					InfoHash:  "b",
+					CreatedAt: time.Date(2026, 3, 12, 9, 0, 0, 0, time.UTC),
+					Message: Message{
+						Title:  "Chip shares retreat",
+						Author: "agent://collector/b",
+					},
+					Body: "Technology stocks traded lower.",
+				},
+				ChannelGroup:      "markets",
+				SourceName:        "CNBC",
+				SourceSiteName:    "CNBC",
+				Topics:            []string{"technology"},
+				TruthScoreAverage: &truthB,
+			},
+		},
+	}
+
+	got := index.FilterPosts(FeedOptions{
+		Query: "oil",
+		Sort:  "truth",
+		Now:   time.Date(2026, 3, 12, 12, 0, 0, 0, time.UTC),
+	})
+	if len(got) != 1 {
+		t.Fatalf("len = %d, want 1", len(got))
+	}
+	if got[0].InfoHash != "a" {
+		t.Fatalf("infohash = %s, want a", got[0].InfoHash)
+	}
+}
+
+func TestBuildIndexPrefersOriginPublicKeyForSourceGrouping(t *testing.T) {
+	t.Parallel()
+
+	const pubKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	const parentPubKey = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+	bundles := []Bundle{
+		{
+			InfoHash:  "post-1",
+			CreatedAt: time.Date(2026, 3, 12, 10, 0, 0, 0, time.UTC),
+			Body:      "Energy markets moved higher.",
+			Message: Message{
+				Kind:      "post",
+				Title:     "Oil rises in Europe",
+				Author:    "agent://collector/a",
+				Channel:   "aip2p/world",
+				CreatedAt: "2026-03-12T10:00:00Z",
+				Origin: &MessageOrigin{
+					Author:    "writer://world/a",
+					AgentID:   "agent://world/a",
+					PublicKey: pubKey,
+				},
+				Extensions: map[string]any{
+					"project":          "aip2p",
+					"hd.parent_pubkey": parentPubKey,
+					"source": map[string]any{
+						"name": "BBC News",
+						"url":  "https://example.com/oil",
+					},
+				},
+			},
+		},
+	}
+
+	index := buildIndex(bundles, "aip2p")
+	if len(index.Posts) != 1 {
+		t.Fatalf("posts len = %d, want 1", len(index.Posts))
+	}
+	post := index.Posts[0]
+	if post.SourceName != pubKey {
+		t.Fatalf("source group = %q, want %q", post.SourceName, pubKey)
+	}
+	if post.SourceSiteName != "BBC News" {
+		t.Fatalf("source site = %q, want BBC News", post.SourceSiteName)
+	}
+	if post.OriginPublicKey != pubKey {
+		t.Fatalf("origin public key = %q, want %q", post.OriginPublicKey, pubKey)
+	}
+	if post.ParentPublicKey != parentPubKey {
+		t.Fatalf("parent public key = %q, want %q", post.ParentPublicKey, parentPubKey)
+	}
+	if !post.HasSourcePage {
+		t.Fatal("expected signed post to have a source page")
+	}
+	if len(index.SourceStats) != 1 || index.SourceStats[0].Name != pubKey {
+		t.Fatalf("source stats = %+v, want one public-key group", index.SourceStats)
+	}
+}
+
+func TestBuildIndexDoesNotAddUnsignedPostsToSourceDirectory(t *testing.T) {
+	t.Parallel()
+
+	bundles := []Bundle{
+		{
+			InfoHash:  "post-unsigned",
+			CreatedAt: time.Date(2026, 3, 12, 10, 0, 0, 0, time.UTC),
+			Body:      "Unsigned body.",
+			Message: Message{
+				Kind:      "post",
+				Title:     "Unsigned story",
+				Author:    "agent://collector/unsigned",
+				Channel:   "aip2p/world",
+				CreatedAt: "2026-03-12T10:00:00Z",
+				Extensions: map[string]any{
+					"project": "aip2p",
+					"source": map[string]any{
+						"name": "Unsigned Source",
+					},
+				},
+				Origin: &MessageOrigin{
+					AgentID: "agent://collector/unsigned",
+				},
+			},
+		},
+	}
+
+	index := buildIndex(bundles, "aip2p")
+	if len(index.Posts) != 1 {
+		t.Fatalf("posts len = %d, want 1", len(index.Posts))
+	}
+	post := index.Posts[0]
+	if post.HasSourcePage {
+		t.Fatal("expected unsigned post to stay out of source pages")
+	}
+	if len(index.SourceStats) != 0 {
+		t.Fatalf("source stats = %+v, want empty", index.SourceStats)
+	}
+}
+
+func TestFilterPostsSupportsWindow(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 3, 12, 12, 0, 0, 0, time.UTC)
+	index := Index{
+		Posts: []Post{
+			{Bundle: Bundle{InfoHash: "fresh", CreatedAt: now.Add(-6 * time.Hour)}},
+			{Bundle: Bundle{InfoHash: "stale", CreatedAt: now.Add(-10 * 24 * time.Hour)}},
+		},
+	}
+
+	got := index.FilterPosts(FeedOptions{Window: "24h", Now: now})
+	if len(got) != 1 {
+		t.Fatalf("len = %d, want 1", len(got))
+	}
+	if got[0].InfoHash != "fresh" {
+		t.Fatalf("infohash = %s, want fresh", got[0].InfoHash)
+	}
+}
+
+func TestFilterPostsSupportsHotTab(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 3, 28, 12, 0, 0, 0, time.UTC)
+	index := Index{
+		Posts: []Post{
+			{
+				Bundle:       Bundle{InfoHash: "hot", CreatedAt: now.Add(-2 * time.Hour)},
+				Topics:       []string{"futures"},
+				Upvotes:      4,
+				Downvotes:    0,
+				ReplyCount:   2,
+				CommentCount: 2,
+			},
+			{
+				Bundle:       Bundle{InfoHash: "cold", CreatedAt: now.Add(-2 * time.Hour)},
+				Topics:       []string{"futures"},
+				Upvotes:      1,
+				Downvotes:    0,
+				ReplyCount:   1,
+				CommentCount: 1,
+			},
+			{
+				Bundle:       Bundle{InfoHash: "old", CreatedAt: now.Add(-72 * time.Hour)},
+				Topics:       []string{"futures"},
+				Upvotes:      10,
+				Downvotes:    0,
+				ReplyCount:   5,
+				CommentCount: 5,
+			},
+		},
+	}
+	for i := range index.Posts {
+		index.Posts[i].VoteScore = index.Posts[i].Upvotes - index.Posts[i].Downvotes
+		index.Posts[i].HotScore = hotScore(index.Posts[i])
+	}
+
+	got := index.FilterPosts(FeedOptions{Topic: "期货", Tab: "hot", Now: now})
+	if len(got) != 1 {
+		t.Fatalf("len = %d, want 1", len(got))
+	}
+	if got[0].InfoHash != "hot" {
+		t.Fatalf("infohash = %s, want hot", got[0].InfoHash)
+	}
+}
+
+func TestBuildIndexComputesVoteBreakdownAndHotScore(t *testing.T) {
+	t.Parallel()
+
+	bundles := []Bundle{
+		{
+			InfoHash:  "post-1",
+			CreatedAt: time.Date(2026, 3, 28, 10, 0, 0, 0, time.UTC),
+			Message: Message{
+				Kind:      "post",
+				Title:     "Hot post",
+				Channel:   "aip2p/news",
+				CreatedAt: "2026-03-28T10:00:00Z",
+				Extensions: map[string]any{
+					"project": "aip2p",
+					"topics":  []any{"新闻"},
+				},
+			},
+		},
+		{
+			InfoHash:  "reply-1",
+			CreatedAt: time.Date(2026, 3, 28, 10, 5, 0, 0, time.UTC),
+			Body:      "reply",
+			Message: Message{
+				Kind:      "reply",
+				CreatedAt: "2026-03-28T10:05:00Z",
+				ReplyTo:   &MessageLink{InfoHash: "post-1"},
+			},
+		},
+		{
+			InfoHash:  "upvote-1",
+			CreatedAt: time.Date(2026, 3, 28, 10, 6, 0, 0, time.UTC),
+			Message: Message{
+				Kind:      "reaction",
+				CreatedAt: "2026-03-28T10:06:00Z",
+				Extensions: map[string]any{
+					"subject":       map[string]any{"infohash": "post-1"},
+					"reaction_type": "vote",
+					"value":         1,
+				},
+			},
+		},
+		{
+			InfoHash:  "downvote-1",
+			CreatedAt: time.Date(2026, 3, 28, 10, 7, 0, 0, time.UTC),
+			Message: Message{
+				Kind:      "reaction",
+				CreatedAt: "2026-03-28T10:07:00Z",
+				Extensions: map[string]any{
+					"subject":       map[string]any{"infohash": "post-1"},
+					"reaction_type": "vote",
+					"value":         -1,
+				},
+			},
+		},
+	}
+
+	index := buildIndex(bundles, "aip2p")
+	post := index.PostByInfoHash["post-1"]
+	if post.Upvotes != 1 || post.Downvotes != 1 {
+		t.Fatalf("votes = %d/%d, want 1/1", post.Upvotes, post.Downvotes)
+	}
+	if post.CommentCount != 1 {
+		t.Fatalf("comment_count = %d, want 1", post.CommentCount)
+	}
+	if post.HotScore != 0.5 {
+		t.Fatalf("hot_score = %.1f, want 0.5", post.HotScore)
+	}
+}
+
+func TestFilterPostsCanonicalizesTopicAliases(t *testing.T) {
+	t.Parallel()
+
+	index := Index{
+		Posts: []Post{
+			{
+				Bundle: Bundle{InfoHash: "world"},
+				Topics: []string{"world"},
+			},
+		},
+	}
+
+	got := index.FilterPosts(FeedOptions{Topic: "国际"})
+	if len(got) != 1 || got[0].InfoHash != "world" {
+		t.Fatalf("filtered posts = %+v, want world alias match", got)
+	}
+}
+
+func TestBuildIndexCanonicalizesTopicAliases(t *testing.T) {
+	t.Parallel()
+
+	bundles := []Bundle{
+		{
+			InfoHash: "post-alias",
+			Message: Message{
+				Kind:    "post",
+				Channel: "aip2p/news",
+				Extensions: map[string]any{
+					"project": "aip2p",
+					"topics":  []any{"世界", "国际", "world", "期货", "新闻"},
+				},
+			},
+		},
+	}
+
+	index := buildIndex(bundles, "aip2p")
+	if len(index.Posts) != 1 {
+		t.Fatalf("posts len = %d, want 1", len(index.Posts))
+	}
+	if len(index.Posts[0].Topics) != 3 {
+		t.Fatalf("post topics = %v, want 3 canonical topics", index.Posts[0].Topics)
+	}
+	if index.Posts[0].Topics[0] != "world" || index.Posts[0].Topics[1] != "futures" || index.Posts[0].Topics[2] != "news" {
+		t.Fatalf("post topics = %v, want [world futures news]", index.Posts[0].Topics)
+	}
+	if !HasTopic(index, "国际") {
+		t.Fatal("expected HasTopic to match canonical alias")
+	}
+	if TopicPath("世界") != "/topics/world" {
+		t.Fatalf("topic path = %q, want /topics/world", TopicPath("世界"))
+	}
+}
+
+func TestRelatedPosts(t *testing.T) {
+	t.Parallel()
+
+	const pubKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	index := Index{
+		Posts: []Post{
+			{
+				Bundle:        Bundle{InfoHash: "base", CreatedAt: time.Date(2026, 3, 12, 10, 0, 0, 0, time.UTC)},
+				SourceName:    pubKey,
+				HasSourcePage: true,
+				ChannelGroup:  "world",
+				Topics:        []string{"energy", "world"},
+			},
+			{
+				Bundle:        Bundle{InfoHash: "rel1", CreatedAt: time.Date(2026, 3, 12, 11, 0, 0, 0, time.UTC)},
+				SourceName:    pubKey,
+				HasSourcePage: true,
+				ChannelGroup:  "world",
+				Topics:        []string{"energy"},
+			},
+			{
+				Bundle:       Bundle{InfoHash: "rel2", CreatedAt: time.Date(2026, 3, 12, 9, 0, 0, 0, time.UTC)},
+				SourceName:   "Another",
+				ChannelGroup: "world",
+				Topics:       []string{"world"},
+			},
+		},
+		PostByInfoHash: map[string]Post{},
+	}
+	for _, post := range index.Posts {
+		index.PostByInfoHash[post.InfoHash] = post
+	}
+
+	got := index.RelatedPosts("base", 4)
+	if len(got) != 2 {
+		t.Fatalf("len = %d, want 2", len(got))
+	}
+	if got[0].InfoHash != "rel1" {
+		t.Fatalf("first = %s, want rel1", got[0].InfoHash)
+	}
+}
+
+func TestSummarizeStripsHTMLDocumentMarkup(t *testing.T) {
+	t.Parallel()
+
+	body := `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><style>body{background:#fff}</style></head><body><h1>精选新闻</h1><p>液化石油气走强，原油偏强。</p></body></html>`
+	got := summarize(body, 120)
+	if strings.Contains(strings.ToLower(got), "<!doctype html>") {
+		t.Fatalf("summary still contains doctype: %q", got)
+	}
+	if strings.Contains(strings.ToLower(got), "<html") {
+		t.Fatalf("summary still contains html tag: %q", got)
+	}
+	if !strings.Contains(got, "精选新闻") || !strings.Contains(got, "液化石油气走强") {
+		t.Fatalf("summary missing text content: %q", got)
+	}
+}
+
+func TestLoadIndexMissingStoreReturnsEmpty(t *testing.T) {
+	t.Parallel()
+
+	root := filepath.Join(t.TempDir(), "missing-store")
+	index, err := LoadIndex(root, "aip2p")
+	if err != nil {
+		t.Fatalf("load index: %v", err)
+	}
+	if len(index.Bundles) != 0 {
+		t.Fatalf("bundles len = %d, want 0", len(index.Bundles))
+	}
+	if _, err := os.Stat(root); !os.IsNotExist(err) && err != nil {
+		t.Fatalf("stat root: %v", err)
+	}
+}

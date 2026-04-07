@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"hao.news/internal/apphost"
+	"aip2p/internal/apphost"
 )
 
 type baseResolver interface {
@@ -32,7 +32,7 @@ func Load(root string, resolver baseResolver) (Plugin, error) {
 	if err != nil {
 		return Plugin{}, err
 	}
-	data, err := os.ReadFile(filepath.Join(root, "haonews.plugin.json"))
+	data, err := os.ReadFile(filepath.Join(root, "aip2p.plugin.json"))
 	if err != nil {
 		return Plugin{}, err
 	}

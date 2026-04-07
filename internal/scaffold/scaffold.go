@@ -35,16 +35,16 @@ func PluginFiles(name string) ([]File, error) {
 		"version":       "0.1.0",
 		"plugin_kind":   "content",
 		"description":   "Describe what this plugin does.",
-		"base_plugin":   "hao-news-content",
-		"default_theme": "hao-news-theme",
+		"base_plugin":   "aip2p-content",
+		"default_theme": "aip2p-theme",
 	})
 	if err != nil {
 		return nil, err
 	}
 	return []File{
-		{Path: "haonews.plugin.json", Content: manifest},
-		{Path: "haonews.plugin.config.json", Content: fmt.Sprintf("{\n  \"channel\": %q\n}\n", channel)},
-		{Path: "README.md", Content: fmt.Sprintf("# %s\n\nThis is an Hao.News plugin scaffold.\n\nThe generated manifest is immediately runnable as a third-party directory plugin by delegating to the built-in `hao-news-content` runtime through `base_plugin`.\n\nTry it with:\n\n`haonews serve --plugin-dir . --theme hao-news-theme`\n", strings.TrimSpace(name))},
+		{Path: "aip2p.plugin.json", Content: manifest},
+		{Path: "aip2p.plugin.config.json", Content: fmt.Sprintf("{\n  \"channel\": %q\n}\n", channel)},
+		{Path: "README.md", Content: fmt.Sprintf("# %s\n\nThis is an aip2p plugin scaffold.\n\nThe generated manifest is immediately runnable as a third-party directory plugin by delegating to the built-in `aip2p-content` runtime through `base_plugin`.\n\nTry it with:\n\n`aip2p serve --plugin-dir . --theme aip2p-theme`\n", strings.TrimSpace(name))},
 		{Path: "config.schema.json", Content: "{\n  \"$schema\": \"https://json-schema.org/draft/2020-12/schema\",\n  \"type\": \"object\",\n  \"properties\": {}\n}\n"},
 		{Path: "skills/README.md", Content: "# Skills\n\nPut plugin-specific skills here.\n"},
 		{Path: "src/README.md", Content: "# Runtime\n\nThis scaffold uses `base_plugin` for runtime delegation today.\n\nKeep app-specific config, schemas, skills, and future runtime code here.\n"},
@@ -65,8 +65,8 @@ func ThemeFiles(name string) ([]File, error) {
 		return nil, err
 	}
 	return []File{
-		{Path: "haonews.theme.json", Content: manifest},
-		{Path: "README.md", Content: fmt.Sprintf("# %s\n\nThis is an Hao.News theme scaffold.\n\nUpdate `haonews.theme.json`, then edit the templates in `templates/` and assets in `static/`.\n\nThe generated files are intentionally minimal but runnable with `haonews serve --theme-dir ./...`.\n", strings.TrimSpace(name))},
+		{Path: "aip2p.theme.json", Content: manifest},
+		{Path: "README.md", Content: fmt.Sprintf("# %s\n\nThis is an aip2p theme scaffold.\n\nUpdate `aip2p.theme.json`, then edit the templates in `templates/` and assets in `static/`.\n\nThe generated files are intentionally minimal but runnable with `aip2p serve --theme-dir ./...`.\n", strings.TrimSpace(name))},
 		{Path: "templates/home.html", Content: defaultThemeTemplate(name, "Home")},
 		{Path: "templates/post.html", Content: defaultThemeTemplate(name, "Post")},
 		{Path: "templates/directory.html", Content: defaultThemeTemplate(name, "Directory")},
@@ -83,7 +83,7 @@ func ThemeFiles(name string) ([]File, error) {
 
 func AppFiles(name string) ([]File, error) {
 	id := Slug(name)
-	basePluginID := "hao-news-content"
+	basePluginID := "aip2p-content"
 	pluginID := id + "-plugin"
 	themeID := id + "-theme"
 	projectID := id + ".sample"
@@ -92,7 +92,7 @@ func AppFiles(name string) ([]File, error) {
 		"id":          id,
 		"name":        strings.TrimSpace(name),
 		"version":     "0.1.0",
-		"description": "Describe this Hao.News sample app. By default it composes built-in sample plugins with a local theme pack.",
+		"description": "Describe this aip2p sample app. By default it composes built-in sample plugins with a local theme pack.",
 		"plugins":     []string{pluginID},
 		"theme":       themeID,
 	})
@@ -100,13 +100,13 @@ func AppFiles(name string) ([]File, error) {
 		return nil, err
 	}
 	return []File{
-		{Path: "haonews.app.json", Content: manifest},
-		{Path: "haonews.app.config.json", Content: fmt.Sprintf("{\n  \"project\": %q,\n  \"runtime_root\": \"runtime\",\n  \"store_root\": \"runtime/store\",\n  \"archive_root\": \"runtime/archive\"\n}\n", projectID)},
-		{Path: "README.md", Content: fmt.Sprintf("# %s\n\nThis is an Hao.News app scaffold.\n\nIt uses a local third-party plugin pack in `plugins/%s-plugin/` and a local theme pack in `themes/%s/`.\n\nThe generated plugin delegates to the built-in `hao-news-content` runtime, so the scaffold runs immediately.\n\nRun it with:\n\n`haonews serve --app-dir .`\n", strings.TrimSpace(name), id, themeID)},
-		{Path: filepath.Join("plugins", pluginID, "haonews.plugin.json"), Content: fmt.Sprintf("{\n  \"id\": %q,\n  \"name\": %q,\n  \"version\": \"0.1.0\",\n  \"plugin_kind\": \"content\",\n  \"description\": \"Example third-party plugin pack that delegates to the built-in hao-news-content runtime.\",\n  \"base_plugin\": %q,\n  \"default_theme\": %q\n}\n", pluginID, strings.TrimSpace(name)+" Plugin", basePluginID, themeID)},
-		{Path: filepath.Join("plugins", pluginID, "haonews.plugin.config.json"), Content: fmt.Sprintf("{\n  \"channel\": %q\n}\n", channel)},
-		{Path: filepath.Join("plugins", pluginID, "README.md"), Content: "# Plugin Sample\n\nThis plugin is immediately loadable through `haonews serve --app-dir .` because it delegates to a built-in runtime using `base_plugin`.\n"},
-		{Path: filepath.Join("themes", themeID, "haonews.theme.json"), Content: fmt.Sprintf("{\n  \"id\": %q,\n  \"name\": %q,\n  \"version\": \"0.1.0\",\n  \"description\": \"Describe this app theme.\",\n  \"supported_plugins\": [%q],\n  \"required_plugins\": [%q]\n}\n", themeID, strings.TrimSpace(name)+" Theme", pluginID, pluginID)},
+		{Path: "aip2p.app.json", Content: manifest},
+		{Path: "aip2p.app.config.json", Content: fmt.Sprintf("{\n  \"project\": %q,\n  \"runtime_root\": \"runtime\",\n  \"store_root\": \"runtime/store\",\n  \"archive_root\": \"runtime/archive\"\n}\n", projectID)},
+		{Path: "README.md", Content: fmt.Sprintf("# %s\n\nThis is an aip2p app scaffold.\n\nIt uses a local third-party plugin pack in `plugins/%s-plugin/` and a local theme pack in `themes/%s/`.\n\nThe generated plugin delegates to the built-in `aip2p-content` runtime, so the scaffold runs immediately.\n\nRun it with:\n\n`aip2p serve --app-dir .`\n", strings.TrimSpace(name), id, themeID)},
+		{Path: filepath.Join("plugins", pluginID, "aip2p.plugin.json"), Content: fmt.Sprintf("{\n  \"id\": %q,\n  \"name\": %q,\n  \"version\": \"0.1.0\",\n  \"plugin_kind\": \"content\",\n  \"description\": \"Example third-party plugin pack that delegates to the built-in aip2p-content runtime.\",\n  \"base_plugin\": %q,\n  \"default_theme\": %q\n}\n", pluginID, strings.TrimSpace(name)+" Plugin", basePluginID, themeID)},
+		{Path: filepath.Join("plugins", pluginID, "aip2p.plugin.config.json"), Content: fmt.Sprintf("{\n  \"channel\": %q\n}\n", channel)},
+		{Path: filepath.Join("plugins", pluginID, "README.md"), Content: "# Plugin Sample\n\nThis plugin is immediately loadable through `aip2p serve --app-dir .` because it delegates to a built-in runtime using `base_plugin`.\n"},
+		{Path: filepath.Join("themes", themeID, "aip2p.theme.json"), Content: fmt.Sprintf("{\n  \"id\": %q,\n  \"name\": %q,\n  \"version\": \"0.1.0\",\n  \"description\": \"Describe this app theme.\",\n  \"supported_plugins\": [%q],\n  \"required_plugins\": [%q]\n}\n", themeID, strings.TrimSpace(name)+" Theme", pluginID, pluginID)},
 		{Path: filepath.Join("themes", themeID, "templates", "home.html"), Content: defaultThemeTemplate(name, "Home")},
 		{Path: filepath.Join("themes", themeID, "templates", "post.html"), Content: defaultThemeTemplate(name, "Post")},
 		{Path: filepath.Join("themes", themeID, "templates", "directory.html"), Content: defaultThemeTemplate(name, "Directory")},
@@ -157,7 +157,7 @@ func defaultThemeTemplate(name, page string) string {
 </head>
 <body>
   <main class="page">
-    <p class="eyebrow">Hao.News Theme Scaffold</p>
+    <p class="eyebrow">aip2p Theme Scaffold</p>
     <h1>%s</h1>
     <p class="lede">Replace this placeholder template with a real layout for the %s page.</p>
   </main>

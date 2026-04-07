@@ -7,9 +7,9 @@ import (
 	"sort"
 	"strings"
 
-	"hao.news/internal/apphost"
-	"hao.news/internal/plugins/directoryplugin"
-	"hao.news/internal/themes/directorytheme"
+	"aip2p/internal/apphost"
+	"aip2p/internal/plugins/directoryplugin"
+	"aip2p/internal/themes/directorytheme"
 )
 
 type AppBundle struct {

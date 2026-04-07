@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aip2p Team 模块优化报告</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --card: #1a1d27;
+    --card-hover: #222632;
+    --border: #2a2e3a;
+    --text: #e1e4ea;
+    --text-dim: #8b8fa3;
+    --accent: #6c8aff;
+    --accent-dim: rgba(108,138,255,.12);
+    --red: #ff6b6b;
+    --red-dim: rgba(255,107,107,.12);
+    --orange: #ffa94d;
+    --orange-dim: rgba(255,169,77,.12);
+    --green: #51cf66;
+    --green-dim: rgba(81,207,102,.12);
+    --yellow: #ffd43b;
+    --yellow-dim: rgba(255,212,59,.12);
+    --purple: #cc5de8;
+    --purple-dim: rgba(204,93,232,.12);
+    --cyan: #22b8cf;
+    --cyan-dim: rgba(34,184,207,.12);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    overflow-x: hidden;
+  }
+  .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+
+  /* Hero */
+  .hero {
+    padding: 64px 0 48px;
+    text-align: center;
+    background: linear-gradient(180deg, rgba(108,138,255,.08) 0%, transparent 100%);
+    border-bottom: 1px solid var(--border);
+  }
+  .hero h1 { font-size: 2.4rem; font-weight: 700; letter-spacing: -.02em; }
+  .hero h1 span { color: var(--accent); }
+  .hero .meta { color: var(--text-dim); margin-top: 12px; font-size: .95rem; }
+
+  /* Stats bar */
+  .stats-bar {
+    display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;
+    margin-top: 32px;
+  }
+  .stat-chip {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 24px;
+    text-align: center;
+    min-width: 130px;
+  }
+  .stat-chip .num { font-size: 1.8rem; font-weight: 700; }
+  .stat-chip .label { font-size: .8rem; color: var(--text-dim); margin-top: 2px; }
+  .stat-chip.red .num { color: var(--red); }
+  .stat-chip.orange .num { color: var(--orange); }
+  .stat-chip.yellow .num { color: var(--yellow); }
+  .stat-chip.green .num { color: var(--green); }
+  .stat-chip.accent .num { color: var(--accent); }
+
+  /* Section */
+  section { padding: 48px 0; }
+  section + section { border-top: 1px solid var(--border); }
+  .section-header {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 28px;
+  }
+  .section-icon {
+    width: 40px; height: 40px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.2rem; flex-shrink: 0;
+  }
+  .section-header h2 { font-size: 1.4rem; font-weight: 600; }
+  .section-header .count {
+    background: var(--accent-dim); color: var(--accent);
+    font-size: .75rem; font-weight: 600; padding: 3px 10px;
+    border-radius: 20px; margin-left: 8px;
+  }
+
+  /* Cards */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 24px;
+    margin-bottom: 16px;
+    cursor: pointer;
+    transition: all .2s;
+  }
+  .card:hover { background: var(--card-hover); border-color: var(--accent); }
+  .card-head {
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  }
+  .card-title {
+    font-size: 1.05rem; font-weight: 600;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .card-id { color: var(--text-dim); font-size: .85rem; font-weight: 400; }
+  .priority-tag {
+    font-size: .7rem; font-weight: 700; padding: 3px 10px;
+    border-radius: 6px; white-space: nowrap; letter-spacing: .03em;
+  }
+  .p0 { background: var(--red-dim); color: var(--red); }
+  .p1 { background: var(--orange-dim); color: var(--orange); }
+  .p2 { background: var(--yellow-dim); color: var(--yellow); }
+  .p3 { background: var(--green-dim); color: var(--green); }
+  .card-desc { color: var(--text-dim); font-size: .9rem; margin-top: 10px; }
+  .card-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+  .tag {
+    font-size: .72rem; padding: 3px 10px; border-radius: 6px;
+    background: rgba(255,255,255,.05); color: var(--text-dim);
+  }
+  .tag.perf { background: var(--cyan-dim); color: var(--cyan); }
+  .tag.bug { background: var(--red-dim); color: var(--red); }
+  .tag.arch { background: var(--purple-dim); color: var(--purple); }
+  .tag.sec { background: var(--orange-dim); color: var(--orange); }
+  .tag.quality { background: var(--accent-dim); color: var(--accent); }
+  .tag.test { background: var(--green-dim); color: var(--green); }
+
+  /* Expandable detail */
+  .card-detail {
+    max-height: 0; overflow: hidden;
+    transition: max-height .4s ease, padding .3s;
+    padding: 0 0;
+  }
+  .card.open .card-detail {
+    max-height: 3000px;
+    padding: 20px 0 0;
+  }
+  .card.open { border-color: var(--accent); }
+  .detail-section { margin-bottom: 16px; }
+  .detail-section h4 {
+    font-size: .85rem; font-weight: 600; color: var(--accent);
+    margin-bottom: 8px;
+  }
+  .detail-section p {
+    font-size: .88rem; color: var(--text-dim); line-height: 1.8;
+  }
+  pre {
+    background: rgba(0,0,0,.35);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    overflow-x: auto;
+    font-size: .82rem;
+    line-height: 1.6;
+    color: #c9d1d9;
+    margin: 8px 0;
+  }
+  code {
+    font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+    font-size: .84em;
+  }
+  .inline-code {
+    background: rgba(108,138,255,.1);
+    color: var(--accent);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: .85em;
+  }
+
+  /* File table */
+  .file-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .85rem;
+  }
+  .file-table th {
+    text-align: left;
+    padding: 10px 14px;
+    background: rgba(255,255,255,.03);
+    color: var(--text-dim);
+    font-weight: 600;
+    font-size: .78rem;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    border-bottom: 1px solid var(--border);
+  }
+  .file-table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(255,255,255,.04);
+  }
+  .file-table tr:hover td { background: rgba(108,138,255,.04); }
+  .file-path { color: var(--accent); font-family: 'SF Mono', monospace; font-size: .82rem; }
+
+  /* Priority matrix */
+  .matrix-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 12px;
+  }
+  .matrix-item {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    font-size: .85rem;
+  }
+  .matrix-item .mi-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 6px;
+  }
+  .matrix-item .mi-id { font-weight: 600; }
+  .matrix-item .mi-desc { color: var(--text-dim); font-size: .82rem; }
+
+  /* Expand arrow */
+  .arrow {
+    display: inline-block; transition: transform .3s;
+    color: var(--text-dim); font-size: .8rem;
+  }
+  .card.open .arrow { transform: rotate(90deg); }
+
+  /* Responsive */
+  @media (max-width: 640px) {
+    .hero h1 { font-size: 1.6rem; }
+    .stats-bar { gap: 10px; }
+    .stat-chip { min-width: 100px; padding: 10px 14px; }
+    .stat-chip .num { font-size: 1.4rem; }
+    .card { padding: 18px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Hero -->
+<div class="hero">
+  <div class="container">
+    <h1>Aip2p <span>Team</span> 模块优化报告</h1>
+    <div class="meta">审阅日期：2026-04-04 &nbsp;|&nbsp; 覆盖代码：约 14,000 行 Go + 12 个 HTML 模板</div>
+    <div class="stats-bar">
+      <div class="stat-chip red"><div class="num">5</div><div class="label">P0 紧急</div></div>
+      <div class="stat-chip orange"><div class="num">5</div><div class="label">P1 重要</div></div>
+      <div class="stat-chip yellow"><div class="num">7</div><div class="label">P2 改进</div></div>
+      <div class="stat-chip green"><div class="num">7</div><div class="label">P3 长期</div></div>
+      <div class="stat-chip accent"><div class="num">11</div><div class="label">优化维度</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+
+<!-- ====== 架构 ====== -->
+<section>
+  <div class="section-header">
+    <div class="section-icon" style="background:var(--purple-dim);color:var(--purple);">&#9881;</div>
+    <h2>架构层面</h2><span class="count">2 项</span>
+  </div>
+
+  <div class="card" onclick="this.classList.toggle('open')">
+    <div class="card-head">
+      <div class="card-title"><span class="arrow">&#9654;</span> <span class="card-id">1.1</span> store.go 单文件 3,462 行，职责过多</div>
+      <span class="priority-tag p2">P2</span>
+    </div>
+    <div class="card-desc">所有数据模型定义、全部 CRUD、文件锁、索引管理、归档、事件、Webhook、normalize 函数都堆在同一个文件中。</div>
+    <div class="card-tags"><span class="tag arch">架构</span><span class="tag quality">可维护性</span></div>
+    <div class="card-detail">
+      <div class="detail-section">
+        <h4>问题分析</h4>
+        <p>不同关注点耦合在一起，修改任一功能都需要在 3,000+ 行文件中定位代码。新开发者理解成本极高。</p>
+      </div>
+      <div class="detail-section">
+        <h4>建议拆分方案</h4>
+<pre>team/
+  types.go           // 所有 struct 定义
+  store.go           // Store 结构体 + OpenStore (~200 行)
+  team_crud.go       // LoadTeam, ListTeams
+  member_crud.go     // LoadMembers, SaveMembers
+  policy_crud.go     // LoadPolicy, SavePolicy
+  channel_crud.go    // Channel 相关操作
+  message_crud.go    // 消息读写 + 分片
+  task_crud.go       // 任务 CRUD + 索引/遗留双轨
+  artifact_crud.go   // 产物 CRUD
+  history_crud.go    // 变更历史
+  archive.go         // 归档快照
+  index.go           // 索引管理 + 迁移 + 压缩
+  event.go           // Subscribe/Publish/Webhook
+  normalize.go       // 所有 normalize 函数
+  helpers.go         // ID 构建 + 工具函数</pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" onclick="this.classList.toggle('open')">
+    <div class="card-head">
+      <div class="card-title"><span class="arrow">&#9654;</span> <span class="card-id">1.2</span> handler.go 1,300+ 行，缺少结构化组织</div>
+      <span class="priority-tag p2">P2</span>
+    </div>
+    <div class="card-desc">40+ 个 handler 函数全部为顶层函数，每个都需手动传入 app 和 store 参数。</div>
+    <div class="card-tags"><span class="tag arch">架构</span><span class="tag quality">可维护性</span></div>
+    <div class="card-detail">
+      <div class="detail-section">
+        <h4>优化方案</h4>
+        <p>引入 <span class="inline-code">TeamHandler</span> 结构体统一持有依赖；按功能拆分为 handler_team.go、handler_task.go、handler_channel.go 等。</p>
+<pre>type TeamHandler struct {
+    app   *newsplugin.App
+    store *teamcore.Store
+}
+
+func (h *TeamHandler) HandleTeamIndex(w http.ResponseWriter, r *http.Request) {
+    // 使用 h.app 和 h.store，无需参数传递
+}</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ====== 性能 ====== -->
+<section>
+  <div class="section-header">
+    <div class="section-icon" style="background:var(--cyan-dim);color:var(--cyan);">&#9889;</div>
+    <h2>性能层面</h2><span class="count">5 项</span>
+  </div>
+
+  <div class="card" onclick="this.classList.toggle('open')">
+    <div class="card-head">
+      <div class="card-title"><span class="arrow">&#9654;</span> <span class="card-id">2.1</span> readLastJSONLLines 逐字节读取 — 性能灾难</div>
+      <span class="priority-tag p0">P0</span>
+    </div>
+    <div class="card-desc">每读 1 字节触发 1 次系统调用。10MB 文件需要 ~1000 万次 ReadAt 调用。</div>
+    <div class="card-tags"><span class="tag perf">性能</span><span class="tag bug">严重</span></div>
+    <div class="card-detail">
+      <div class="detail-section">
+        <h4>现状代码（store.go 第 841-879 行）</h4>
+<pre>for pos := info.Size() - 1; pos >= 0; pos-- {
+    var b [1]byte
+    file.ReadAt(b[:], pos)  // 每字节一次系统调用！
+    // ...
+}</pre>
+      </div>
+      <div class="detail-section">
+        <h4>优化方案：块状反向读取（8KB 块）</h4>
+        <p>一次读取 8KB 数据块，在内存中反向扫描换行符。系统调用从数百万次降至约 1,200 次。</p>
+<pre>const blockSize = 8192
+for offset := size; offset > 0 && len(lines) < limit; {
+    readSize := min(blockSize, offset)
+    offset -= readSize
+    buf := make([]byte, readSize)
+    file.ReadAt(buf, offset)  // 一次读 8KB
+    // 内存中扫描换行符...
+}</pre>
+        <p><strong>预期收益：100x+ 速度提升</strong></p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" onclick="this.classList.toggle('open')">
+    <div class="card-head">
+      <div class="card-title"><span class="arrow">&#9654;</span> <span class="card-id">2.2</span> channelSummary 加载全部消息只为统计数量</div>
+      <span class="priority-tag p0">P0</span>
+    </div>
+    <div class="card-desc"><span class="inline-code">LoadMessages(teamID, channelID, 0)</span> 加载整个频道的全部消息，只为获取 len() 和最新时间。</div>
+    <div class="card-tags"><span class="tag perf">性能</span><span class="tag bug">严重</span></div>
+    <div class="card-detail">
+      <div class="detail-section">
+        <h4>影响范围</h4>
+        <p><span class="inline-code">ListChannels</span> 会对每个频道都调用 <span class="inline-code">channelSummary</span>。如果一个团队有 5 个频道、每个频道 1 万条消息，就需要将 5 万条消息全部加载到内存。</p>
+      </div>
+      <div class="detail-section">
+        <h4>优化方案</h4>
+        <p>方案 A：新增 <span class="inline-code">channelMessageStats</span> 轻量方法，只统计行数 + 读取最后一行获取时间。<br/>
+        方案 B（推荐）：在频道元数据中维护 message_count 和 last_message_at，每次 AppendMessage 时增量更新。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" onclick="this.classList.toggle('open')">
+    <div class="card-head">
+      <div class="card-title"><span class="arrow">&#9654;</span> <span class="card-id">2.3</span> LoadTaskMessages 全量扫描所有频道所有消息</div>
+      <span class="priority-tag p1">P1</span>
+    </div>
+    <div class="card-desc">查找与某 Task 相关的消息时，遍历所有频道的所有消息做 StructuredData 匹配。</div>
+    <div class="card-tags"><span class="tag perf">性能</span></div>
+    <div class="card-detail">
+      <div class="detail-section">
+        <h4>优化方案</h4>
+        <p>利用 Task 的 ChannelID 优先搜索对应频道；或新增按 task_id 的消息索引文件。<span class="inline-code">LoadMessagesByContext</span> 同理。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" onclick="this.classList.toggle('open')">
+    <div class="card-head">
+      <div class="card-title"><span class="arrow">&#9654;</span> <span class="card-id">2.4</span> ListTeams 串行加载每个团队信息</div>
+      <span class="priority-tag p2">P2</span>
+    </div>
+    <div class="card-desc">50 个团队串行读取 team.json + members.json + channels 配置，I/O 累加。</div>
+    <div class="card-tags"><span class="tag perf">性能</span></div>
+    <div class="card-detail">
+      <div class="detail-section">
+        <h4>优化方案</h4>
+        <p>使用 goroutine 并发加载各团队数据，通过 channel 收集结果。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" onclick="this.classList.toggle('open')">
+    <div class="card-head">
+      <div class="card-title"><span class="arrow">&#9654;</span> <span class="card-id">2.5</span> handleTeam 错误处理：errOnce 丢弃后续错误</div>
+      <span class="priority-tag p2">P2</span>
+    </div>
+    <div class="card-desc">9 个并发 goroutine 加载数据，errOnce 只保留第一个错误，无法提前取消。</div>
+    <div class="card-tags"><span class="tag perf">性能</span><span class="tag quality">错误处理</span></div>
+    <div class="card-detail">
+      <div class="detail-section">
+        <h4>优化方案</h4>
+        <p>使用 <span class="inline-code">golang.org/x/sync/errgroup</span> 替换手动 WaitGroup + errOnce，获得 context 取消支持。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ====== 数据一致性 ====== -->
+<section>
+  <div class="section-header">
+    <div class="section-icon" style="background:var(--red-dim);color:var(--red);">&#128274;</div>
+    <h2>数据一致性与可靠性</h2><span class="count">3 项</span>
+  </div>
+
+  <div class="card" onclick="this.classList.toggle('open')">
+    <div class="card-head">
+      <div class="card-title"><span class="arrow">&#9654;</span> <span class="card-id">3.1</span> JSONL Append 写入不安全 + 错误静默丢弃</div>
+      <span class="priority-tag p0">P0</span>
+    </div>
+    <div class="card-desc">程序崩溃可导致半行 JSON；json.Unmarshal 失败时 continue 丢弃数据无日志。</div>
+    <div class="card-tags"><span class="tag bug">严重</span><span class="tag quality">可靠性</span></div>
+    <div class="card-detail">
+      <div class="detail-section">
+        <h4>问题位置</h4>
+        <p>store.go 中约 10 处 <span class="inline-code">json.Unmarshal + continue</span>（第 683、697、746、813、1159、1475 行等）。</p>
+      </div>
+      <div class="detail-section">
+        <h4>修复方案</h4>
+        <p>1. <span class="inline-code">file.Close()</span> 前调用 <span class="inline-code">file.Sync()</span><br/>
+        2. 所有 <span class="inline-code">continue</span> 处改为 <span class="inline-code">log.Printf("[team] corrupt JSONL line: %v", err)</span></p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" onclick="this.classList.toggle('open')">
+    <div class="card-head">
+      <div class="card-title"><span class="arrow">&#9654;</span> <span class="card-id">3.2</span> 文件锁（Flock）无超时机制</div>
+      <span class="priority-tag p1">P1</span>
+    </div>
+    <div class="card-desc"><span class="inline-code">syscall.Flock(LOCK_EX)</span> 阻塞等待，无超时。异常退出可能导致永久阻塞。</div>
+    <div class="card-tags"><span class="tag bug">可靠性</span></div>
+    <div class="card-detail">
+      <div class="detail-section">
+        <h4>优化方案</h4>
+        <p>改用 <span class="inline-code">LOCK_NB</span> 非阻塞模式 + 重试循环 + 超时退出（建议 10 秒）。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" onclick="this.classList.toggle('open')">
+    <div class="card-head">
+      <div class="card-title"><span class="arrow">&#9654;</span> <span class="card-id">3.3</span> Webhook 推送缺少重试和日志</div>
+      <span class="priority-tag p1">P1</span>
+    </div>
+    <div class="card-desc">所有错误静默丢弃，无重试机制，每次创建新 http.Client 实例。</div>
+    <div class="card-tags"><span class="tag quality">可靠性</span></div>
+    <div class="card-detail">
+      <div class="detail-section">
+        <h4>优化方案</h4>
+        <p>复用 http.Client；增加最多 3 次重试 + 指数退避；区分 500/429（可重试）和 4xx（不可重试）；添加日志。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ====== 代码质量 ====== -->
+<section>
+  <div class="section-header">
+    <div class="section-icon" style="background:var(--accent-dim);color:var(--accent);">&#9998;</div>
+    <h2>代码质量与 Bug</h2><span class="count">5 项</span>
+  </div>
+
+  <div class="card" onclick="this.classList.toggle('open')">
+    <div class="card-head">
+      <div class="card-title"><span class="arrow">&#9654;</span> <span class="card-id">4.1</span> 30 处重复的 nil 检查 + NormalizeTeamID 模板</div>
+      <span class="priority-tag p2">P2</span>
+    </div>
+    <div class="card-desc">几乎每个 Store 方法都以相同的 5 行验证代码开头，3,462 行中出现约 30 次。</div>
+    <div class="card-tags"><span class="tag quality">代码质量</span></div>
+    <div class="card-detail">
+      <div class="detail-section">
+        <h4>优化方案</h4>
+        <p>提取 <span class="inline-code">validateTeamID(teamID) (string, error)</span> 公共方法。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" onclick="this.classList.toggle('open')">
+    <div class="card-head">
+      <div class="card-title"><span class="arrow">&#9654;</span> <span class="card-id">4.2</span> Legacy/Indexed 双轨存储约 10 处分支</div>
+      <span class="priority-tag p2">P2</span>
+    </div>
+    <div class="card-desc">Tasks 和 Artifacts 各有两套存储逻辑，到处都是 <span class="inline-code">if hasTaskIndex</span> 分支。</div>
+    <div class="card-tags"><span class="tag arch">架构</span><span class="tag quality">可维护性</span></div>
+    <div class="card-detail">
+      <div class="detail-section">
+        <h4>优化方案</h4>
+        <p>定义 <span class="inline-code">TaskStorage</span> 接口，Legacy 和 Indexed 各实现一份。长期统一迁移到 Indexed。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" onclick="this.classList.toggle('open')">
+    <div class="card-head">
+      <div class="card-title"><span class="arrow">&#9654;</span> <span class="card-id">4.3</span> 锁内调用 public LoadTasks 而非内部方法</div>
+      <span class="priority-tag p2">P2</span>
+    </div>
+    <div class="card-desc"><span class="inline-code">SaveTask</span> 在 withTeamLock 内调用 public <span class="inline-code">LoadTasks</span>，含冗余验证。</div>
+    <div class="card-tags"><span class="tag quality">代码质量</span></div>
+    <div class="card-detail">
+      <div class="detail-section">
+        <h4>修复</h4>
+        <p>第 1237、1330、1703 行：将 <span class="inline-code">s.LoadTasks</span> 改为 <span class="inline-code">s.loadLegacyTasks</span>（已有的内部方法）。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" onclick="this.classList.toggle('open')">
+    <div class="card-head">
+      <div class="card-title"><span class="arrow">&#9654;</span> <span class="card-id">4.4</span> mergeChannel 的 CreatedAt 逻辑 Bug</div>
+      <span class="priority-tag p0">P0</span>
+    </div>
+    <div class="card-desc">store.go 第 2245-2268 行：两段 if 逻辑导致 CreatedAt 被无条件覆盖。</div>
+    <div class="card-tags"><span class="tag bug">Bug</span></div>
+    <div class="card-detail">
+      <div class="detail-section">
+        <h4>Bug 代码</h4>
+<pre>if base.CreatedAt.IsZero() {
+    base.CreatedAt = override.CreatedAt  // 第一段
+}
+if override.CreatedAt.IsZero() {
+    // keep existing
+} else {
+    base.CreatedAt = override.CreatedAt  // 又覆盖了！
+}</pre>
+      </div>
+      <div class="detail-section">
+        <h4>修复：CreatedAt 取最早的非零值</h4>
+<pre>if base.CreatedAt.IsZero() {
+    base.CreatedAt = override.CreatedAt
+}
+// 不再额外覆盖</pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" onclick="this.classList.toggle('open')">
+    <div class="card-head">
+      <div class="card-title"><span class="arrow">&#9654;</span> <span class="card-id">4.5</span> ClosedAt 逻辑在 Handler 层和 Store 层重复且不一致</div>
+      <span class="priority-tag p0">P0</span>
+    </div>
+    <div class="card-desc">Handler 只处理 "done" 状态，Store 用 IsTerminalState（含 done/failed/cancelled/rejected），逻辑矛盾。</div>
+    <div class="card-tags"><span class="tag bug">Bug</span><span class="tag quality">一致性</span></div>
+    <div class="card-detail">
+      <div class="detail-section">
+        <h4>修复</h4>
+        <p>删除 handler.go 第 770-775 行的 ClosedAt 处理逻辑，完全由 Store 层 <span class="inline-code">SaveTask</span> 统一管理。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ====== 安全 ====== -->
+<section>
+  <div class="section-header">
+    <div class="section-icon" style="background:var(--orange-dim);color:var(--orange);">&#128737;</div>
+    <h2>安全性</h2><span class="count">2 项</span>
+  </div>
+
+  <div class="card" onclick="this.classList.toggle('open')">
+    <div class="card-head">
+      <div class="card-title"><span class="arrow">&#9654;</span> <span class="card-id">5.1</span> teamRequestTrusted IP 校验可被反向代理绕过</div>
+      <span class="priority-tag p1">P1</span>
+    </div>
+    <div class="card-desc">在 nginx 等反向代理后面，RemoteAddr 可能是代理 IP 而非真实客户端 IP。</div>
+    <div class="card-tags"><span class="tag sec">安全</span></div>
+    <div class="card-detail">
+      <div class="detail-section">
+        <h4>建议</h4>
+        <p>明确不信任 X-Forwarded-For 头；生产环境建议增加 token-based auth。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" onclick="this.classList.toggle('open')">
+    <div class="card-head">
+      <div class="card-title"><span class="arrow">&#9654;</span> <span class="card-id">5.2</span> NormalizeTeamID 缺少路径遍历防护</div>
+      <span class="priority-tag p1">P1</span>
+    </div>
+    <div class="card-desc">虽然 / 被替换为 -，但未处理 URL 编码 <span class="inline-code">%2F</span>、<span class="inline-code">..</span> 等形式。</div>
+    <div class="card-tags"><span class="tag sec">安全</span></div>
+    <div class="card-detail">
+      <div class="detail-section">
+        <h4>修复要点</h4>
+        <p>1. 先做 URL 解码 <span class="inline-code">url.PathUnescape</span><br/>
+        2. 过滤 <span class="inline-code">..</span><br/>
+        3. 最终检查 <span class="inline-code">filepath.IsAbs</span></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ====== 接口/测试/可观测 ====== -->
+<section>
+  <div class="section-header">
+    <div class="section-icon" style="background:var(--green-dim);color:var(--green);">&#128200;</div>
+    <h2>接口 / 测试 / 可观测性 / 同步</h2><span class="count">7 项</span>
+  </div>
+
+  <div class="card" onclick="this.classList.toggle('open')">
+    <div class="card-head">
+      <div class="card-title"><span class="arrow">&#9654;</span> <span class="card-id">6.1</span> limit=0 语义不明确</div>
+      <span class="priority-tag p3">P3</span>
+    </div>
+    <div class="card-desc">LoadMessages(teamID, channelID, 0) 的 0 表示"加载全部"，容易误读为"不加载"。</div>
+    <div class="card-tags"><span class="tag quality">API 设计</span></div>
+    <div class="card-detail">
+      <div class="detail-section"><h4>方案</h4><p>引入 <span class="inline-code">const LoadAll = -1</span> 明确语义，或新增 <span class="inline-code">LoadAllMessages</span> 方法。</p></div>
+    </div>
+  </div>
+
+  <div class="card" onclick="this.classList.toggle('open')">
+    <div class="card-head">
+      <div class="card-title"><span class="arrow">&#9654;</span> <span class="card-id">6.2</span> 全部方法缺少 context.Context</div>
+      <span class="priority-tag p3">P3</span>
+    </div>
+    <div class="card-desc">无法传递 HTTP 请求 deadline/timeout，无法做分布式追踪。</div>
+    <div class="card-tags"><span class="tag arch">架构</span></div>
+    <div class="card-detail">
+      <div class="detail-section"><h4>方案</h4><p>长期为所有 public 方法添加 ctx 参数；短期先为 <span class="inline-code">withTeamLock</span> 增加 context 支持。</p></div>
+    </div>
+  </div>
+
+  <div class="card" onclick="this.classList.toggle('open')">
+    <div class="card-head">
+      <div class="card-title"><span class="arrow">&#9654;</span> <span class="card-id">7.1</span> store.go（核心数据层）完全没有单元测试</div>
+      <span class="priority-tag p3">P3</span>
+    </div>
+    <div class="card-desc">team_sync_test.go 有 1,065 行测试，但 store.go 零测试覆盖。</div>
+    <div class="card-tags"><span class="tag test">测试</span></div>
+    <div class="card-detail">
+      <div class="detail-section"><h4>建议覆盖</h4><p>readLastJSONLLines 边界、索引存储 CRUD、文件锁并发、Policy.Allows、NormalizeTeamID 等至少 20+ 测试用例。</p></div>
+    </div>
+  </div>
+
+  <div class="card" onclick="this.classList.toggle('open')">
+    <div class="card-head">
+      <div class="card-title"><span class="arrow">&#9654;</span> <span class="card-id">8.1</span> 整个 team 包零日志记录</div>
+      <span class="priority-tag p1">P1</span>
+    </div>
+    <div class="card-desc">JSON 反序列化失败、Webhook 失败、锁超时等全部静默处理。</div>
+    <div class="card-tags"><span class="tag quality">可观测性</span></div>
+    <div class="card-detail">
+      <div class="detail-section"><h4>方案</h4><p>引入 <span class="inline-code">log/slog</span>，在 Store 中持有 Logger，关键位置输出结构化日志。</p></div>
+    </div>
+  </div>
+
+  <div class="card" onclick="this.classList.toggle('open')">
+    <div class="card-head">
+      <div class="card-title"><span class="arrow">&#9654;</span> <span class="card-id">8.2</span> 缺少 metrics 指标</div>
+      <span class="priority-tag p3">P3</span>
+    </div>
+    <div class="card-desc">无法监控消息吞吐、任务数、Webhook 错误率、锁等待时间等关键指标。</div>
+    <div class="card-tags"><span class="tag quality">可观测性</span></div>
+    <div class="card-detail">
+      <div class="detail-section"><h4>方案</h4><p>使用 <span class="inline-code">expvar</span> 或 Prometheus client 收集关键指标。</p></div>
+    </div>
+  </div>
+
+  <div class="card" onclick="this.classList.toggle('open')">
+    <div class="card-head">
+      <div class="card-title"><span class="arrow">&#9654;</span> <span class="card-id">9.1</span> Key() 方法重复 normalize</div>
+      <span class="priority-tag p3">P3</span>
+    </div>
+    <div class="card-desc">sync.go 的 Key() 方法对 Type 再次做 ToLower+TrimSpace，Normalize() 已经做过。</div>
+    <div class="card-tags"><span class="tag quality">代码质量</span></div>
+    <div class="card-detail">
+      <div class="detail-section"><h4>方案</h4><p>Key() 内部先调用 Normalize()，或要求调用方确保已 normalized。</p></div>
+    </div>
+  </div>
+
+  <div class="card" onclick="this.classList.toggle('open')">
+    <div class="card-head">
+      <div class="card-title"><span class="arrow">&#9654;</span> <span class="card-id">9.2</span> 时间戳冲突检测在时钟偏移下不可靠</div>
+      <span class="priority-tag p3">P3</span>
+    </div>
+    <div class="card-desc">分布式节点间的 UpdatedAt 比较依赖时钟同步，NTP 偏移可导致错误的 last-write-wins。</div>
+    <div class="card-tags"><span class="tag arch">架构</span></div>
+    <div class="card-detail">
+      <div class="detail-section"><h4>长期方案</h4><p>引入 Hybrid Logical Clock (HLC) 替代纯时间戳。</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ====== 优先级矩阵 ====== -->
+<section>
+  <div class="section-header">
+    <div class="section-icon" style="background:var(--yellow-dim);color:var(--yellow);">&#128203;</div>
+    <h2>优先级矩阵</h2>
+  </div>
+
+  <h3 style="color:var(--red);margin-bottom:12px;">P0 — 立即修复</h3>
+  <div class="matrix-grid">
+    <div class="matrix-item"><div class="mi-head"><span class="mi-id">2.1</span><span class="priority-tag p0">P0</span></div><div class="mi-desc">readLastJSONLLines 逐字节读取</div></div>
+    <div class="matrix-item"><div class="mi-head"><span class="mi-id">2.2</span><span class="priority-tag p0">P0</span></div><div class="mi-desc">channelSummary 全量加载</div></div>
+    <div class="matrix-item"><div class="mi-head"><span class="mi-id">3.1</span><span class="priority-tag p0">P0</span></div><div class="mi-desc">JSONL 写入 + 错误日志</div></div>
+    <div class="matrix-item"><div class="mi-head"><span class="mi-id">4.4</span><span class="priority-tag p0">P0</span></div><div class="mi-desc">mergeChannel CreatedAt Bug</div></div>
+    <div class="matrix-item"><div class="mi-head"><span class="mi-id">4.5</span><span class="priority-tag p0">P0</span></div><div class="mi-desc">ClosedAt 逻辑重复不一致</div></div>
+  </div>
+
+  <h3 style="color:var(--orange);margin:24px 0 12px;">P1 — 本迭代完成</h3>
+  <div class="matrix-grid">
+    <div class="matrix-item"><div class="mi-head"><span class="mi-id">2.3</span><span class="priority-tag p1">P1</span></div><div class="mi-desc">LoadTaskMessages 全量扫描</div></div>
+    <div class="matrix-item"><div class="mi-head"><span class="mi-id">3.2</span><span class="priority-tag p1">P1</span></div><div class="mi-desc">文件锁无超时</div></div>
+    <div class="matrix-item"><div class="mi-head"><span class="mi-id">3.3</span><span class="priority-tag p1">P1</span></div><div class="mi-desc">Webhook 重试 + 日志</div></div>
+    <div class="matrix-item"><div class="mi-head"><span class="mi-id">5.2</span><span class="priority-tag p1">P1</span></div><div class="mi-desc">路径遍历防护</div></div>
+    <div class="matrix-item"><div class="mi-head"><span class="mi-id">8.1</span><span class="priority-tag p1">P1</span></div><div class="mi-desc">引入日志系统</div></div>
+  </div>
+
+  <h3 style="color:var(--yellow);margin:24px 0 12px;">P2 — 下个迭代</h3>
+  <div class="matrix-grid">
+    <div class="matrix-item"><div class="mi-head"><span class="mi-id">1.1</span><span class="priority-tag p2">P2</span></div><div class="mi-desc">store.go 拆分</div></div>
+    <div class="matrix-item"><div class="mi-head"><span class="mi-id">1.2</span><span class="priority-tag p2">P2</span></div><div class="mi-desc">handler.go 结构体化</div></div>
+    <div class="matrix-item"><div class="mi-head"><span class="mi-id">4.1</span><span class="priority-tag p2">P2</span></div><div class="mi-desc">公共验证提取</div></div>
+    <div class="matrix-item"><div class="mi-head"><span class="mi-id">4.2</span><span class="priority-tag p2">P2</span></div><div class="mi-desc">双轨存储接口化</div></div>
+    <div class="matrix-item"><div class="mi-head"><span class="mi-id">4.3</span><span class="priority-tag p2">P2</span></div><div class="mi-desc">锁内调用修正</div></div>
+    <div class="matrix-item"><div class="mi-head"><span class="mi-id">2.4</span><span class="priority-tag p2">P2</span></div><div class="mi-desc">ListTeams 并发化</div></div>
+    <div class="matrix-item"><div class="mi-head"><span class="mi-id">2.5</span><span class="priority-tag p2">P2</span></div><div class="mi-desc">errgroup 替换</div></div>
+  </div>
+
+  <h3 style="color:var(--green);margin:24px 0 12px;">P3 — 长期规划</h3>
+  <div class="matrix-grid">
+    <div class="matrix-item"><div class="mi-head"><span class="mi-id">6.1</span><span class="priority-tag p3">P3</span></div><div class="mi-desc">limit=0 语义</div></div>
+    <div class="matrix-item"><div class="mi-head"><span class="mi-id">6.2</span><span class="priority-tag p3">P3</span></div><div class="mi-desc">context.Context</div></div>
+    <div class="matrix-item"><div class="mi-head"><span class="mi-id">7.1</span><span class="priority-tag p3">P3</span></div><div class="mi-desc">store 单元测试</div></div>
+    <div class="matrix-item"><div class="mi-head"><span class="mi-id">9.1</span><span class="priority-tag p3">P3</span></div><div class="mi-desc">Key() 规范化</div></div>
+    <div class="matrix-item"><div class="mi-head"><span class="mi-id">9.2</span><span class="priority-tag p3">P3</span></div><div class="mi-desc">HLC 冲突检测</div></div>
+    <div class="matrix-item"><div class="mi-head"><span class="mi-id">10.1</span><span class="priority-tag p3">P3</span></div><div class="mi-desc">模板数据结构</div></div>
+    <div class="matrix-item"><div class="mi-head"><span class="mi-id">8.2</span><span class="priority-tag p3">P3</span></div><div class="mi-desc">Metrics 指标</div></div>
+  </div>
+</section>
+
+<!-- ====== 文件清单 ====== -->
+<section>
+  <div class="section-header">
+    <div class="section-icon" style="background:rgba(255,255,255,.06);color:var(--text-dim);">&#128193;</div>
+    <h2>审阅文件清单</h2>
+  </div>
+  <div style="overflow-x:auto;">
+  <table class="file-table">
+    <thead>
+      <tr><th>文件路径</th><th>行数</th><th>职责</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="file-path">internal/aip2p/team/store.go</td><td>3,462</td><td>核心数据存储层</td></tr>
+      <tr><td class="file-path">internal/aip2p/team/sync.go</td><td>928</td><td>同步消息与冲突检测</td></tr>
+      <tr><td class="file-path">internal/aip2p/team/task_state.go</td><td>115</td><td>任务状态机</td></tr>
+      <tr><td class="file-path">internal/aip2p/team/agent_card.go</td><td>248</td><td>Agent 能力注册</td></tr>
+      <tr><td class="file-path">internal/aip2p/team/message_signature.go</td><td>163</td><td>消息签名验证</td></tr>
+      <tr><td class="file-path">internal/aip2p/team_sync.go</td><td>1,946</td><td>PubSub 同步运行时</td></tr>
+      <tr><td class="file-path">internal/aip2p/team_sync_test.go</td><td>1,065</td><td>同步测试</td></tr>
+      <tr><td class="file-path">internal/aip2p/pubsub.go</td><td>1,037</td><td>PubSub 基础设施</td></tr>
+      <tr><td class="file-path">internal/aip2p/sync.go</td><td>1,964</td><td>通用同步编排</td></tr>
+      <tr><td class="file-path">internal/plugins/aip2pteam/handler.go</td><td>1,300+</td><td>HTTP Handler</td></tr>
+      <tr><td class="file-path">internal/plugins/aip2pteam/plugin.go</td><td>124</td><td>插件入口</td></tr>
+      <tr><td class="file-path">internal/plugins/aip2pteam/types.go</td><td>201</td><td>页面数据结构</td></tr>
+      <tr><td class="file-path">internal/plugins/aip2pteam/a2a_bridge.go</td><td>277</td><td>A2A 协议桥接</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<!-- Footer -->
+<div style="text-align:center; padding:48px 0 64px; color:var(--text-dim); font-size:.85rem;">
+  Generated by Claude Opus 4.6 &nbsp;|&nbsp; 2026-04-04
+</div>
+
+</div>
+</body>
+</html>

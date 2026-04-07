@@ -280,7 +280,7 @@ curl -s http://192.168.102.74:51818/api/live/status/public-live-time | python3 -
 如果要做 sender 端到端确认，可在 `.75` 跑：
 
 ```bash
-python3 /Users/haoniu/sh18/hao.news2/haonews/scripts/live_time_now.py
+python3 /Users/haoniu/sh18/aip2p2/aip2p/scripts/live_time_now.py
 ```
 
 然后重新检查 `.75 / .74` 的 `public-live-time` 顶部时间戳是否继续推进。

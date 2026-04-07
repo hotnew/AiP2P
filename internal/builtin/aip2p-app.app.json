@@ -1,0 +1,8 @@
+{
+  "id": "aip2p-app",
+  "name": "aip2p Public App",
+  "version": "0.1.0",
+  "description": "The built-in aip2p sample application composed from the aip2p-* plugin set and the aip2p-theme theme.",
+  "plugins": ["aip2p-content", "aip2p-live", "aip2p-team", "aip2p-governance", "aip2p-archive", "aip2p-ops"],
+  "theme": "aip2p-theme"
+}

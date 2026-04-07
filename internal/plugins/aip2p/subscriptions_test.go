@@ -1,0 +1,740 @@
+package newsplugin
+
+import (
+	"os"
+	"testing"
+	"time"
+)
+
+func TestAppSubscriptionRulesCachesUntilFileChanges(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	path := root + "/subscriptions.json"
+	if err := os.WriteFile(path, []byte(`{"topics":["world"]}`), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	loads := 0
+	app := &App{
+		rulesPath: path,
+		loadRules: func(path string) (SubscriptionRules, error) {
+			loads++
+			return LoadSubscriptionRules(path)
+		},
+	}
+
+	first, err := app.subscriptionRules()
+	if err != nil {
+		t.Fatalf("first subscriptionRules() error = %v", err)
+	}
+	second, err := app.subscriptionRules()
+	if err != nil {
+		t.Fatalf("second subscriptionRules() error = %v", err)
+	}
+	if loads != 1 {
+		t.Fatalf("load count = %d, want 1", loads)
+	}
+	if len(first.Topics) != 1 || first.Topics[0] != "world" {
+		t.Fatalf("first topics = %v", first.Topics)
+	}
+	if len(second.Topics) != 1 || second.Topics[0] != "world" {
+		t.Fatalf("second topics = %v", second.Topics)
+	}
+
+	nextMod := time.Now().Add(2 * time.Second)
+	if err := os.WriteFile(path, []byte(`{"topics":["futures"]}`), 0o644); err != nil {
+		t.Fatalf("rewrite subscriptions error = %v", err)
+	}
+	if err := os.Chtimes(path, nextMod, nextMod); err != nil {
+		t.Fatalf("Chtimes() error = %v", err)
+	}
+	updated, err := app.subscriptionRules()
+	if err != nil {
+		t.Fatalf("updated subscriptionRules() error = %v", err)
+	}
+	if loads != 2 {
+		t.Fatalf("load count after file change = %d, want 2", loads)
+	}
+	if len(updated.Topics) != 1 || updated.Topics[0] != "futures" {
+		t.Fatalf("updated topics = %v", updated.Topics)
+	}
+}
+
+func TestApplySubscriptionRulesFiltersByTopicAndCarriesReplies(t *testing.T) {
+	t.Parallel()
+
+	postWorld := Bundle{
+		InfoHash: "post-world",
+		Message: Message{
+			Kind:    "post",
+			Channel: "aip2p/world",
+			Extensions: map[string]any{
+				"project": "aip2p",
+				"topics":  []any{"world", "energy"},
+			},
+		},
+	}
+	replyWorld := Bundle{
+		InfoHash: "reply-world",
+		Message: Message{
+			Kind:    "reply",
+			ReplyTo: &MessageLink{InfoHash: "post-world"},
+			Extensions: map[string]any{
+				"project": "aip2p",
+			},
+		},
+	}
+	postTech := Bundle{
+		InfoHash: "post-tech",
+		Message: Message{
+			Kind:    "post",
+			Channel: "aip2p/tech",
+			Extensions: map[string]any{
+				"project": "aip2p",
+				"topics":  []any{"technology"},
+			},
+		},
+	}
+
+	index := buildIndex([]Bundle{postWorld, replyWorld, postTech}, "aip2p")
+	filtered := ApplySubscriptionRules(index, "aip2p", SubscriptionRules{Topics: []string{"energy"}})
+
+	if len(filtered.Posts) != 1 {
+		t.Fatalf("posts len = %d, want 1", len(filtered.Posts))
+	}
+	if filtered.Posts[0].InfoHash != "post-world" {
+		t.Fatalf("post = %s, want post-world", filtered.Posts[0].InfoHash)
+	}
+	if got := len(filtered.RepliesByPost["post-world"]); got != 1 {
+		t.Fatalf("replies len = %d, want 1", got)
+	}
+	if len(filtered.Bundles) != 2 {
+		t.Fatalf("bundles len = %d, want 2", len(filtered.Bundles))
+	}
+}
+
+func TestLoadSubscriptionRulesNormalizesDiscoverySelectors(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	path := root + "/subscriptions.json"
+	data := `{
+  "topics": ["all"],
+  "discovery_feeds": ["news", "NEWS", "aip2p/live", "all", "新手"],
+  "discovery_topics": ["world", "WORLD", "期货"]
+}`
+	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	rules, err := LoadSubscriptionRules(path)
+	if err != nil {
+		t.Fatalf("LoadSubscriptionRules() error = %v", err)
+	}
+	if len(rules.DiscoveryFeeds) != 4 {
+		t.Fatalf("discovery feeds len = %d, want 4", len(rules.DiscoveryFeeds))
+	}
+	if len(rules.DiscoveryTopics) != 2 {
+		t.Fatalf("discovery topics len = %d, want 2", len(rules.DiscoveryTopics))
+	}
+	if rules.DiscoveryFeeds[0] != "news" || rules.DiscoveryFeeds[1] != "live" || rules.DiscoveryFeeds[2] != "global" || rules.DiscoveryFeeds[3] != "new-agents" {
+		t.Fatalf("unexpected normalized discovery feeds: %v", rules.DiscoveryFeeds)
+	}
+	if rules.DiscoveryTopics[0] != "world" || rules.DiscoveryTopics[1] != "futures" {
+		t.Fatalf("unexpected normalized discovery topics: %v", rules.DiscoveryTopics)
+	}
+}
+
+func TestLoadSubscriptionRulesNormalizesTopicAliases(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	path := root + "/subscriptions.json"
+	data := `{
+  "topics": ["世界", "国际", "world"],
+  "history_topics": ["新闻", "news"],
+  "discovery_topics": ["期货", "futures"]
+}`
+	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	rules, err := LoadSubscriptionRules(path)
+	if err != nil {
+		t.Fatalf("LoadSubscriptionRules() error = %v", err)
+	}
+	if len(rules.Topics) != 1 || rules.Topics[0] != "world" {
+		t.Fatalf("topics = %v, want [world]", rules.Topics)
+	}
+	if len(rules.HistoryTopics) != 1 || rules.HistoryTopics[0] != "news" {
+		t.Fatalf("history topics = %v, want [news]", rules.HistoryTopics)
+	}
+	if len(rules.DiscoveryTopics) != 1 || rules.DiscoveryTopics[0] != "futures" {
+		t.Fatalf("discovery topics = %v, want [futures]", rules.DiscoveryTopics)
+	}
+}
+
+func TestLoadSubscriptionRulesNormalizesPublicKeyRules(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	path := root + "/subscriptions.json"
+	data := `{
+  "allowed_origin_public_keys": ["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "bad"],
+  "blocked_parent_public_keys": ["BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB", ""]
+}`
+	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	rules, err := LoadSubscriptionRules(path)
+	if err != nil {
+		t.Fatalf("LoadSubscriptionRules() error = %v", err)
+	}
+	if len(rules.AllowedOriginKeys) != 1 || rules.AllowedOriginKeys[0] != "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" {
+		t.Fatalf("allowed origin keys = %v", rules.AllowedOriginKeys)
+	}
+	if len(rules.BlockedParentKeys) != 1 || rules.BlockedParentKeys[0] != "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" {
+		t.Fatalf("blocked parent keys = %v", rules.BlockedParentKeys)
+	}
+}
+
+func TestLoadSubscriptionRulesNormalizesLivePublicKeyRules(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	path := root + "/subscriptions.json"
+	data := `{
+  "live_allowed_origin_public_keys": ["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "bad"],
+  "live_blocked_parent_public_keys": ["BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB", ""]
+}`
+	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	rules, err := LoadSubscriptionRules(path)
+	if err != nil {
+		t.Fatalf("LoadSubscriptionRules() error = %v", err)
+	}
+	if len(rules.LiveAllowedOriginKeys) != 1 || rules.LiveAllowedOriginKeys[0] != "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" {
+		t.Fatalf("live allowed origin keys = %v", rules.LiveAllowedOriginKeys)
+	}
+	if len(rules.LiveBlockedParentKeys) != 1 || rules.LiveBlockedParentKeys[0] != "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" {
+		t.Fatalf("live blocked parent keys = %v", rules.LiveBlockedParentKeys)
+	}
+}
+
+func TestLoadSubscriptionRulesNormalizesLivePublicModerationRules(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	path := root + "/subscriptions.json"
+	data := `{
+  "live_public_muted_origin_public_keys": ["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "bad"],
+  "live_public_muted_parent_public_keys": ["BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB", ""],
+  "live_public_rate_limit_messages": -1,
+  "live_public_rate_limit_window_seconds": -10
+}`
+	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	rules, err := LoadSubscriptionRules(path)
+	if err != nil {
+		t.Fatalf("LoadSubscriptionRules() error = %v", err)
+	}
+	if len(rules.LivePublicMutedOriginKeys) != 1 || rules.LivePublicMutedOriginKeys[0] != "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" {
+		t.Fatalf("live public muted origin keys = %v", rules.LivePublicMutedOriginKeys)
+	}
+	if len(rules.LivePublicMutedParentKeys) != 1 || rules.LivePublicMutedParentKeys[0] != "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" {
+		t.Fatalf("live public muted parent keys = %v", rules.LivePublicMutedParentKeys)
+	}
+	if rules.LivePublicRateLimitMessages != 0 || rules.LivePublicRateLimitWindowSeconds != 0 {
+		t.Fatalf("live public rate limits = %d/%d, want 0/0", rules.LivePublicRateLimitMessages, rules.LivePublicRateLimitWindowSeconds)
+	}
+}
+
+func TestLoadSubscriptionRulesAppliesConfiguredTopicAliasesAndWhitelist(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	path := root + "/subscriptions.json"
+	data := `{
+  "topics": ["macro", "未收录"],
+  "history_topics": ["brief"],
+  "discovery_topics": ["期货", "unknown"],
+  "topic_whitelist": ["world", "news", "futures"],
+  "topic_aliases": {
+    "macro": "world",
+    "brief": "news"
+  }
+}`
+	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	rules, err := LoadSubscriptionRules(path)
+	if err != nil {
+		t.Fatalf("LoadSubscriptionRules() error = %v", err)
+	}
+	if len(rules.Topics) != 1 || rules.Topics[0] != "world" {
+		t.Fatalf("topics = %v, want [world]", rules.Topics)
+	}
+	if len(rules.HistoryTopics) != 1 || rules.HistoryTopics[0] != "news" {
+		t.Fatalf("history topics = %v, want [news]", rules.HistoryTopics)
+	}
+	if len(rules.DiscoveryTopics) != 1 || rules.DiscoveryTopics[0] != "futures" {
+		t.Fatalf("discovery topics = %v, want [futures]", rules.DiscoveryTopics)
+	}
+	if len(rules.TopicWhitelist) != 3 || rules.TopicWhitelist[0] != "futures" || rules.TopicWhitelist[1] != "news" || rules.TopicWhitelist[2] != "world" {
+		t.Fatalf("topic whitelist = %v, want [futures news world]", rules.TopicWhitelist)
+	}
+	if rules.TopicAliases["macro"] != "world" || rules.TopicAliases["brief"] != "news" {
+		t.Fatalf("topic aliases = %v, want macro->world and brief->news", rules.TopicAliases)
+	}
+}
+
+func TestLoadSubscriptionRulesNormalizesApprovalModeAndFeed(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	path := root + "/subscriptions.json"
+	data := `{
+  "whitelist_mode": "APPROVAL",
+  "approval_feed": "pending approval",
+  "topics": ["all"]
+}`
+	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	rules, err := LoadSubscriptionRules(path)
+	if err != nil {
+		t.Fatalf("LoadSubscriptionRules() error = %v", err)
+	}
+	if rules.WhitelistMode != "approval" {
+		t.Fatalf("whitelist mode = %q, want approval", rules.WhitelistMode)
+	}
+	if rules.ApprovalFeed != "pending-approval" {
+		t.Fatalf("approval feed = %q, want pending-approval", rules.ApprovalFeed)
+	}
+}
+
+func TestLoadSubscriptionRulesKeepsAutoRoutePending(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	path := root + "/subscriptions.json"
+	data := `{
+  "whitelist_mode": "approval",
+  "approval_feed": "pending-approval",
+  "auto_route_pending": true,
+  "topics": ["all"]
+}`
+	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	rules, err := LoadSubscriptionRules(path)
+	if err != nil {
+		t.Fatalf("LoadSubscriptionRules() error = %v", err)
+	}
+	if !rules.AutoRoutePending {
+		t.Fatalf("auto route pending = %v, want true", rules.AutoRoutePending)
+	}
+}
+
+func TestLoadSubscriptionRulesNormalizesApprovalRoutes(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	path := root + "/subscriptions.json"
+	data := `{
+  "whitelist_mode": "approval",
+  "topics": ["world", "news", "futures"],
+  "topic_whitelist": ["world", "news", "futures"],
+  "topic_aliases": {
+    "国际": "world"
+  },
+  "approval_routes": {
+    "国际": "reviewer-world",
+    "feed/NEWS": "reviewer-news",
+    "topic/unknown": "reviewer-drop"
+  }
+}`
+	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	rules, err := LoadSubscriptionRules(path)
+	if err != nil {
+		t.Fatalf("LoadSubscriptionRules() error = %v", err)
+	}
+	if len(rules.ApprovalRoutes) != 2 {
+		t.Fatalf("approval routes len = %d, want 2", len(rules.ApprovalRoutes))
+	}
+	if got := rules.ApprovalRoutes["topic/world"]; got != "reviewer-world" {
+		t.Fatalf("topic/world route = %q, want reviewer-world", got)
+	}
+	if got := rules.ApprovalRoutes["feed/news"]; got != "reviewer-news" {
+		t.Fatalf("feed/news route = %q, want reviewer-news", got)
+	}
+}
+
+func TestLoadSubscriptionRulesNormalizesApprovalKeySelectors(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	path := root + "/subscriptions.json"
+	data := `{
+  "approval_routes": {
+    "parent/BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB": "reviewer-parent",
+    "origin/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA": "reviewer-origin",
+    "origin/bad": "ignored"
+  },
+  "approval_auto_approve": [
+    "parent/BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+    "origin/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+  ]
+}`
+	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	rules, err := LoadSubscriptionRules(path)
+	if err != nil {
+		t.Fatalf("LoadSubscriptionRules() error = %v", err)
+	}
+	if rules.ApprovalRoutes["parent/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"] != "reviewer-parent" {
+		t.Fatalf("approval routes = %v", rules.ApprovalRoutes)
+	}
+	if rules.ApprovalRoutes["origin/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"] != "reviewer-origin" {
+		t.Fatalf("approval routes = %v", rules.ApprovalRoutes)
+	}
+	if len(rules.ApprovalAutoApprove) != 2 {
+		t.Fatalf("approval auto approve = %v", rules.ApprovalAutoApprove)
+	}
+}
+
+func TestLoadSubscriptionRulesNormalizesApprovalAutoApprove(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	path := root + "/subscriptions.json"
+	data := `{
+  "whitelist_mode": "approval",
+  "topic_whitelist": ["world", "news", "futures"],
+  "topic_aliases": {
+    "国际": "world"
+  },
+  "approval_auto_approve": ["国际", "feed/NEWS", "topic/unknown"]
+}`
+	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	rules, err := LoadSubscriptionRules(path)
+	if err != nil {
+		t.Fatalf("LoadSubscriptionRules() error = %v", err)
+	}
+	if len(rules.ApprovalAutoApprove) != 2 {
+		t.Fatalf("approval auto approve len = %d, want 2", len(rules.ApprovalAutoApprove))
+	}
+	if rules.ApprovalAutoApprove[0] != "topic/world" || rules.ApprovalAutoApprove[1] != "feed/news" {
+		t.Fatalf("approval auto approve = %v, want [topic/world feed/news]", rules.ApprovalAutoApprove)
+	}
+}
+
+func TestApplySubscriptionRulesReservedAllTopicShowsEverything(t *testing.T) {
+	t.Parallel()
+
+	postWorld := Bundle{
+		InfoHash: "post-world",
+		Message: Message{
+			Kind:    "post",
+			Channel: "aip2p/world",
+			Extensions: map[string]any{
+				"project": "aip2p",
+				"topics":  []any{"world"},
+			},
+		},
+	}
+	postTech := Bundle{
+		InfoHash: "post-tech",
+		Message: Message{
+			Kind:    "post",
+			Channel: "aip2p/tech",
+			Extensions: map[string]any{
+				"project": "aip2p",
+				"topics":  []any{"technology"},
+			},
+		},
+	}
+
+	index := buildIndex([]Bundle{postWorld, postTech}, "aip2p")
+	filtered := ApplySubscriptionRules(index, "aip2p", SubscriptionRules{Topics: []string{"all"}})
+
+	if len(filtered.Posts) != 2 {
+		t.Fatalf("posts len = %d, want 2", len(filtered.Posts))
+	}
+}
+
+func TestApplySubscriptionRulesApprovalModeKeepsPendingPostsOutOfDefaultFeed(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 3, 28, 12, 0, 0, 0, time.UTC)
+	postWorld := Bundle{
+		InfoHash:  "post-world",
+		CreatedAt: now,
+		Message: Message{
+			Kind:      "post",
+			Channel:   "aip2p/world",
+			CreatedAt: now.Format(time.RFC3339),
+			Extensions: map[string]any{
+				"project": "aip2p",
+				"topics":  []any{"world"},
+			},
+		},
+	}
+	postTech := Bundle{
+		InfoHash:  "post-tech",
+		CreatedAt: now,
+		Message: Message{
+			Kind:      "post",
+			Channel:   "aip2p/tech",
+			CreatedAt: now.Format(time.RFC3339),
+			Extensions: map[string]any{
+				"project": "aip2p",
+				"topics":  []any{"technology"},
+			},
+		},
+	}
+
+	index := buildIndex([]Bundle{postWorld, postTech}, "aip2p")
+	filtered := ApplySubscriptionRules(index, "aip2p", SubscriptionRules{
+		WhitelistMode: "approval",
+		ApprovalFeed:  "pending-approval",
+		Topics:        []string{"world"},
+	})
+
+	if len(filtered.Posts) != 2 {
+		t.Fatalf("posts len = %d, want 2", len(filtered.Posts))
+	}
+	if !filtered.PostByInfoHash["post-tech"].PendingApproval {
+		t.Fatalf("post-tech pending = false, want true")
+	}
+	if filtered.PostByInfoHash["post-tech"].ApprovalFeed != "pending-approval" {
+		t.Fatalf("approval feed = %q, want pending-approval", filtered.PostByInfoHash["post-tech"].ApprovalFeed)
+	}
+	visible := filtered.FilterPosts(FeedOptions{Now: now})
+	if len(visible) != 1 || visible[0].InfoHash != "post-world" {
+		t.Fatalf("visible posts = %+v, want only post-world", visible)
+	}
+	pending := filtered.FilterPosts(FeedOptions{PendingApproval: true, Now: now})
+	if len(pending) != 1 || pending[0].InfoHash != "post-tech" {
+		t.Fatalf("pending posts = %+v, want only post-tech", pending)
+	}
+}
+
+func TestApplySubscriptionRulesFiltersByMaxAgeDays(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now().UTC()
+	fresh := Bundle{
+		InfoHash: "post-fresh",
+		Message: Message{
+			Kind:      "post",
+			Channel:   "aip2p/world",
+			CreatedAt: now.Add(-12 * time.Hour).Format(time.RFC3339),
+			Extensions: map[string]any{
+				"project": "aip2p",
+				"topics":  []any{"world"},
+			},
+		},
+	}
+	stale := Bundle{
+		InfoHash: "post-stale",
+		Message: Message{
+			Kind:      "post",
+			Channel:   "aip2p/world",
+			CreatedAt: now.Add(-72 * time.Hour).Format(time.RFC3339),
+			Extensions: map[string]any{
+				"project": "aip2p",
+				"topics":  []any{"world"},
+			},
+		},
+	}
+
+	index := buildIndex([]Bundle{fresh, stale}, "aip2p")
+	filtered := ApplySubscriptionRules(index, "aip2p", SubscriptionRules{Topics: []string{"all"}, MaxAgeDays: 1})
+
+	if len(filtered.Posts) != 1 {
+		t.Fatalf("posts len = %d, want 1", len(filtered.Posts))
+	}
+	if filtered.Posts[0].InfoHash != "post-fresh" {
+		t.Fatalf("post = %s, want post-fresh", filtered.Posts[0].InfoHash)
+	}
+}
+
+func TestApplySubscriptionRulesFiltersByMaxBundleMB(t *testing.T) {
+	t.Parallel()
+
+	small := Bundle{
+		InfoHash:  "post-small",
+		SizeBytes: 2 * 1024 * 1024,
+		Message: Message{
+			Kind:    "post",
+			Channel: "aip2p/world",
+			Extensions: map[string]any{
+				"project": "aip2p",
+				"topics":  []any{"world"},
+			},
+		},
+	}
+	large := Bundle{
+		InfoHash:  "post-large",
+		SizeBytes: 12 * 1024 * 1024,
+		Message: Message{
+			Kind:    "post",
+			Channel: "aip2p/world",
+			Extensions: map[string]any{
+				"project": "aip2p",
+				"topics":  []any{"world"},
+			},
+		},
+	}
+
+	index := buildIndex([]Bundle{small, large}, "aip2p")
+	filtered := ApplySubscriptionRules(index, "aip2p", SubscriptionRules{Topics: []string{"all"}, MaxBundleMB: 10})
+
+	if len(filtered.Posts) != 1 {
+		t.Fatalf("posts len = %d, want 1", len(filtered.Posts))
+	}
+	if filtered.Posts[0].InfoHash != "post-small" {
+		t.Fatalf("post = %s, want post-small", filtered.Posts[0].InfoHash)
+	}
+}
+
+func TestApplySubscriptionRulesFiltersByMaxItemsPerDay(t *testing.T) {
+	t.Parallel()
+
+	day := time.Date(2026, 3, 13, 12, 0, 0, 0, time.UTC)
+	first := Bundle{
+		InfoHash: "post-first",
+		Message: Message{
+			Kind:      "post",
+			Channel:   "aip2p/world",
+			CreatedAt: day.Format(time.RFC3339),
+			Extensions: map[string]any{
+				"project": "aip2p",
+				"topics":  []any{"world"},
+			},
+		},
+	}
+	second := Bundle{
+		InfoHash: "post-second",
+		Message: Message{
+			Kind:      "post",
+			Channel:   "aip2p/world",
+			CreatedAt: day.Add(-1 * time.Hour).Format(time.RFC3339),
+			Extensions: map[string]any{
+				"project": "aip2p",
+				"topics":  []any{"world"},
+			},
+		},
+	}
+
+	index := buildIndex([]Bundle{first, second}, "aip2p")
+	filtered := ApplySubscriptionRules(index, "aip2p", SubscriptionRules{Topics: []string{"all"}, MaxItemsPerDay: 1})
+
+	if len(filtered.Posts) != 1 {
+		t.Fatalf("posts len = %d, want 1", len(filtered.Posts))
+	}
+	if filtered.Posts[0].InfoHash != "post-first" {
+		t.Fatalf("post = %s, want post-first", filtered.Posts[0].InfoHash)
+	}
+}
+
+func TestApplySubscriptionRulesFiltersByAuthor(t *testing.T) {
+	t.Parallel()
+
+	index := buildIndex([]Bundle{
+		{
+			InfoHash: "post-pc75",
+			Message: Message{
+				Kind:    "post",
+				Author:  "agent://pc75/openclaw01",
+				Channel: "aip2p/world",
+				Extensions: map[string]any{
+					"project": "aip2p",
+					"topics":  []any{"world"},
+				},
+			},
+		},
+		{
+			InfoHash: "post-pc76",
+			Message: Message{
+				Kind:    "post",
+				Author:  "agent://pc76/main",
+				Channel: "aip2p/world",
+				Extensions: map[string]any{
+					"project": "aip2p",
+					"topics":  []any{"world"},
+				},
+			},
+		},
+	}, "aip2p")
+
+	filtered := ApplySubscriptionRules(index, "aip2p", SubscriptionRules{Authors: []string{"agent://pc75/openclaw01"}})
+	if len(filtered.Posts) != 1 {
+		t.Fatalf("posts len = %d, want 1", len(filtered.Posts))
+	}
+	if filtered.Posts[0].InfoHash != "post-pc75" {
+		t.Fatalf("post = %s, want post-pc75", filtered.Posts[0].InfoHash)
+	}
+}
+
+func TestApplySubscriptionRulesFiltersByParentAndOriginPublicKey(t *testing.T) {
+	t.Parallel()
+
+	index := buildIndex([]Bundle{
+		{
+			InfoHash: "post-parent-a",
+			Message: Message{
+				Kind:    "post",
+				Author:  "agent://pc75/openclaw01",
+				Channel: "aip2p/world",
+				Origin: &MessageOrigin{
+					PublicKey: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+				},
+				Extensions: map[string]any{
+					"project":           "aip2p",
+					"topics":            []any{"world"},
+					"origin_public_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+					"parent_public_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+				},
+			},
+		},
+		{
+			InfoHash: "post-parent-c",
+			Message: Message{
+				Kind:    "post",
+				Author:  "agent://pc76/main",
+				Channel: "aip2p/world",
+				Origin: &MessageOrigin{
+					PublicKey: "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+				},
+				Extensions: map[string]any{
+					"project":           "aip2p",
+					"topics":            []any{"world"},
+					"origin_public_key": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+					"parent_public_key": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+				},
+			},
+		},
+	}, "aip2p")
+
+	filtered := ApplySubscriptionRules(index, "aip2p", SubscriptionRules{
+		AllowedParentKeys: []string{"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
+	})
+	if len(filtered.Posts) != 1 || filtered.Posts[0].InfoHash != "post-parent-a" {
+		t.Fatalf("filtered by parent = %v", filtered.Posts)
+	}
+
+	filtered = ApplySubscriptionRules(index, "aip2p", SubscriptionRules{
+		Topics:            []string{"world"},
+		BlockedOriginKeys: []string{"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+	})
+	if len(filtered.Posts) != 1 || filtered.Posts[0].InfoHash != "post-parent-c" {
+		t.Fatalf("filtered by blocked origin = %v", filtered.Posts)
+	}
+}

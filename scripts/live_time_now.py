@@ -15,18 +15,18 @@ def env(name: str, default: str) -> str:
     return value or default
 
 
-HAONEWS_BIN = env("HAONEWS_BIN", "/Users/haoniu/go/bin/haonews")
-MASTER_IDENTITY = env("HAONEWS_MASTER_IDENTITY", "/Users/haoniu/.hao-news/identities/pc75.json")
-CHILD_IDENTITY = env("HAONEWS_IDENTITY", "/Users/haoniu/.hao-news/identities/pc75-now-time.json")
-AUTHOR = env("HAONEWS_AUTHOR", "agent://pc75/now-time")
-STORE = env("HAONEWS_STORE", "/Users/haoniu/.hao-news/haonews/.haonews")
-BASE_NET = env("HAONEWS_BASE_NET", "/Users/haoniu/.hao-news/hao_news_live_net.inf")
-NET = env("HAONEWS_NET", "/Users/haoniu/.hao-news/hao_news_live_sender_net.inf")
-ROOM_ID = env("HAONEWS_ROOM_ID", "public-live-time")
-ROOM_TITLE = env("HAONEWS_ROOM_TITLE", "Live-Time")
-CHANNEL = env("HAONEWS_CHANNEL", "hao.news/live/public")
-INTERVAL_SECONDS = int(env("HAONEWS_INTERVAL_SECONDS", "60"))
-AUTO_ARCHIVE = env("HAONEWS_ARCHIVE_ON_EXIT", "false").lower() in {"1", "true", "yes", "on"}
+AIP2P_BIN = env("AIP2P_BIN", "/Users/haoniu/go/bin/aip2p")
+MASTER_IDENTITY = env("AIP2P_MASTER_IDENTITY", "/Users/haoniu/.aip2p/identities/pc75.json")
+CHILD_IDENTITY = env("AIP2P_IDENTITY", "/Users/haoniu/.aip2p/identities/pc75-now-time.json")
+AUTHOR = env("AIP2P_AUTHOR", "agent://pc75/now-time")
+STORE = env("AIP2P_STORE", "/Users/haoniu/.aip2p/aip2p/.aip2p")
+BASE_NET = env("AIP2P_BASE_NET", "/Users/haoniu/.aip2p/aip2p_live_net.inf")
+NET = env("AIP2P_NET", "/Users/haoniu/.aip2p/aip2p_live_sender_net.inf")
+ROOM_ID = env("AIP2P_ROOM_ID", "public-live-time")
+ROOM_TITLE = env("AIP2P_ROOM_TITLE", "Live-Time")
+CHANNEL = env("AIP2P_CHANNEL", "aip2p/live/public")
+INTERVAL_SECONDS = int(env("AIP2P_INTERVAL_SECONDS", "60"))
+AUTO_ARCHIVE = env("AIP2P_ARCHIVE_ON_EXIT", "false").lower() in {"1", "true", "yes", "on"}
 
 DEFAULT_SENDER_TCP_PORT = "51585"
 DEFAULT_SENDER_QUIC_PORT = "51585"
@@ -38,7 +38,7 @@ def ensure_child_identity() -> None:
         return
     child.parent.mkdir(parents=True, exist_ok=True)
     cmd = [
-        HAONEWS_BIN,
+        AIP2P_BIN,
         "identity",
         "derive",
         "--identity-file",
@@ -79,7 +79,7 @@ def ensure_sender_net() -> None:
 
 def build_host_cmd() -> list[str]:
     return [
-        HAONEWS_BIN,
+        AIP2P_BIN,
         "live",
         "host",
         "--store",

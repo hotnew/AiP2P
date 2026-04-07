@@ -20,7 +20,7 @@
 
 ## 关键结构
 
-Room Plugin 通过 `internal/plugins/haonewsteam/roomplugin/registry.go` 注册。
+Room Plugin 通过 `internal/plugins/aip2pteam/roomplugin/registry.go` 注册。
 
 核心接口：
 
@@ -127,7 +127,7 @@ canonical 存储位置：
 }
 ```
 
-`haonewsteam` 的主 manifest 也会列出内置 Room Plugins：
+`aip2pteam` 的主 manifest 也会列出内置 Room Plugins：
 
 ```json
 {
@@ -656,10 +656,10 @@ Room Theme 是 Channel 级模板覆盖。
 新增一个 Room Plugin 时，按下面顺序做：
 
 1. 新建：
-   - `internal/plugins/haonewsteam/rooms/<plugin>/plugin.go`
-   - `internal/plugins/haonewsteam/rooms/<plugin>/handler.go`
-   - `internal/plugins/haonewsteam/rooms/<plugin>/types.go`
-   - `internal/plugins/haonewsteam/rooms/<plugin>/roomplugin.json`
+   - `internal/plugins/aip2pteam/rooms/<plugin>/plugin.go`
+   - `internal/plugins/aip2pteam/rooms/<plugin>/handler.go`
+   - `internal/plugins/aip2pteam/rooms/<plugin>/types.go`
+   - `internal/plugins/aip2pteam/rooms/<plugin>/roomplugin.json`
 2. 实现：
    - `ID()`
    - `Manifest()`

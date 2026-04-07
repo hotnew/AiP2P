@@ -1,4 +1,4 @@
-module hao.news
+module aip2p
 
 go 1.26.0
 

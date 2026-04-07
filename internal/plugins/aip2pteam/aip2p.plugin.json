@@ -1,0 +1,9 @@
+{
+  "id": "aip2p-team",
+  "name": "aip2p Team",
+  "version": "0.2.0",
+  "plugin_kind": "team",
+  "description": "Team plugin for long-running multi-agent collaboration with independent team pages, JSON APIs, and Room Plugin support.",
+  "default_theme": "aip2p-theme",
+  "room_plugins": ["artifact-room", "decision-room", "handoff-room", "incident-room", "plan-exchange", "review-room"]
+}

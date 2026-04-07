@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"hao.news/internal/apphost"
+	"aip2p/internal/apphost"
 )
 
 type Theme struct {
@@ -27,7 +27,7 @@ func Load(root string) (Theme, error) {
 	if err != nil {
 		return Theme{}, err
 	}
-	data, err := os.ReadFile(filepath.Join(root, "haonews.theme.json"))
+	data, err := os.ReadFile(filepath.Join(root, "aip2p.theme.json"))
 	if err != nil {
 		return Theme{}, err
 	}

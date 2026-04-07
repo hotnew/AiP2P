@@ -5,7 +5,7 @@ import (
 	"html/template"
 	"io/fs"
 
-	roomthemes "hao.news/internal/themes/room-themes"
+	roomthemes "aip2p/internal/themes/room-themes"
 )
 
 //go:embed roomtheme.json web/templates/*.html

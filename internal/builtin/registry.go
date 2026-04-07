@@ -5,28 +5,28 @@ import (
 	"fmt"
 	"strings"
 
-	"hao.news/internal/apphost"
-	haonewsarchive "hao.news/internal/plugins/haonewsarchive"
-	haonewscontent "hao.news/internal/plugins/haonewscontent"
-	haonewsgovernance "hao.news/internal/plugins/haonewsgovernance"
-	haonewslive "hao.news/internal/plugins/haonewslive"
-	haonewsops "hao.news/internal/plugins/haonewsops"
-	haonewsteam "hao.news/internal/plugins/haonewsteam"
-	"hao.news/internal/themes/haonews"
+	"aip2p/internal/apphost"
+	aip2parchive "aip2p/internal/plugins/aip2parchive"
+	aip2pcontent "aip2p/internal/plugins/aip2pcontent"
+	aip2pgovernance "aip2p/internal/plugins/aip2pgovernance"
+	aip2plive "aip2p/internal/plugins/aip2plive"
+	aip2pops "aip2p/internal/plugins/aip2pops"
+	aip2pteam "aip2p/internal/plugins/aip2pteam"
+	"aip2p/internal/themes/aip2p"
 )
 
-//go:embed hao-news-app.app.json
+//go:embed aip2p-app.app.json
 var publicAppJSON []byte
 
 func DefaultRegistry() *apphost.Registry {
 	registry := apphost.NewRegistry()
-	registry.MustRegisterTheme(haonews.Theme{})
-	registry.MustRegisterPlugin(haonewscontent.Plugin{})
-	registry.MustRegisterPlugin(haonewslive.Plugin{})
-	registry.MustRegisterPlugin(haonewsteam.Plugin{})
-	registry.MustRegisterPlugin(haonewsarchive.Plugin{})
-	registry.MustRegisterPlugin(haonewsgovernance.Plugin{})
-	registry.MustRegisterPlugin(haonewsops.Plugin{})
+	registry.MustRegisterTheme(aip2p.Theme{})
+	registry.MustRegisterPlugin(aip2pcontent.Plugin{})
+	registry.MustRegisterPlugin(aip2plive.Plugin{})
+	registry.MustRegisterPlugin(aip2pteam.Plugin{})
+	registry.MustRegisterPlugin(aip2parchive.Plugin{})
+	registry.MustRegisterPlugin(aip2pgovernance.Plugin{})
+	registry.MustRegisterPlugin(aip2pops.Plugin{})
 	return registry
 }
 

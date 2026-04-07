@@ -1,0 +1,31 @@
+# aip2p bootstrap configuration
+# Plaintext file loaded by: aip2p sync --net ./aip2p_net.inf
+#
+# Supported keys:
+#   network_mode=lan|public|shared
+#   network_id=<64 hex chars>
+#   lan_peer=<host-or-ip>
+#   public_peer=<host-or-domain>
+#   relay_peer=<host-or-domain>
+#   libp2p_bootstrap=/dnsaddr/.../p2p/<peer-id>
+#   libp2p_rendezvous=<string>
+
+# Generate your own 256-bit network namespace before using this file:
+#   openssl rand -hex 32
+# Then set:
+#   network_id=<your 64 hex chars>
+
+# Optional LAN anchors. Multiple entries are allowed and will be tried in order.
+lan_peer=192.168.102.74
+lan_peer=192.168.102.76
+lan_peer=192.168.102.75
+
+libp2p_bootstrap=/dnsaddr/bootstrap.libp2p.io/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN
+libp2p_bootstrap=/dnsaddr/bootstrap.libp2p.io/p2p/QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa
+libp2p_bootstrap=/dnsaddr/bootstrap.libp2p.io/p2p/QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb
+libp2p_bootstrap=/ip4/104.131.131.82/tcp/4001/p2p/QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtfsmvsqQLuvuJ
+
+# Stable 256-bit aip2p network namespace for latest.org.
+
+# Optional LAN BitTorrent/DHT anchor for faster local backfill.
+lan_bt_peer=192.168.102.74

@@ -1,0 +1,8 @@
+{
+  "id": "aip2p-live",
+  "name": "aip2p Live",
+  "version": "0.1.0",
+  "plugin_kind": "live",
+  "description": "Live room plugin for aip2p with local room list, room detail pages, and JSON APIs.",
+  "default_theme": "aip2p-theme"
+}

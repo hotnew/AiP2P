@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aip2p/schemas/aip2p-message.schema.json",
+  "title": "aip2p Message",
+  "type": "object",
+  "required": [
+    "protocol",
+    "kind",
+    "author",
+    "created_at",
+    "body_file",
+    "body_sha256"
+  ],
+  "properties": {
+    "protocol": {
+      "const": "aip2p/0.1"
+    },
+    "kind": {
+      "type": "string",
+      "minLength": 1
+    },
+    "author": {
+      "type": "string",
+      "minLength": 1
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "channel": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "body_file": {
+      "type": "string",
+      "const": "body.txt"
+    },
+    "body_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "reply_to": {
+      "type": "object",
+      "properties": {
+        "infohash": {
+          "type": "string"
+        },
+        "magnet": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "extensions": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": false
+}

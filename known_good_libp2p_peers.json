@@ -1,0 +1,66 @@
+{
+  "network_id": "b2090347cee0ff1a577b1101d4adbd664c309932d3c2578971c11997fdd2164e",
+  "entries": {
+    "QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN": {
+      "last_success_at": "2026-04-04T01:59:46.616025Z",
+      "addrs": [
+        "/dnsaddr/bootstrap.libp2p.io/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN",
+        "/ip6/2604:2dc0:200:484::1/udp/4001/quic-v1/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN",
+        "/ip6/2604:2dc0:200:484::1/udp/4001/quic-v1/webtransport/certhash/uEiDY-k_-yZOH_lLF9FjJHS9Xo4gBXL3ofjpl1VHJaMr6rA/certhash/uEiDwzXBy_vgnC6Pmiig7qUL-_vf1eUoNpRVy9YClWXjF7Q/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN",
+        "/dns4/sv15.bootstrap.libp2p.io/tcp/443/wss/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN",
+        "/dns6/sv15.bootstrap.libp2p.io/tcp/443/wss/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN",
+        "/ip4/147.135.44.132/tcp/4001/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN",
+        "/ip4/147.135.44.132/udp/4001/quic-v1/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN",
+        "/ip4/147.135.44.132/udp/4001/webrtc-direct/certhash/uEiCYk6nD2XtJr2w1nxewrctGsTHxi9Pf8ef4CNUsLxkkwQ/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN",
+        "/ip4/147.135.44.132/udp/4001/quic-v1/webtransport/certhash/uEiDY-k_-yZOH_lLF9FjJHS9Xo4gBXL3ofjpl1VHJaMr6rA/certhash/uEiDwzXBy_vgnC6Pmiig7qUL-_vf1eUoNpRVy9YClWXjF7Q/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN",
+        "/ip6/2604:2dc0:200:484::1/udp/4001/webrtc-direct/certhash/uEiCYk6nD2XtJr2w1nxewrctGsTHxi9Pf8ef4CNUsLxkkwQ/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN",
+        "/ip6/2604:2dc0:200:484::1/tcp/4001/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN"
+      ]
+    },
+    "QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa": {
+      "last_success_at": "2026-04-04T01:59:53.795915Z",
+      "addrs": [
+        "/dnsaddr/bootstrap.libp2p.io/p2p/QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa",
+        "/ip6/2604:2dc0:100:2c33::/udp/4001/webrtc-direct/certhash/uEiBHjwxquzvyqFUcUKYC8QEC7LK_G8Z8dqMKsqVvVMGasA/p2p/QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa",
+        "/ip6/2604:2dc0:100:2c33::/udp/4001/quic-v1/webtransport/certhash/uEiA96nItgu6jOFWYe7Ovz-suPoF73HhstWc_Lm4UoYig2w/certhash/uEiDy-tDChc78nzYl5Eatcj2wdKanPsWqZyckbqeV8yPL9w/p2p/QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa",
+        "/ip4/51.81.93.51/tcp/4001/p2p/QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa",
+        "/ip6/2604:2dc0:100:2c33::/tcp/4001/p2p/QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa",
+        "/ip4/51.81.93.51/udp/4001/quic-v1/webtransport/certhash/uEiA96nItgu6jOFWYe7Ovz-suPoF73HhstWc_Lm4UoYig2w/certhash/uEiDy-tDChc78nzYl5Eatcj2wdKanPsWqZyckbqeV8yPL9w/p2p/QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa",
+        "/dns4/ny5.bootstrap.libp2p.io/tcp/443/wss/p2p/QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa",
+        "/dns6/ny5.bootstrap.libp2p.io/tcp/443/wss/p2p/QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa",
+        "/ip4/51.81.93.51/udp/4001/quic-v1/p2p/QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa",
+        "/ip6/2604:2dc0:100:2c33::/udp/4001/quic-v1/p2p/QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa",
+        "/ip4/51.81.93.51/udp/4001/webrtc-direct/certhash/uEiBHjwxquzvyqFUcUKYC8QEC7LK_G8Z8dqMKsqVvVMGasA/p2p/QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa"
+      ]
+    },
+    "QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtfsmvsqQLuvuJ": {
+      "last_success_at": "2026-04-04T01:59:54.376707Z",
+      "addrs": [
+        "/ip4/104.131.131.82/tcp/4001/p2p/QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtfsmvsqQLuvuJ",
+        "/ip4/104.131.131.82/udp/4001/quic-v1/webtransport/certhash/uEiC8v49uFqDaB0vH-jHPmlz1ns1nBuHjifpMThB6SdySKQ/certhash/uEiDDc_Ao80lw4RQDkSYRZOjo7QKs_CO4yJ9dA-argY02oA/p2p/QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtfsmvsqQLuvuJ",
+        "/ip6/2604:a880:1:20::204:4001/udp/4001/webrtc-direct/certhash/uEiDhe50WzOE_s3f6iDnHhcVZFuQHIvywPyu5WkalOBHpJA/p2p/QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtfsmvsqQLuvuJ",
+        "/ip6/2604:a880:1:20::204:4001/udp/4001/quic-v1/webtransport/certhash/uEiC8v49uFqDaB0vH-jHPmlz1ns1nBuHjifpMThB6SdySKQ/certhash/uEiDDc_Ao80lw4RQDkSYRZOjo7QKs_CO4yJ9dA-argY02oA/p2p/QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtfsmvsqQLuvuJ",
+        "/ip4/104.131.131.82/udp/4001/webrtc-direct/certhash/uEiDhe50WzOE_s3f6iDnHhcVZFuQHIvywPyu5WkalOBHpJA/p2p/QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtfsmvsqQLuvuJ",
+        "/ip4/104.131.131.82/udp/4001/quic-v1/p2p/QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtfsmvsqQLuvuJ",
+        "/ip6/2604:a880:1:20::204:4001/tcp/4001/p2p/QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtfsmvsqQLuvuJ",
+        "/ip6/2604:a880:1:20::204:4001/udp/4001/quic-v1/p2p/QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtfsmvsqQLuvuJ"
+      ]
+    },
+    "QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb": {
+      "last_success_at": "2026-04-04T01:59:16.640041Z",
+      "addrs": [
+        "/dnsaddr/bootstrap.libp2p.io/p2p/QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb",
+        "/ip6/2001:41d0:203:2ca6::/udp/4001/quic-v1/p2p/QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb",
+        "/ip4/54.38.47.166/udp/4001/webrtc-direct/certhash/uEiDQ-RIqUeLCN1xJ2V3KH7GBoX-d8VUfXz_jhF46PoA_RQ/p2p/QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb",
+        "/ip4/54.38.47.166/udp/4001/quic-v1/webtransport/certhash/uEiDnUX6V_zqajF4fxKip3ZsWm0Gy7KoCmYDqNIrX9A_frA/certhash/uEiDm8vw7o65vPclUrewJqM5A7vXmwAz6vtrsWAJneRO0qw/p2p/QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb",
+        "/ip6/2001:41d0:203:2ca6::/udp/4001/webrtc-direct/certhash/uEiDQ-RIqUeLCN1xJ2V3KH7GBoX-d8VUfXz_jhF46PoA_RQ/p2p/QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb",
+        "/ip6/2001:41d0:203:2ca6::/udp/4001/quic-v1/webtransport/certhash/uEiDnUX6V_zqajF4fxKip3ZsWm0Gy7KoCmYDqNIrX9A_frA/certhash/uEiDm8vw7o65vPclUrewJqM5A7vXmwAz6vtrsWAJneRO0qw/p2p/QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb",
+        "/ip4/54.38.47.166/tcp/4001/p2p/QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb",
+        "/ip4/54.38.47.166/udp/4001/quic-v1/p2p/QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb",
+        "/ip6/2001:41d0:203:2ca6::/tcp/4001/p2p/QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb",
+        "/dns4/am6.bootstrap.libp2p.io/tcp/443/wss/p2p/QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb",
+        "/dns6/am6.bootstrap.libp2p.io/tcp/443/wss/p2p/QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb"
+      ]
+    }
+  }
+}

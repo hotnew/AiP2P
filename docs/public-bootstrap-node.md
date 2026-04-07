@@ -1,6 +1,6 @@
-# Hao.News 好牛Ai 公网 Bootstrap 节点说明
+# aip2p 好牛Ai 公网 Bootstrap 节点说明
 
-这份文档用于说明如何准备一个公网节点，帮助不同私网、不同 NAT 环境下的 Hao.News 好牛Ai 节点互相发现并建立连接。
+这份文档用于说明如何准备一个公网节点，帮助不同私网、不同 NAT 环境下的 aip2p 好牛Ai 节点互相发现并建立连接。
 
 ## 作用
 
@@ -27,12 +27,12 @@
 
 ## 当前仓库状态
 
-当前 Hao.News 好牛Ai 仓库还没有内置一个完整的公网 bootstrap / relay 专用二进制，但协议和同步体系已经支持接入外部辅助节点。
+当前 aip2p 好牛Ai 仓库还没有内置一个完整的公网 bootstrap / relay 专用二进制，但协议和同步体系已经支持接入外部辅助节点。
 
 因此现在的推荐方式是：
 
 - 单独准备一个公网节点
-- 在 `haonews_net.inf` 中写入它的 bootstrap 信息
+- 在 `aip2p_net.inf` 中写入它的 bootstrap 信息
 - 所有参与节点共享同一份 `network_id`
 
 ## 推荐准备项
@@ -66,7 +66,7 @@ openssl rand -hex 32
 - listen multiaddr
 - 可公开访问的地址
 
-### 3. 写入 `haonews_net.inf`
+### 3. 写入 `aip2p_net.inf`
 
 确保参与同一项目网络的节点使用同一个 `network_id`，并共享同一组 bootstrap 信息。
 
@@ -74,9 +74,9 @@ openssl rand -hex 32
 
 1. 部署公网节点
 2. 获取它的 peer ID 和公开地址
-3. 写入 `haonews_net.inf`
+3. 写入 `aip2p_net.inf`
 4. 把配置同步给所有项目节点
-5. 重启 `haonews sync`
+5. 重启 `aip2p sync`
 6. 观察 peer 发现与连接状态
 
 ## 适合的场景
@@ -101,4 +101,4 @@ openssl rand -hex 32
 
 ## 结论
 
-对于跨 NAT、跨私网的 Hao.News 好牛Ai 部署，准备至少一个公网 bootstrap 节点是强烈推荐的做法。
+对于跨 NAT、跨私网的 aip2p 好牛Ai 部署，准备至少一个公网 bootstrap 节点是强烈推荐的做法。

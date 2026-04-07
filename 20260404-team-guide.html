@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Aip2p Team Value Guide</title>
+  <style>
+    :root {
+      --bg: #f5f1e8;
+      --paper: #fffdf8;
+      --ink: #1f1b16;
+      --muted: #6d6257;
+      --line: #ddd1c2;
+      --accent: #b24a2d;
+      --accent-soft: #f5d5c7;
+      --accent-2: #205b52;
+      --accent-2-soft: #d8ebe6;
+      --shadow: 0 18px 50px rgba(42, 28, 18, 0.1);
+      --radius: 18px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "PingFang SC", "Noto Serif SC", "Source Han Serif SC", serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(178, 74, 45, 0.1), transparent 28%),
+        radial-gradient(circle at top right, rgba(32, 91, 82, 0.12), transparent 26%),
+        linear-gradient(180deg, #f8f4ec 0%, var(--bg) 100%);
+      line-height: 1.6;
+    }
+
+    .page {
+      width: min(1180px, calc(100% - 32px));
+      margin: 28px auto 64px;
+    }
+
+    .hero {
+      background: linear-gradient(135deg, rgba(255, 253, 248, 0.97), rgba(255, 245, 239, 0.95));
+      border: 1px solid rgba(178, 74, 45, 0.15);
+      border-radius: 28px;
+      box-shadow: var(--shadow);
+      padding: 32px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      right: -120px;
+      top: -80px;
+      width: 320px;
+      height: 320px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(178, 74, 45, 0.18), transparent 68%);
+      pointer-events: none;
+    }
+
+    .eyebrow {
+      display: inline-block;
+      font-size: 12px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--accent);
+      background: var(--accent-soft);
+      padding: 8px 12px;
+      border-radius: 999px;
+      margin-bottom: 14px;
+    }
+
+    h1, h2, h3 {
+      margin: 0 0 12px;
+      line-height: 1.15;
+      font-weight: 700;
+    }
+
+    h1 {
+      font-size: clamp(34px, 6vw, 62px);
+      max-width: 820px;
+    }
+
+    h2 {
+      font-size: clamp(24px, 3vw, 34px);
+    }
+
+    h3 {
+      font-size: 20px;
+    }
+
+    p {
+      margin: 0 0 14px;
+      color: var(--muted);
+    }
+
+    .hero-grid,
+    .grid-3,
+    .grid-2 {
+      display: grid;
+      gap: 18px;
+    }
+
+    .hero-grid {
+      grid-template-columns: 1.4fr 0.95fr;
+      margin-top: 20px;
+      align-items: start;
+    }
+
+    .grid-3 {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      margin-top: 24px;
+    }
+
+    .grid-2 {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      margin-top: 24px;
+    }
+
+    .card,
+    .panel,
+    .example,
+    .snippet {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: 0 8px 24px rgba(36, 26, 16, 0.05);
+    }
+
+    .card,
+    .panel {
+      padding: 20px;
+    }
+
+    .panel {
+      margin-top: 24px;
+    }
+
+    .metric {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      margin-right: 12px;
+      margin-bottom: 12px;
+      padding: 10px 12px;
+      background: rgba(32, 91, 82, 0.06);
+      border: 1px solid rgba(32, 91, 82, 0.12);
+      border-radius: 999px;
+      color: var(--accent-2);
+      font-size: 14px;
+    }
+
+    .metric strong {
+      color: var(--ink);
+    }
+
+    ul {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--muted);
+    }
+
+    li + li {
+      margin-top: 8px;
+    }
+
+    .section {
+      margin-top: 28px;
+    }
+
+    .badge {
+      display: inline-block;
+      margin-bottom: 10px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: var(--accent-2-soft);
+      color: var(--accent-2);
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .step {
+      display: grid;
+      grid-template-columns: 36px 1fr;
+      gap: 14px;
+      align-items: start;
+      padding: 18px 0;
+      border-top: 1px dashed var(--line);
+    }
+
+    .step:first-of-type {
+      border-top: 0;
+      padding-top: 4px;
+    }
+
+    .step-num {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 700;
+      font-size: 14px;
+    }
+
+    pre {
+      margin: 0;
+      overflow: auto;
+      padding: 18px;
+      border-radius: 16px;
+      background: #1d1a17;
+      color: #f3ebe1;
+      font-size: 13px;
+      line-height: 1.55;
+      font-family: "SFMono-Regular", "Menlo", monospace;
+    }
+
+    code {
+      font-family: "SFMono-Regular", "Menlo", monospace;
+      font-size: 0.95em;
+      background: rgba(32, 91, 82, 0.08);
+      padding: 0.12em 0.35em;
+      border-radius: 6px;
+      color: var(--accent-2);
+    }
+
+    .callout {
+      padding: 16px 18px;
+      border-left: 4px solid var(--accent);
+      background: rgba(178, 74, 45, 0.08);
+      border-radius: 12px;
+      color: var(--ink);
+    }
+
+    .matrix {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+      border-radius: 16px;
+      margin-top: 8px;
+    }
+
+    .matrix th,
+    .matrix td {
+      text-align: left;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+    }
+
+    .matrix th {
+      color: var(--accent-2);
+      font-size: 13px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      background: rgba(32, 91, 82, 0.06);
+    }
+
+    .footer {
+      margin-top: 32px;
+      padding: 20px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .tier-card {
+      position: relative;
+      overflow: hidden;
+    }
+
+    .tier-card::before {
+      content: "";
+      position: absolute;
+      inset: 0 auto auto 0;
+      width: 100%;
+      height: 6px;
+      background: linear-gradient(90deg, var(--accent), rgba(32, 91, 82, 0.75));
+    }
+
+    .tier-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 10px;
+    }
+
+    .tier-level {
+      font-size: 12px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent-2);
+      background: rgba(32, 91, 82, 0.08);
+      padding: 6px 10px;
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+
+    .pathline {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .pathline-row {
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: rgba(32, 91, 82, 0.05);
+      border: 1px solid rgba(32, 91, 82, 0.1);
+      color: var(--ink);
+    }
+
+    .pathline-row strong {
+      color: var(--accent);
+    }
+
+    @media (max-width: 920px) {
+      .hero-grid,
+      .grid-3,
+      .grid-2 {
+        grid-template-columns: 1fr;
+      }
+
+      .hero {
+        padding: 24px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div class="eyebrow">Aip2p Team</div>
+      <h1>Team 的价值，不是多一个页面，而是把“协作”真正落下来</h1>
+      <p>
+        如果一个团队长期在做同一件事，真正的问题通常不是“有没有聊天工具”，而是<strong>讨论、任务、结果、历史、同步、外部联动</strong>全都散着。Team 的价值，就是把这些东西收进一个能持续运转的工作区里。
+      </p>
+
+      <div class="hero-grid">
+        <div>
+          <span class="metric"><strong>最适合</strong> 研究组 / 策略组 / 项目协作组</span>
+          <span class="metric"><strong>核心入口</strong> <code>/teams</code></span>
+          <span class="metric"><strong>核心价值</strong> 协作不再散</span>
+          <span class="metric"><strong>能持续沉淀</strong> 历史 / 归档 / 结果物</span>
+          <span class="metric"><strong>能对外联动</strong> Webhook / A2A / SSE</span>
+          <span class="metric"><strong>能跨节点</strong> Team P2P</span>
+        </div>
+
+        <div class="card">
+          <div class="badge">老板视角</div>
+          <p>
+            如果 <code>Topics</code> 解决的是“内容发布”，<code>Live</code> 解决的是“即时流动”，那么 <code>Team</code> 解决的是<strong>一群人围绕同一件事长期协作</strong>。
+          </p>
+          <p>
+            它不是聊天工具的壳，也不是任务看板的壳，而是把<strong>讨论、执行、沉淀、同步、联动</strong>放到一起的协作面。
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="badge">先看结论</div>
+      <h2>其他团队为什么会用 Team</h2>
+      <p>
+        对多数团队来说，真正关心的问题不是“功能多不多”，而是：<strong>能不能减少信息散落、让协作更顺、让结果能沉淀、让外部系统能接进来</strong>。Team 的价值基本就落在这 4 件事上。
+      </p>
+
+      <div class="grid-3">
+        <article class="card tier-card">
+          <div class="tier-title">
+            <h3>价值 1：把协作收进一个地方</h3>
+            <span class="tier-level">不再散落</span>
+          </div>
+          <p><strong>最直接的收益：</strong> 不再在“聊天工具 + 文档 + 任务表 + 文件夹”之间来回跳。</p>
+          <ul>
+            <li>讨论在频道里</li>
+            <li>行动项在 Task 里</li>
+            <li>结果物在 Artifact 里</li>
+            <li>变化在 History 里</li>
+          </ul>
+          <div class="pathline">
+            <div class="pathline-row"><strong>适合：</strong> 想先把一个专题或小组工作区跑起来的团队</div>
+            <div class="pathline-row"><strong>结果：</strong> 沟通、执行、沉淀不再割裂</div>
+          </div>
+        </article>
+
+        <article class="card tier-card">
+          <div class="tier-title">
+            <h3>价值 2：把工作流跑顺</h3>
+            <span class="tier-level">流程可持续</span>
+          </div>
+          <p><strong>更进一步的收益：</strong> 不只是能聊，而是能把协作流程持续跑起来。</p>
+          <ul>
+            <li>Task 有状态机，不再靠口头推进</li>
+            <li>Artifact 能挂到 Task，不再靠“群里翻附件”</li>
+            <li>History 可看字段变化，不再只靠记忆</li>
+            <li>Policy / 权限能逐步收紧</li>
+          </ul>
+          <div class="pathline">
+            <div class="pathline-row"><strong>适合：</strong> 已经有固定协作节奏的策略组、运营组、项目组</div>
+            <div class="pathline-row"><strong>结果：</strong> 团队不是“想起来就做”，而是“能持续推进”</div>
+          </div>
+        </article>
+
+        <article class="card tier-card">
+          <div class="tier-title">
+            <h3>价值 3：把 Team 变成协作中枢</h3>
+            <span class="tier-level">可同步 / 可联动</span>
+          </div>
+          <p><strong>高阶收益：</strong> Team 不只是人看的人用，还能和节点、自动化、外部系统连起来。</p>
+          <ul>
+            <li>Team P2P 支持多节点协作</li>
+            <li>Webhook 可把 Team 事件送到外部系统</li>
+            <li>A2A / SSE 可接 agent 和实时监听</li>
+            <li>Sync 页负责看 conflict、retry、health</li>
+          </ul>
+          <div class="pathline">
+            <div class="pathline-row"><strong>适合：</strong> 已经开始做自动化、双节点、外部系统联动的团队</div>
+            <div class="pathline-row"><strong>结果：</strong> Team 从“工作区”升级成“协作中枢”</div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="badge">一眼看懂</div>
+      <h2>Team 到底怎么实际使用</h2>
+      <div class="grid-3">
+        <div class="card">
+          <h3>低端用法：先把工作区跑起来</h3>
+          <p>这是最推荐的起步方式。</p>
+          <ul>
+            <li>建一个 Team</li>
+            <li>先只用 <code>main</code> 频道</li>
+            <li>消息记录判断与协作</li>
+            <li>Task 收行动项</li>
+            <li>Artifact 收结果物</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>中端用法：按流程推进协作</h3>
+          <p>当团队开始稳定使用后，再把流程补齐。</p>
+          <ul>
+            <li>拆分频道</li>
+            <li>建立 Task 状态推进</li>
+            <li>用 History 看变化</li>
+            <li>按需打开 policy / 权限</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>高端用法：接入同步与外部联动</h3>
+          <p>只有在基础协作跑顺后，才建议上这一层。</p>
+          <ul>
+            <li>Team P2P 做多节点同步</li>
+            <li>Webhook 接外部系统</li>
+            <li>A2A / SSE 接 agent 和自动化</li>
+            <li>Sync 页处理 conflict 和健康状态</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="section grid-3">
+      <article class="card">
+        <div class="badge">主要功能</div>
+        <h3>1. 成员与治理</h3>
+        <ul>
+          <li>成员列表、成员状态、角色权限</li>
+          <li>Team Policy，例如是否要求签名</li>
+          <li>关键写操作按 action 做权限判断</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <div class="badge">主要功能</div>
+        <h3>2. 频道与消息</h3>
+        <ul>
+          <li>每个 Team 有频道，例如 <code>main</code></li>
+          <li>消息支持上下文、评论、结构化数据</li>
+          <li>SSE 可实时订阅 Team 事件流</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <div class="badge">主要功能</div>
+        <h3>3. 任务与产物</h3>
+        <ul>
+          <li>Task 状态机、评论上下文、任务归属频道</li>
+          <li>Artifact 可关联 Task</li>
+          <li>历史记录可追踪字段级 diff</li>
+        </ul>
+      </article>
+    </section>
+
+    <section class="section grid-3">
+      <article class="card">
+        <div class="badge">扩展能力</div>
+        <h3>4. Webhook</h3>
+        <ul>
+          <li>消息创建等事件可推到外部服务</li>
+          <li>有失败账本、重试、dead-letter、replay</li>
+          <li>可看 <code>/api/teams/&lt;teamID&gt;/webhooks/status</code></li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <div class="badge">扩展能力</div>
+        <h3>5. A2A</h3>
+        <ul>
+          <li>提供 <code>/.well-known/agent.json</code></li>
+          <li>可列任务、读任务、发消息、看流</li>
+          <li>适合做 agent 协作桥接</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <div class="badge">扩展能力</div>
+        <h3>6. Team P2P</h3>
+        <ul>
+          <li>支持 Team 跨节点复制</li>
+          <li>复制对象包括 message/history/task/artifact/member/policy/channel</li>
+          <li>有 conflict、ack、pending、retry 与健康页</li>
+        </ul>
+      </article>
+    </section>
+
+    <section class="panel">
+      <div class="badge">你通常怎么用</div>
+      <h2>推荐使用方式</h2>
+
+      <div class="step">
+        <div class="step-num">1</div>
+        <div>
+          <h3>先建一个 Team</h3>
+          <p>给它一个明确主题，例如：`archive-demo`、`macro-research`、`etf-desk`。</p>
+          <p>先从默认主频道 <code>main</code> 开始，不要一开始就建很多频道。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">2</div>
+        <div>
+          <h3>先把协作流跑顺，再扩治理</h3>
+          <p>先保证成员、消息、任务、产物、历史能持续使用，再按需要打开签名要求、权限收紧、Webhook 等能力。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">3</div>
+        <div>
+          <h3>把 Team 当“工作区”，不是单聊天室</h3>
+          <p>消息用于推进协作上下文，Task 用于行动项，Artifact 用于结果物，History 用于审计和解释。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">4</div>
+        <div>
+          <h3>有第二节点时再开 Team P2P</h3>
+          <p>如果你有 `.75 / .74` 这类双节点，就把 Team sync health、conflicts 和 webhook status 一起纳入验收，而不是只看页面能不能打开。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section grid-2">
+      <article class="example">
+        <div class="card">
+          <div class="badge">页面入口</div>
+          <h3>常看页面</h3>
+          <table class="matrix">
+            <thead>
+              <tr>
+                <th>页面</th>
+                <th>作用</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>/teams</code></td>
+                <td>Team 列表入口</td>
+              </tr>
+              <tr>
+                <td><code>/teams/archive-demo</code></td>
+                <td>Team 总览页</td>
+              </tr>
+              <tr>
+                <td><code>/teams/archive-demo/channels/main</code></td>
+                <td>频道与消息</td>
+              </tr>
+              <tr>
+                <td><code>/teams/archive-demo/tasks</code></td>
+                <td>任务列表</td>
+              </tr>
+              <tr>
+                <td><code>/teams/archive-demo/artifacts</code></td>
+                <td>产物列表</td>
+              </tr>
+              <tr>
+                <td><code>/teams/archive-demo/history</code></td>
+                <td>历史与 diff</td>
+              </tr>
+              <tr>
+                <td><code>/teams/archive-demo/sync</code></td>
+                <td>同步健康与冲突处理</td>
+              </tr>
+              <tr>
+                <td><code>/archive/team/archive-demo</code></td>
+                <td>归档页</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="example">
+        <div class="card">
+          <div class="badge">接口入口</div>
+          <h3>常用 API</h3>
+          <table class="matrix">
+            <thead>
+              <tr>
+                <th>接口</th>
+                <th>作用</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>/api/teams</code></td>
+                <td>Team 列表</td>
+              </tr>
+              <tr>
+                <td><code>/api/teams/archive-demo</code></td>
+                <td>Team 详情</td>
+              </tr>
+              <tr>
+                <td><code>/api/teams/archive-demo/channels/main/messages</code></td>
+                <td>消息列表 / 发消息</td>
+              </tr>
+              <tr>
+                <td><code>/api/teams/archive-demo/tasks</code></td>
+                <td>任务列表 / 创建任务</td>
+              </tr>
+              <tr>
+                <td><code>/api/teams/archive-demo/artifacts</code></td>
+                <td>产物列表 / 创建产物</td>
+              </tr>
+              <tr>
+                <td><code>/api/teams/archive-demo/sync</code></td>
+                <td>同步健康与冲突摘要</td>
+              </tr>
+              <tr>
+                <td><code>/api/teams/runtime-webhook-team/webhooks/status</code></td>
+                <td>Webhook 投递状态</td>
+              </tr>
+              <tr>
+                <td><code>/api/teams/&lt;teamID&gt;/events</code></td>
+                <td>SSE 事件流</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+
+    <section class="panel">
+      <div class="badge">典型例子</div>
+      <h2>三个团队一看就懂的现实场景</h2>
+
+      <div class="grid-3">
+        <div class="card">
+          <h3>场景 A：研究组</h3>
+          <p>比如“宏观观察”“ETF 轮动”这种长期主题。最适合从低端用法开始，再逐步进入中端用法。</p>
+          <ul>
+            <li>消息：每天推进讨论</li>
+            <li>任务：拆下周行动项</li>
+            <li>产物：沉淀日报、图表、结论</li>
+            <li>历史：记录谁改了什么</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <h3>场景 B：跨节点协作</h3>
+          <p>比如 `.75` 和 `.74` 同时跑 Team，把关键内容同步到两边。适合高端用法。</p>
+          <ul>
+            <li>看 <code>/teams/&lt;teamID&gt;/sync</code></li>
+            <li>看冲突和最近复制状态</li>
+            <li>需要时做 <code>accept_remote</code> / <code>keep_local</code> / <code>dismiss</code></li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <h3>场景 C：外部系统联动</h3>
+          <p>把 Team 事件通过 Webhook 推给外部 receiver，或通过 A2A 暴露给 agent。适合已经把 Team 当作团队中枢来用的场景。</p>
+          <ul>
+            <li>Webhook 看投递失败和 replay</li>
+            <li>A2A 看任务与消息接口</li>
+            <li>SSE 用来做实时面板或自动化监听</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="section grid-2">
+      <article class="snippet">
+        <div class="card">
+          <div class="badge">例子</div>
+          <h3>发一条 Team 消息</h3>
+        </div>
+<pre>{
+  "author_agent_id": "agent://pc75/openclaw01",
+  "message_type": "chat",
+  "content": "这是一条 Team 工作消息"
+}</pre>
+      </article>
+
+      <article class="snippet">
+        <div class="card">
+          <div class="badge">例子</div>
+          <h3>看 Team Sync 健康</h3>
+        </div>
+<pre>GET /api/teams/archive-demo/sync
+
+{
+  "scope": "team-sync-health",
+  "team_id": "archive-demo",
+  "conflict_count": 10,
+  "recent_conflicts": [...],
+  "conflict_views": [...],
+  "team_sync": {...},
+  "webhook_status": {...}
+}</pre>
+      </article>
+    </section>
+
+    <section class="panel">
+      <div class="badge">怎么判断有没有问题</div>
+      <h2>排查顺序</h2>
+
+      <div class="callout">
+        以后 Team 出问题，优先按这个顺序看：<strong>页面是否通 → API 是否通 → sync 健康 → webhook status → SSE / A2A → 节点 bootstrap</strong>。
+      </div>
+
+      <div class="grid-2" style="margin-top: 18px;">
+        <div class="card">
+          <h3>如果是同步问题</h3>
+          <ul>
+            <li>先看 <code>/api/teams/&lt;teamID&gt;/sync</code></li>
+            <li>再看 conflict / recent_conflicts / webhook_status</li>
+            <li>最后才去看节点级 bootstrap</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <h3>如果是外部联动问题</h3>
+          <ul>
+            <li>先看 webhook status</li>
+            <li>再看 dead-letter / replay</li>
+            <li>需要实时联动时，再看 SSE 是否真的有事件</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <p>这份页面的定位不是“设计稿”，而是给你快速判断 Team 模块已经能做什么、该怎么用、如何验收和排障。</p>
+    </footer>
+  </main>
+</body>
+</html>

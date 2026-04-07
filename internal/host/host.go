@@ -11,11 +11,11 @@ import (
 	"strings"
 	"time"
 
-	"hao.news/internal/apphost"
-	"hao.news/internal/builtin"
-	"hao.news/internal/extensions"
-	"hao.news/internal/themes/directorytheme"
-	"hao.news/internal/workspace"
+	"aip2p/internal/apphost"
+	"aip2p/internal/builtin"
+	"aip2p/internal/extensions"
+	"aip2p/internal/themes/directorytheme"
+	"aip2p/internal/workspace"
 )
 
 type Config struct {
@@ -236,7 +236,7 @@ func (i *Instance) ListenAddr() string {
 
 func normalizeConfig(cfg Config) Config {
 	if strings.TrimSpace(cfg.AppDir) == "" && strings.TrimSpace(cfg.App) == "" && len(cfg.Plugins) == 0 && strings.TrimSpace(cfg.Plugin) == "" && len(cfg.PluginDirs) == 0 {
-		cfg.App = "hao-news-app"
+		cfg.App = "aip2p-app"
 	}
 	if strings.TrimSpace(cfg.ListenAddr) == "" {
 		cfg.ListenAddr = "0.0.0.0:51818"
@@ -360,7 +360,7 @@ func applyAppBundleConfig(cfg Config, appCfg workspace.AppConfig) (Config, error
 
 func (i *Instance) String() string {
 	if i == nil || i.site == nil {
-		return "haonews host"
+		return "aip2p host"
 	}
 	return fmt.Sprintf("%s on %s", i.site.Manifest.Name, i.config.ListenAddr)
 }
