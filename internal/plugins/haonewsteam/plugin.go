@@ -14,6 +14,10 @@ import (
 	teamcore "hao.news/internal/haonews/team"
 	newsplugin "hao.news/internal/plugins/haonews"
 	"hao.news/internal/plugins/haonewsteam/roomplugin"
+	"hao.news/internal/plugins/haonewsteam/rooms/artifactroom"
+	"hao.news/internal/plugins/haonewsteam/rooms/decisionroom"
+	"hao.news/internal/plugins/haonewsteam/rooms/handoffroom"
+	"hao.news/internal/plugins/haonewsteam/rooms/incidentroom"
 	"hao.news/internal/plugins/haonewsteam/rooms/planexchange"
 	"hao.news/internal/plugins/haonewsteam/rooms/reviewroom"
 	roomthemes "hao.news/internal/themes/room-themes"
@@ -57,6 +61,10 @@ func (Plugin) Build(_ context.Context, cfg apphost.Config, theme apphost.WebThem
 		return nil, err
 	}
 	registry := roomplugin.NewRegistry()
+	registry.MustRegister(artifactroom.New())
+	registry.MustRegister(decisionroom.New())
+	registry.MustRegister(handoffroom.New())
+	registry.MustRegister(incidentroom.New())
 	registry.MustRegister(planexchange.New())
 	registry.MustRegister(reviewroom.New())
 	themeRegistry := roomthemes.NewRegistry()

@@ -1,0 +1,12 @@
+{
+  "id": "artifact-room",
+  "name": "Artifact Room",
+  "version": "1.0.0",
+  "minTeamVersion": "0.2.0",
+  "routes": {
+    "web": "/teams/{teamID}/r/artifact-room",
+    "api": "/api/teams/{teamID}/r/artifact-room"
+  },
+  "messageKinds": ["proposal", "revision", "publish"],
+  "artifactKinds": ["artifact-brief"]
+}

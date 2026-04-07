@@ -246,6 +246,11 @@
       - 页面与 Summary API 暴露 `recent_batch_runs`
       - 可见最近批量同步时间 / actor / 已同步线程 / 新建任务数 / 新建产物数 / 建议状态分布
       - 可直接打开本轮新建的 Task / Artifact
+      - 可直接打开本轮批处理对应的 Team history
+    - `review-room` 已支持更细的线程工作流状态
+      - `待风险跟进 / 待评审 / 待沉淀 / 已沉淀待挂接 / 已完成`
+      - 已同步进入 `decision_threads / thread_workbench / recent_batch_runs`
+      - 页面已形成对应工作台分组
     - `review-room` 已支持跨频道 / 跨上下文收敛
       - `cross_channel_digests`
       - `context_digests`
@@ -253,13 +258,108 @@
     - 第三个 Room Theme：`board`
       - Theme 选择器里可见
       - 频道页可切换并真实渲染
+    - 第三个内置 Room Plugin：`incident-room`
+      - `incident / update / recovery`
+      - `Summary API`
+      - `incident-summary` 提炼链
+      - web + API 双入口
+      - 已进入 Room Plugin Registry 和频道配置入口
+      - 单条消息已支持 `同步到任务`
+        - `incident -> blocked`
+        - `update -> doing`
+        - `recovery -> done`
+        - 缺少 `task_id` 时自动创建并挂接 Team Task
+      - 当前频道已支持 `批量同步全部消息到任务`
+        - `task-sync-all`
+        - Summary API 与页面统计已补：
+          - `bound_task_count / unbound_task_count`
+          - `suggested_blocked_count / suggested_doing_count / suggested_done_count`
+        - 会对尚未沉淀的 `recovery` 消息自动补 `incident-summary`
+      - `incident-room` 的批量同步结果已写回并回显：
+        - Team history 中记录 `message_scope = incident-room`
+        - `batch_action = task-sync-all`
+        - Summary API 暴露 `recent_batch_runs`
+        - 页面可见最近批处理结果、批处理历史入口、新建任务入口、新增产物数
+        - 本轮新建的 `Incident Summary` 也可直接打开
+    - 第四个内置 Room Plugin：`handoff-room`
+      - `handoff / checkpoint / accept`
+      - `Summary API`
+      - `handoff-summary` 提炼链
+      - web + API 双入口
+      - 已进入 Room Plugin Registry 和频道配置入口
+      - 单条消息已支持 `同步到任务`
+        - `handoff -> doing`
+        - `checkpoint -> doing`
+        - `accept -> done`
+        - 缺少 `task_id` 时自动创建并挂接 Team Task
+      - 当前频道已支持 `批量同步全部消息到任务`
+        - `task-sync-all`
+        - Summary API 与页面统计已补：
+          - `bound_task_count / unbound_task_count`
+          - `suggested_doing_count / suggested_done_count`
+        - 会对尚未沉淀的 `accept` 消息自动补 `handoff-summary`
+      - `handoff-room` 的批量同步结果已写回并回显：
+        - Team history 中记录 `message_scope = handoff-room`
+        - `batch_action = task-sync-all`
+        - Summary API 暴露 `recent_batch_runs`
+        - 页面可见最近批处理结果、批处理历史入口、新建任务入口、新增产物入口
+    - 第五个内置 Room Plugin：`artifact-room`
+      - `proposal / revision / publish`
+      - `artifact-brief` 提炼链
+      - web + API 双入口
+      - `Summary API`
+      - 页面已具备：
+        - 三类结构化表单
+        - 产物推进统计
+        - `Artifact Brief` 入口
+        - Team 历史入口
+      - 单条消息已支持 `同步到任务`
+        - `proposal -> doing`
+        - `revision -> doing`
+        - `publish -> done`
+        - 缺少 `task_id` 时自动创建并挂接 Team Task
+      - 当前频道已支持 `批量同步全部消息到任务`
+        - `task-sync-all`
+        - Summary API 与页面统计已补：
+          - `bound_task_count / unbound_task_count`
+          - `suggested_doing_count / suggested_done_count`
+        - 会对尚未沉淀的 `publish` 消息自动补 `artifact-brief`
+      - `artifact-room` 的批量同步结果已写回并回显：
+        - Team history 中记录 `message_scope = artifact-room`
+        - `batch_action = task-sync-all`
+        - Summary API 暴露 `recent_batch_runs`
+        - 页面可见最近批处理结果、批处理历史入口、新建任务入口、新增产物入口
+    - 第六个内置 Room Plugin：`decision-room`
+      - `proposal / option / decision`
+      - `decision-note` 提炼链
+      - web + API 双入口
+      - `Summary API`
+      - 单条消息已支持 `同步到任务`
+        - `proposal -> doing`
+        - `option -> doing`
+        - `decision -> done`
+        - 缺少 `task_id` 时自动创建并挂接 Team Task
+      - 当前频道已支持 `批量同步全部消息到任务`
+        - `task-sync-all`
+        - Summary API 与页面统计已补：
+          - `bound_task_count / unbound_task_count`
+          - `suggested_doing_count / suggested_done_count`
+        - 会对尚未沉淀的 `decision` 消息自动补 `decision-note`
+      - `decision-room` 的批量同步结果已写回并回显：
+        - Team history 中记录 `message_scope = decision-room`
+        - `batch_action = task-sync-all`
+        - Summary API 暴露 `recent_batch_runs`
+        - 页面可见最近批处理结果、批处理历史入口、新建任务入口、新增产物入口
+    - `incident-room / handoff-room / artifact-room / decision-room`
+      的任务绑定现在都支持通过 Team history 自动回填：
+      - 即使原始消息没有显式 `task_id`
+      - 执行过 `task-sync / task-sync-all` 后
+      - 页面与 Summary API 的 `bound_task_count / unbound_task_count`
+        以及 `打开绑定任务` 都会稳定回显
 - `Blocked`:
   - None
 - `Next Step`:
   - 继续时优先做：
-    - `review-room` 更强的任务/产物自动联动策略
-      - 更细的状态策略
-      - 批处理结果与更多 Team 主链对象的联动
-      - 例如自动挂接更多 Task / Artifact / History 入口
-    - 更多内置 Room Plugin
+    - 继续把 `decision-room / artifact-room / handoff-room / incident-room` 的自动联动做得更强
+    - 或继续补新的内置 Room Plugin
     - 若要发布，再单开 `main + tag + release` 批次

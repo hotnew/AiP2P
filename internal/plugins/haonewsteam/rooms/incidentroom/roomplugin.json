@@ -1,0 +1,13 @@
+{
+  "id": "incident-room",
+  "name": "Incident Room",
+  "version": "1.0.0",
+  "description": "故障、异常、恢复结论的频道级协作房间。",
+  "minTeamVersion": "0.2.0",
+  "routes": {
+    "web": "/teams/{teamID}/r/incident-room",
+    "api": "/api/teams/{teamID}/r/incident-room"
+  },
+  "messageKinds": ["incident", "update", "recovery"],
+  "artifactKinds": ["incident-summary"]
+}

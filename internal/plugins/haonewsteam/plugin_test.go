@@ -1120,6 +1120,9 @@ func TestPluginBuildServesReviewRoom(t *testing.T) {
 	if !strings.Contains(summaryRec.Body.String(), `"thread_workbench"`) || !strings.Contains(summaryRec.Body.String(), `"total_threads":1`) && !strings.Contains(summaryRec.Body.String(), `"total_threads": 1`) {
 		t.Fatalf("expected thread workbench summary in review-room summary body, got %q", summaryRec.Body.String())
 	}
+	if !strings.Contains(summaryRec.Body.String(), `"workflow_state":"ready-to-distill"`) && !strings.Contains(summaryRec.Body.String(), `"workflow_state": "ready-to-distill"`) {
+		t.Fatalf("expected initial workflow state in review-room summary body, got %q", summaryRec.Body.String())
+	}
 
 	webReq := httptest.NewRequest(http.MethodGet, "/teams/review-room-team/r/review-room/?channel_id=main&kind=decision&actor_agent_id=agent://pc75/live-bravo", nil)
 	webRec := httptest.NewRecorder()
@@ -1462,6 +1465,9 @@ func TestPluginBuildServesReviewRoom(t *testing.T) {
 	if !strings.Contains(summaryAfterBatchRec.Body.String(), `"created_task_ids"`) || !strings.Contains(summaryAfterBatchRec.Body.String(), `"created_artifact_ids"`) {
 		t.Fatalf("expected created task/artifact ids in recent batch runs, got %q", summaryAfterBatchRec.Body.String())
 	}
+	if !strings.Contains(summaryAfterBatchRec.Body.String(), `"ready_to_distill_count"`) || !strings.Contains(summaryAfterBatchRec.Body.String(), `"needs_review_count"`) || !strings.Contains(summaryAfterBatchRec.Body.String(), `"history_link"`) {
+		t.Fatalf("expected workflow counters and history link in recent batch runs, got %q", summaryAfterBatchRec.Body.String())
+	}
 
 	webAfterBatchReq := httptest.NewRequest(http.MethodGet, "/teams/review-room-team/r/review-room/?channel_id=main&actor_agent_id=agent://pc75/live-bravo", nil)
 	webAfterBatchRec := httptest.NewRecorder()
@@ -1475,11 +1481,17 @@ func TestPluginBuildServesReviewRoom(t *testing.T) {
 	if !strings.Contains(webAfterBatchRec.Body.String(), "线程工作台摘要") || !strings.Contains(webAfterBatchRec.Body.String(), "待自动建任务") || !strings.Contains(webAfterBatchRec.Body.String(), "待补沉淀产物") {
 		t.Fatalf("expected thread workbench panel in review-room web body, got %q", webAfterBatchRec.Body.String())
 	}
+	if !strings.Contains(webAfterBatchRec.Body.String(), "待风险跟进") || !strings.Contains(webAfterBatchRec.Body.String(), "待评审") || !strings.Contains(webAfterBatchRec.Body.String(), "已沉淀待挂接") {
+		t.Fatalf("expected workflow state lanes in review-room web body, got %q", webAfterBatchRec.Body.String())
+	}
 	if !strings.Contains(webAfterBatchRec.Body.String(), "最近批处理结果") || !strings.Contains(webAfterBatchRec.Body.String(), "已同步线程") || !strings.Contains(webAfterBatchRec.Body.String(), "新建任务") || !strings.Contains(webAfterBatchRec.Body.String(), "新建产物") {
 		t.Fatalf("expected recent batch runs panel in review-room web body, got %q", webAfterBatchRec.Body.String())
 	}
 	if !strings.Contains(webAfterBatchRec.Body.String(), "本轮新建任务") || !strings.Contains(webAfterBatchRec.Body.String(), "本轮新建产物") {
 		t.Fatalf("expected created task/artifact links in review-room web body, got %q", webAfterBatchRec.Body.String())
+	}
+	if !strings.Contains(webAfterBatchRec.Body.String(), "查看本轮批处理历史") || !strings.Contains(webAfterBatchRec.Body.String(), "工作流状态") {
+		t.Fatalf("expected batch history link and workflow labels in review-room web body, got %q", webAfterBatchRec.Body.String())
 	}
 
 	researchDecisionReq := httptest.NewRequest(http.MethodPost, "/api/teams/review-room-team/r/review-room/messages", strings.NewReader(`{
@@ -1529,6 +1541,791 @@ func TestPluginBuildServesReviewRoom(t *testing.T) {
 	}
 	if !strings.Contains(globalWebBody, "research") || !strings.Contains(globalWebBody, "ctx-rollout") {
 		t.Fatalf("expected research channel and shared context in review-room web body, got %q", globalWebBody)
+	}
+}
+
+func TestPluginBuildServesIncidentRoom(t *testing.T) {
+	t.Parallel()
+
+	site, root := buildTeamSite(t)
+	store, err := teamcore.OpenStore(filepath.Join(root, "store"))
+	if err != nil {
+		t.Fatalf("OpenStore error = %v", err)
+	}
+	teamRoot := filepath.Join(root, "store", "team", "incident-room-team")
+	if err := os.MkdirAll(teamRoot, 0o755); err != nil {
+		t.Fatalf("MkdirAll error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(teamRoot, "team.json"), []byte(`{
+  "team_id":"incident-room-team",
+  "title":"Incident Room Team",
+  "owner_agent_id":"agent://pc75/live-bravo"
+}`), 0o644); err != nil {
+		t.Fatalf("WriteFile(team.json) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(teamRoot, "members.json"), []byte(`[
+  {"agent_id":"agent://pc75/live-bravo","role":"owner","status":"active"}
+]`), 0o644); err != nil {
+		t.Fatalf("WriteFile(members.json) error = %v", err)
+	}
+	if err := store.SaveChannelConfig("incident-room-team", teamcore.ChannelConfig{
+		ChannelID: "main",
+		Plugin:    "incident-room@1.0",
+		Theme:     "board",
+	}); err != nil {
+		t.Fatalf("SaveChannelConfig error = %v", err)
+	}
+
+	postReq := httptest.NewRequest(http.MethodPost, "/api/teams/incident-room-team/r/incident-room/messages", strings.NewReader(`{
+  "channel_id":"main",
+  "author_agent_id":"agent://pc75/live-bravo",
+  "kind":"incident",
+  "content":"Main room degraded after rollout",
+  "structured_data":{
+    "kind":"incident",
+    "title":"Main room degraded after rollout",
+    "severity":"high",
+    "summary":"Room entry renders but incidents fail to load",
+    "impact":"Operators cannot inspect room state quickly",
+    "owner":"agent://pc75/live-bravo",
+    "next_steps":["inspect plugin route","rebuild binary"]
+  }
+}`))
+	postReq.RemoteAddr = "127.0.0.1:12345"
+	postReq.Header.Set("Content-Type", "application/json")
+	postRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(postRec, postReq)
+	if postRec.Code != http.StatusCreated {
+		t.Fatalf("incident-room post status = %d, body = %s", postRec.Code, postRec.Body.String())
+	}
+
+	updateReq := httptest.NewRequest(http.MethodPost, "/api/teams/incident-room-team/r/incident-room/messages", strings.NewReader(`{
+  "channel_id":"main",
+  "author_agent_id":"agent://pc75/live-bravo",
+  "kind":"update",
+  "content":"Plugin route rebuilt",
+  "structured_data":{
+    "kind":"update",
+    "title":"Plugin route rebuilt",
+    "incident_ref":"Main room degraded after rollout",
+    "status":"validating",
+    "summary":"Binary rebuilt and route table refreshed",
+    "findings":["route responds 200","theme assets load"]
+  }
+}`))
+	updateReq.RemoteAddr = "127.0.0.1:12345"
+	updateReq.Header.Set("Content-Type", "application/json")
+	updateRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(updateRec, updateReq)
+	if updateRec.Code != http.StatusCreated {
+		t.Fatalf("incident-room update status = %d, body = %s", updateRec.Code, updateRec.Body.String())
+	}
+
+	recoveryReq := httptest.NewRequest(http.MethodPost, "/api/teams/incident-room-team/r/incident-room/messages", strings.NewReader(`{
+  "channel_id":"main",
+  "author_agent_id":"agent://pc75/live-bravo",
+  "kind":"recovery",
+  "content":"Service recovered after rebuild",
+  "structured_data":{
+    "kind":"recovery",
+    "title":"Service recovered after rebuild",
+    "incident_ref":"Main room degraded after rollout",
+    "summary":"Room traffic is back to normal",
+    "resolution":"Restarted service with fixed route registration",
+    "followups":["publish release note","verify .74 after upgrade"]
+  }
+}`))
+	recoveryReq.RemoteAddr = "127.0.0.1:12345"
+	recoveryReq.Header.Set("Content-Type", "application/json")
+	recoveryRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(recoveryRec, recoveryReq)
+	if recoveryRec.Code != http.StatusCreated {
+		t.Fatalf("incident-room recovery status = %d, body = %s", recoveryRec.Code, recoveryRec.Body.String())
+	}
+
+	summaryReq := httptest.NewRequest(http.MethodGet, "/api/teams/incident-room-team/r/incident-room/summary?channel_id=main", nil)
+	summaryRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(summaryRec, summaryReq)
+	if summaryRec.Code != http.StatusOK {
+		t.Fatalf("incident-room summary status = %d, body = %s", summaryRec.Code, summaryRec.Body.String())
+	}
+	summaryBody := summaryRec.Body.String()
+	if !strings.Contains(summaryBody, `"incident_count": 1`) && !strings.Contains(summaryBody, `"incident_count":1`) {
+		t.Fatalf("expected incident count in summary body, got %q", summaryBody)
+	}
+	if !strings.Contains(summaryBody, `"update_count": 1`) && !strings.Contains(summaryBody, `"update_count":1`) {
+		t.Fatalf("expected update count in summary body, got %q", summaryBody)
+	}
+	if !strings.Contains(summaryBody, `"recovery_count": 1`) && !strings.Contains(summaryBody, `"recovery_count":1`) {
+		t.Fatalf("expected recovery count in summary body, got %q", summaryBody)
+	}
+	if !strings.Contains(summaryBody, `"bound_task_count"`) || !strings.Contains(summaryBody, `"unbound_task_count"`) || !strings.Contains(summaryBody, `"suggested_blocked_count"`) {
+		t.Fatalf("expected task summary counters in incident-room summary body, got %q", summaryBody)
+	}
+
+	listReq := httptest.NewRequest(http.MethodGet, "/api/teams/incident-room-team/r/incident-room/?channel_id=main&kind=incident", nil)
+	listRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(listRec, listReq)
+	if listRec.Code != http.StatusOK {
+		t.Fatalf("incident-room list status = %d, body = %s", listRec.Code, listRec.Body.String())
+	}
+	if !strings.Contains(listRec.Body.String(), `"message_type":"incident"`) && !strings.Contains(listRec.Body.String(), `"message_type": "incident"`) {
+		t.Fatalf("expected incident message in list body, got %q", listRec.Body.String())
+	}
+
+	messages, err := store.LoadMessages("incident-room-team", "main", 20)
+	if err != nil {
+		t.Fatalf("LoadMessages error = %v", err)
+	}
+	if len(messages) == 0 {
+		t.Fatalf("expected incident-room messages, got %#v", messages)
+	}
+	incidentMessageID := ""
+	for _, msg := range messages {
+		if msg.MessageType == "incident" {
+			incidentMessageID = msg.MessageID
+			break
+		}
+	}
+	if incidentMessageID == "" {
+		t.Fatalf("expected incident-room incident message id, got %#v", messages)
+	}
+	taskSyncReq := httptest.NewRequest(http.MethodPost, "/api/teams/incident-room-team/r/incident-room/task-sync", strings.NewReader(`{
+  "channel_id":"main",
+  "message_id":"`+incidentMessageID+`",
+  "actor_agent_id":"agent://pc75/live-bravo"
+}`))
+	taskSyncReq.RemoteAddr = "127.0.0.1:12345"
+	taskSyncReq.Header.Set("Content-Type", "application/json")
+	taskSyncRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(taskSyncRec, taskSyncReq)
+	if taskSyncRec.Code != http.StatusOK {
+		t.Fatalf("incident-room task sync status = %d, body = %s", taskSyncRec.Code, taskSyncRec.Body.String())
+	}
+	if !strings.Contains(taskSyncRec.Body.String(), `"status":"synced"`) && !strings.Contains(taskSyncRec.Body.String(), `"status": "synced"`) {
+		t.Fatalf("expected incident-room task sync body, got %q", taskSyncRec.Body.String())
+	}
+	if !strings.Contains(taskSyncRec.Body.String(), `"task_status":"blocked"`) && !strings.Contains(taskSyncRec.Body.String(), `"task_status": "blocked"`) {
+		t.Fatalf("expected blocked task status from incident sync, got %q", taskSyncRec.Body.String())
+	}
+	tasksAfterSync, err := store.LoadTasksCtx(context.Background(), "incident-room-team", 10)
+	if err != nil {
+		t.Fatalf("LoadTasksCtx after incident sync error = %v", err)
+	}
+	foundIncidentTask := false
+	for _, task := range tasksAfterSync {
+		if task.Title == "Main room degraded after rollout" && task.Status == "blocked" {
+			foundIncidentTask = true
+			break
+		}
+	}
+	if !foundIncidentTask {
+		t.Fatalf("expected auto-created blocked incident task, got %#v", tasksAfterSync)
+	}
+	syncAllReq := httptest.NewRequest(http.MethodPost, "/api/teams/incident-room-team/r/incident-room/task-sync-all", strings.NewReader(`{
+  "channel_id":"main",
+  "actor_agent_id":"agent://pc75/live-bravo"
+}`))
+	syncAllReq.RemoteAddr = "127.0.0.1:12345"
+	syncAllReq.Header.Set("Content-Type", "application/json")
+	syncAllRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(syncAllRec, syncAllReq)
+	if syncAllRec.Code != http.StatusOK {
+		t.Fatalf("incident-room task sync all status = %d, body = %s", syncAllRec.Code, syncAllRec.Body.String())
+	}
+	if !strings.Contains(syncAllRec.Body.String(), `"synced_items"`) || !strings.Contains(syncAllRec.Body.String(), `"task_created"`) || !strings.Contains(syncAllRec.Body.String(), `"artifact_created"`) {
+		t.Fatalf("expected incident-room batch task sync body, got %q", syncAllRec.Body.String())
+	}
+	summaryReqAfterSync := httptest.NewRequest(http.MethodGet, "/api/teams/incident-room-team/r/incident-room/summary?channel_id=main", nil)
+	summaryRecAfterSync := httptest.NewRecorder()
+	site.Handler.ServeHTTP(summaryRecAfterSync, summaryReqAfterSync)
+	if summaryRecAfterSync.Code != http.StatusOK {
+		t.Fatalf("incident-room summary(after sync) status = %d, body = %s", summaryRecAfterSync.Code, summaryRecAfterSync.Body.String())
+	}
+	if !strings.Contains(summaryRecAfterSync.Body.String(), `"recent_batch_runs"`) || !strings.Contains(summaryRecAfterSync.Body.String(), `"history_link"`) || !strings.Contains(summaryRecAfterSync.Body.String(), `"created_artifact_ids"`) {
+		t.Fatalf("expected incident-room recent batch runs in summary body, got %q", summaryRecAfterSync.Body.String())
+	}
+	distillReq := httptest.NewRequest(http.MethodPost, "/api/teams/incident-room-team/r/incident-room/distill", strings.NewReader(`{
+  "channel_id":"main",
+  "message_id":"`+incidentMessageID+`",
+  "actor_agent_id":"agent://pc75/live-bravo"
+}`))
+	distillReq.RemoteAddr = "127.0.0.1:12345"
+	distillReq.Header.Set("Content-Type", "application/json")
+	distillRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(distillRec, distillReq)
+	if distillRec.Code != http.StatusCreated {
+		t.Fatalf("incident-room distill status = %d, body = %s", distillRec.Code, distillRec.Body.String())
+	}
+	if !strings.Contains(distillRec.Body.String(), `"artifact_kind":"incident-summary"`) && !strings.Contains(distillRec.Body.String(), `"artifact_kind": "incident-summary"`) {
+		t.Fatalf("unexpected incident-room distill body: %q", distillRec.Body.String())
+	}
+
+	webReq := httptest.NewRequest(http.MethodGet, "/teams/incident-room-team/r/incident-room/?channel_id=main&actor_agent_id=agent://pc75/live-bravo", nil)
+	webRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(webRec, webReq)
+	if webRec.Code != http.StatusOK {
+		t.Fatalf("incident-room web status = %d, body = %s", webRec.Code, webRec.Body.String())
+	}
+	webBody := webRec.Body.String()
+	for _, needle := range []string{"Incident Room", "Summary API", "Main room degraded after rollout", "Service recovered after rebuild", "提炼为 Incident Summary", "查看 Incident Summary", "Severity", "high", "同步到任务", "批量同步全部消息到任务", "绑定任务", "最近批处理结果", "查看本轮批处理历史", "打开新建 Incident Summary"} {
+		if !strings.Contains(webBody, needle) {
+			t.Fatalf("incident-room web body missing %q: %q", needle, webBody)
+		}
+	}
+	channelReq := httptest.NewRequest(http.MethodGet, "/api/teams/incident-room-team/channels/main", nil)
+	channelRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(channelRec, channelReq)
+	if channelRec.Code != http.StatusOK {
+		t.Fatalf("channel api status = %d, body = %s", channelRec.Code, channelRec.Body.String())
+	}
+	if !strings.Contains(channelRec.Body.String(), `"incident-room"`) {
+		t.Fatalf("expected incident-room in available room plugins, got %q", channelRec.Body.String())
+	}
+}
+
+func TestPluginBuildServesHandoffRoom(t *testing.T) {
+	t.Parallel()
+
+	site, root := buildTeamSite(t)
+	store, err := teamcore.OpenStore(filepath.Join(root, "store"))
+	if err != nil {
+		t.Fatalf("OpenStore error = %v", err)
+	}
+	teamRoot := filepath.Join(root, "store", "team", "handoff-room-team")
+	if err := os.MkdirAll(teamRoot, 0o755); err != nil {
+		t.Fatalf("MkdirAll error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(teamRoot, "team.json"), []byte(`{
+  "team_id":"handoff-room-team",
+  "title":"Handoff Room Team",
+  "owner_agent_id":"agent://pc75/live-alpha"
+}`), 0o644); err != nil {
+		t.Fatalf("WriteFile(team.json) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(teamRoot, "members.json"), []byte(`[
+  {"agent_id":"agent://pc75/live-alpha","role":"owner","status":"active"},
+  {"agent_id":"agent://pc75/live-bravo","role":"member","status":"active"}
+]`), 0o644); err != nil {
+		t.Fatalf("WriteFile(members.json) error = %v", err)
+	}
+	if err := store.SaveChannelConfig("handoff-room-team", teamcore.ChannelConfig{
+		ChannelID: "main",
+		Plugin:    "handoff-room@1.0",
+		Theme:     "focus",
+	}); err != nil {
+		t.Fatalf("SaveChannelConfig error = %v", err)
+	}
+
+	postReq := httptest.NewRequest(http.MethodPost, "/api/teams/handoff-room-team/r/handoff-room/messages", strings.NewReader(`{
+  "channel_id":"main",
+  "author_agent_id":"agent://pc75/live-alpha",
+  "kind":"handoff",
+  "content":"把发布验证交接给晚班",
+  "structured_data":{
+    "kind":"handoff",
+    "title":"把发布验证交接给晚班",
+    "owner":"agent://pc75/live-alpha",
+    "receiver":"agent://pc75/live-bravo",
+    "summary":"白班完成构建，晚班继续跑节点验收",
+    "context":"v0.5.83 节点升级",
+    "next_steps":["检查 .74","记录回归结果"]
+  }
+}`))
+	postReq.RemoteAddr = "127.0.0.1:12345"
+	postReq.Header.Set("Content-Type", "application/json")
+	postRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(postRec, postReq)
+	if postRec.Code != http.StatusCreated {
+		t.Fatalf("handoff-room post status = %d, body = %s", postRec.Code, postRec.Body.String())
+	}
+
+	checkpointReq := httptest.NewRequest(http.MethodPost, "/api/teams/handoff-room-team/r/handoff-room/messages", strings.NewReader(`{
+  "channel_id":"main",
+  "author_agent_id":"agent://pc75/live-bravo",
+  "kind":"checkpoint",
+  "content":"晚班已完成 .74 健康检查",
+  "structured_data":{
+    "kind":"checkpoint",
+    "title":"晚班已完成 .74 健康检查",
+    "handoff_ref":"把发布验证交接给晚班",
+    "owner":"agent://pc75/live-alpha",
+    "receiver":"agent://pc75/live-bravo",
+    "summary":"节点健康正常",
+    "findings":["bootstrap ready","team sync ready"]
+  }
+}`))
+	checkpointReq.RemoteAddr = "127.0.0.1:12345"
+	checkpointReq.Header.Set("Content-Type", "application/json")
+	checkpointRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(checkpointRec, checkpointReq)
+	if checkpointRec.Code != http.StatusCreated {
+		t.Fatalf("handoff-room checkpoint status = %d, body = %s", checkpointRec.Code, checkpointRec.Body.String())
+	}
+
+	acceptReq := httptest.NewRequest(http.MethodPost, "/api/teams/handoff-room-team/r/handoff-room/messages", strings.NewReader(`{
+  "channel_id":"main",
+  "author_agent_id":"agent://pc75/live-bravo",
+  "kind":"accept",
+  "content":"交接验收完成",
+  "structured_data":{
+    "kind":"accept",
+    "title":"交接验收完成",
+    "handoff_ref":"把发布验证交接给晚班",
+    "owner":"agent://pc75/live-alpha",
+    "receiver":"agent://pc75/live-bravo",
+    "summary":"晚班已接手并完成验收",
+    "resolution":"记录验证结果并关闭交接",
+    "followups":["回写 runbook"]
+  }
+}`))
+	acceptReq.RemoteAddr = "127.0.0.1:12345"
+	acceptReq.Header.Set("Content-Type", "application/json")
+	acceptRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(acceptRec, acceptReq)
+	if acceptRec.Code != http.StatusCreated {
+		t.Fatalf("handoff-room accept status = %d, body = %s", acceptRec.Code, acceptRec.Body.String())
+	}
+
+	summaryReq := httptest.NewRequest(http.MethodGet, "/api/teams/handoff-room-team/r/handoff-room/summary?channel_id=main", nil)
+	summaryRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(summaryRec, summaryReq)
+	if summaryRec.Code != http.StatusOK {
+		t.Fatalf("handoff-room summary status = %d, body = %s", summaryRec.Code, summaryRec.Body.String())
+	}
+	summaryBody := summaryRec.Body.String()
+	for _, needle := range []string{`"handoff_count":1`, `"checkpoint_count":1`, `"accept_count":1`, `"bound_task_count"`, `"suggested_doing_count"`, `"suggested_done_count"`} {
+		if !strings.Contains(strings.ReplaceAll(summaryBody, " ", ""), needle) {
+			t.Fatalf("expected %q in handoff-room summary body, got %q", needle, summaryBody)
+		}
+	}
+
+	messages, err := store.LoadMessages("handoff-room-team", "main", 20)
+	if err != nil {
+		t.Fatalf("LoadMessages error = %v", err)
+	}
+	if len(messages) == 0 {
+		t.Fatalf("expected handoff-room messages, got %#v", messages)
+	}
+	handoffMessageID := ""
+	for _, msg := range messages {
+		if msg.MessageType == "handoff" {
+			handoffMessageID = msg.MessageID
+			break
+		}
+	}
+	if handoffMessageID == "" {
+		t.Fatalf("expected handoff-room handoff message id, got %#v", messages)
+	}
+
+	taskSyncReq := httptest.NewRequest(http.MethodPost, "/api/teams/handoff-room-team/r/handoff-room/task-sync", strings.NewReader(`{
+  "channel_id":"main",
+  "message_id":"`+handoffMessageID+`",
+  "actor_agent_id":"agent://pc75/live-alpha"
+}`))
+	taskSyncReq.RemoteAddr = "127.0.0.1:12345"
+	taskSyncReq.Header.Set("Content-Type", "application/json")
+	taskSyncRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(taskSyncRec, taskSyncReq)
+	if taskSyncRec.Code != http.StatusOK {
+		t.Fatalf("handoff-room task sync status = %d, body = %s", taskSyncRec.Code, taskSyncRec.Body.String())
+	}
+	if !strings.Contains(taskSyncRec.Body.String(), `"task_status":"doing"`) && !strings.Contains(taskSyncRec.Body.String(), `"task_status": "doing"`) {
+		t.Fatalf("expected doing task status from handoff sync, got %q", taskSyncRec.Body.String())
+	}
+
+	syncAllReq := httptest.NewRequest(http.MethodPost, "/api/teams/handoff-room-team/r/handoff-room/task-sync-all", strings.NewReader(`{
+  "channel_id":"main",
+  "actor_agent_id":"agent://pc75/live-alpha"
+}`))
+	syncAllReq.RemoteAddr = "127.0.0.1:12345"
+	syncAllReq.Header.Set("Content-Type", "application/json")
+	syncAllRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(syncAllRec, syncAllReq)
+	if syncAllRec.Code != http.StatusOK {
+		t.Fatalf("handoff-room task sync all status = %d, body = %s", syncAllRec.Code, syncAllRec.Body.String())
+	}
+	if !strings.Contains(syncAllRec.Body.String(), `"artifact_created"`) {
+		t.Fatalf("expected handoff-room batch task sync body, got %q", syncAllRec.Body.String())
+	}
+
+	summaryAfterSyncReq := httptest.NewRequest(http.MethodGet, "/api/teams/handoff-room-team/r/handoff-room/summary?channel_id=main", nil)
+	summaryAfterSyncRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(summaryAfterSyncRec, summaryAfterSyncReq)
+	if summaryAfterSyncRec.Code != http.StatusOK {
+		t.Fatalf("handoff-room summary(after sync) status = %d, body = %s", summaryAfterSyncRec.Code, summaryAfterSyncRec.Body.String())
+	}
+	if !strings.Contains(summaryAfterSyncRec.Body.String(), `"recent_batch_runs"`) || !strings.Contains(summaryAfterSyncRec.Body.String(), `"created_artifact_ids"`) {
+		t.Fatalf("expected handoff-room recent batch runs in summary body, got %q", summaryAfterSyncRec.Body.String())
+	}
+
+	webReq := httptest.NewRequest(http.MethodGet, "/teams/handoff-room-team/r/handoff-room/?channel_id=main&actor_agent_id=agent://pc75/live-alpha", nil)
+	webRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(webRec, webReq)
+	if webRec.Code != http.StatusOK {
+		t.Fatalf("handoff-room web status = %d, body = %s", webRec.Code, webRec.Body.String())
+	}
+	webBody := webRec.Body.String()
+	for _, needle := range []string{"Handoff Room", "Summary API", "把发布验证交接给晚班", "交接验收完成", "提炼为 Handoff Summary", "最近批处理结果", "打开新建 Handoff Summary"} {
+		if !strings.Contains(webBody, needle) {
+			t.Fatalf("handoff-room web body missing %q: %q", needle, webBody)
+		}
+	}
+
+	channelReq := httptest.NewRequest(http.MethodGet, "/api/teams/handoff-room-team/channels/main", nil)
+	channelRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(channelRec, channelReq)
+	if channelRec.Code != http.StatusOK {
+		t.Fatalf("channel api status = %d, body = %s", channelRec.Code, channelRec.Body.String())
+	}
+	if !strings.Contains(channelRec.Body.String(), `"handoff-room"`) {
+		t.Fatalf("expected handoff-room in available room plugins, got %q", channelRec.Body.String())
+	}
+}
+
+func TestPluginBuildServesArtifactRoom(t *testing.T) {
+	t.Parallel()
+
+	site, root := buildTeamSite(t)
+	store, err := teamcore.OpenStore(filepath.Join(root, "store"))
+	if err != nil {
+		t.Fatalf("OpenStore error = %v", err)
+	}
+	teamRoot := filepath.Join(root, "store", "team", "artifact-room-team")
+	if err := os.MkdirAll(teamRoot, 0o755); err != nil {
+		t.Fatalf("MkdirAll error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(teamRoot, "team.json"), []byte(`{
+  "team_id":"artifact-room-team",
+  "title":"Artifact Room Team",
+  "owner_agent_id":"agent://pc75/live-alpha"
+}`), 0o644); err != nil {
+		t.Fatalf("WriteFile(team.json) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(teamRoot, "members.json"), []byte(`[
+  {"agent_id":"agent://pc75/live-alpha","role":"owner","status":"active"}
+]`), 0o644); err != nil {
+		t.Fatalf("WriteFile(members.json) error = %v", err)
+	}
+	if err := store.SaveChannelConfig("artifact-room-team", teamcore.ChannelConfig{
+		ChannelID: "main",
+		Plugin:    "artifact-room@1.0",
+		Theme:     "minimal",
+	}); err != nil {
+		t.Fatalf("SaveChannelConfig error = %v", err)
+	}
+
+	postReq := httptest.NewRequest(http.MethodPost, "/api/teams/artifact-room-team/r/artifact-room/messages", strings.NewReader(`{
+  "channel_id":"main",
+  "author_agent_id":"agent://pc75/live-alpha",
+  "kind":"proposal",
+  "content":"起草升级复盘文档",
+  "structured_data":{
+    "kind":"proposal",
+    "title":"起草升级复盘文档",
+    "artifact_kind":"report",
+    "summary":"先整理节点升级过程的初稿",
+    "outline":["版本变化","节点差异","回归结果"]
+  }
+}`))
+	postReq.RemoteAddr = "127.0.0.1:12345"
+	postReq.Header.Set("Content-Type", "application/json")
+	postRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(postRec, postReq)
+	if postRec.Code != http.StatusCreated {
+		t.Fatalf("artifact-room post status = %d, body = %s", postRec.Code, postRec.Body.String())
+	}
+
+	publishReq := httptest.NewRequest(http.MethodPost, "/api/teams/artifact-room-team/r/artifact-room/messages", strings.NewReader(`{
+  "channel_id":"main",
+  "author_agent_id":"agent://pc75/live-alpha",
+  "kind":"publish",
+  "content":"复盘文档已发布",
+  "structured_data":{
+    "kind":"publish",
+    "title":"复盘文档已发布",
+    "artifact_kind":"report",
+    "summary":"文档已经发到 Team Artifact",
+    "result":"发布到周会前材料",
+    "followups":["补截图","补变更链接"]
+  }
+}`))
+	publishReq.RemoteAddr = "127.0.0.1:12345"
+	publishReq.Header.Set("Content-Type", "application/json")
+	publishRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(publishRec, publishReq)
+	if publishRec.Code != http.StatusCreated {
+		t.Fatalf("artifact-room publish status = %d, body = %s", publishRec.Code, publishRec.Body.String())
+	}
+
+	summaryReq := httptest.NewRequest(http.MethodGet, "/api/teams/artifact-room-team/r/artifact-room/summary?channel_id=main", nil)
+	summaryRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(summaryRec, summaryReq)
+	if summaryRec.Code != http.StatusOK {
+		t.Fatalf("artifact-room summary status = %d, body = %s", summaryRec.Code, summaryRec.Body.String())
+	}
+	summaryBody := strings.ReplaceAll(summaryRec.Body.String(), " ", "")
+	for _, needle := range []string{`"proposal_count":1`, `"publish_count":1`, `"unbound_task_count":2`, `"suggested_doing_count":1`, `"suggested_done_count":1`} {
+		if !strings.Contains(summaryBody, needle) {
+			t.Fatalf("expected %q in artifact-room summary body, got %q", needle, summaryBody)
+		}
+	}
+
+	messages, err := store.LoadMessages("artifact-room-team", "main", 20)
+	if err != nil {
+		t.Fatalf("LoadMessages error = %v", err)
+	}
+	publishMessageID := ""
+	for _, msg := range messages {
+		if msg.MessageType == "publish" {
+			publishMessageID = msg.MessageID
+			break
+		}
+	}
+	if publishMessageID == "" {
+		t.Fatalf("expected artifact-room publish message id, got %#v", messages)
+	}
+
+	distillReq := httptest.NewRequest(http.MethodPost, "/api/teams/artifact-room-team/r/artifact-room/distill", strings.NewReader(`{
+  "channel_id":"main",
+  "message_id":"`+publishMessageID+`",
+  "actor_agent_id":"agent://pc75/live-alpha"
+}`))
+	distillReq.RemoteAddr = "127.0.0.1:12345"
+	distillReq.Header.Set("Content-Type", "application/json")
+	distillRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(distillRec, distillReq)
+	if distillRec.Code != http.StatusCreated {
+		t.Fatalf("artifact-room distill status = %d, body = %s", distillRec.Code, distillRec.Body.String())
+	}
+	if !strings.Contains(distillRec.Body.String(), `"artifact_kind":"artifact-brief"`) && !strings.Contains(distillRec.Body.String(), `"artifact_kind": "artifact-brief"`) {
+		t.Fatalf("unexpected artifact-room distill body: %q", distillRec.Body.String())
+	}
+
+	syncAllReq := httptest.NewRequest(http.MethodPost, "/api/teams/artifact-room-team/r/artifact-room/task-sync-all", strings.NewReader(`{
+  "channel_id":"main",
+  "actor_agent_id":"agent://pc75/live-alpha"
+}`))
+	syncAllReq.RemoteAddr = "127.0.0.1:12345"
+	syncAllReq.Header.Set("Content-Type", "application/json")
+	syncAllRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(syncAllRec, syncAllReq)
+	if syncAllRec.Code != http.StatusOK {
+		t.Fatalf("artifact-room task-sync-all status = %d, body = %s", syncAllRec.Code, syncAllRec.Body.String())
+	}
+	syncAllBody := strings.ReplaceAll(syncAllRec.Body.String(), " ", "")
+	for _, needle := range []string{`"status":"synced"`, `"synced_items":2`, `"task_created":2`} {
+		if !strings.Contains(syncAllBody, needle) {
+			t.Fatalf("expected %q in artifact-room task-sync-all body, got %q", needle, syncAllBody)
+		}
+	}
+
+	summaryAfterSyncReq := httptest.NewRequest(http.MethodGet, "/api/teams/artifact-room-team/r/artifact-room/summary?channel_id=main", nil)
+	summaryAfterSyncRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(summaryAfterSyncRec, summaryAfterSyncReq)
+	if summaryAfterSyncRec.Code != http.StatusOK {
+		t.Fatalf("artifact-room summary-after-sync status = %d, body = %s", summaryAfterSyncRec.Code, summaryAfterSyncRec.Body.String())
+	}
+	summaryAfterSyncBody := strings.ReplaceAll(summaryAfterSyncRec.Body.String(), " ", "")
+	for _, needle := range []string{`"bound_task_count":2`, `"unbound_task_count":0`} {
+		if !strings.Contains(summaryAfterSyncBody, needle) {
+			t.Fatalf("expected %q in artifact-room summary-after-sync body, got %q", needle, summaryAfterSyncBody)
+		}
+	}
+
+	webReq := httptest.NewRequest(http.MethodGet, "/teams/artifact-room-team/r/artifact-room/?channel_id=main&actor_agent_id=agent://pc75/live-alpha", nil)
+	webRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(webRec, webReq)
+	if webRec.Code != http.StatusOK {
+		t.Fatalf("artifact-room web status = %d, body = %s", webRec.Code, webRec.Body.String())
+	}
+	webBody := webRec.Body.String()
+	for _, needle := range []string{"Artifact Room", "Summary API", "起草升级复盘文档", "复盘文档已发布", "提炼为 Artifact Brief", "打开 Artifact Brief", "批量同步全部消息到任务", "最近批处理结果", "同步到任务", "打开新建任务", "打开绑定任务"} {
+		if !strings.Contains(webBody, needle) {
+			t.Fatalf("artifact-room web body missing %q: %q", needle, webBody)
+		}
+	}
+
+	channelReq := httptest.NewRequest(http.MethodGet, "/api/teams/artifact-room-team/channels/main", nil)
+	channelRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(channelRec, channelReq)
+	if channelRec.Code != http.StatusOK {
+		t.Fatalf("channel api status = %d, body = %s", channelRec.Code, channelRec.Body.String())
+	}
+	if !strings.Contains(channelRec.Body.String(), `"artifact-room"`) {
+		t.Fatalf("expected artifact-room in available room plugins, got %q", channelRec.Body.String())
+	}
+}
+
+func TestPluginBuildServesDecisionRoom(t *testing.T) {
+	t.Parallel()
+
+	site, root := buildTeamSite(t)
+	store, err := teamcore.OpenStore(filepath.Join(root, "store"))
+	if err != nil {
+		t.Fatalf("OpenStore error = %v", err)
+	}
+	teamRoot := filepath.Join(root, "store", "team", "decision-room-team")
+	if err := os.MkdirAll(teamRoot, 0o755); err != nil {
+		t.Fatalf("MkdirAll error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(teamRoot, "team.json"), []byte(`{
+  "team_id":"decision-room-team",
+  "title":"Decision Room Team",
+  "owner_agent_id":"agent://pc75/live-alpha"
+}`), 0o644); err != nil {
+		t.Fatalf("WriteFile(team.json) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(teamRoot, "members.json"), []byte(`[
+  {"agent_id":"agent://pc75/live-alpha","role":"owner","status":"active"}
+]`), 0o644); err != nil {
+		t.Fatalf("WriteFile(members.json) error = %v", err)
+	}
+	if err := store.SaveChannelConfig("decision-room-team", teamcore.ChannelConfig{
+		ChannelID: "main",
+		Plugin:    "decision-room@1.0",
+		Theme:     "minimal",
+	}); err != nil {
+		t.Fatalf("SaveChannelConfig error = %v", err)
+	}
+
+	postReq := httptest.NewRequest(http.MethodPost, "/api/teams/decision-room-team/r/decision-room/messages", strings.NewReader(`{
+  "channel_id":"main",
+  "author_agent_id":"agent://pc75/live-alpha",
+  "kind":"proposal",
+  "content":"迁移 Team 默认流程到 decision-room",
+  "structured_data":{
+    "kind":"proposal",
+    "title":"迁移 Team 默认流程到 decision-room",
+    "summary":"先整理候选方案和切换窗口",
+    "options":["保守迁移","分批切换"]
+  }
+}`))
+	postReq.RemoteAddr = "127.0.0.1:12345"
+	postReq.Header.Set("Content-Type", "application/json")
+	postRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(postRec, postReq)
+	if postRec.Code != http.StatusCreated {
+		t.Fatalf("decision-room post status = %d, body = %s", postRec.Code, postRec.Body.String())
+	}
+
+	decisionReq := httptest.NewRequest(http.MethodPost, "/api/teams/decision-room-team/r/decision-room/messages", strings.NewReader(`{
+  "channel_id":"main",
+  "author_agent_id":"agent://pc75/live-alpha",
+  "kind":"decision",
+  "content":"决定先按 10% 节点灰度切换",
+  "structured_data":{
+    "kind":"decision",
+    "title":"决定先按 10% 节点灰度切换",
+    "summary":"先小流量验证，再全量放开",
+    "outcome":"按 10% 灰度切换",
+    "followups":["补监控","补回滚按钮"]
+  }
+}`))
+	decisionReq.RemoteAddr = "127.0.0.1:12345"
+	decisionReq.Header.Set("Content-Type", "application/json")
+	decisionRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(decisionRec, decisionReq)
+	if decisionRec.Code != http.StatusCreated {
+		t.Fatalf("decision-room decision status = %d, body = %s", decisionRec.Code, decisionRec.Body.String())
+	}
+
+	summaryReq := httptest.NewRequest(http.MethodGet, "/api/teams/decision-room-team/r/decision-room/summary?channel_id=main", nil)
+	summaryRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(summaryRec, summaryReq)
+	if summaryRec.Code != http.StatusOK {
+		t.Fatalf("decision-room summary status = %d, body = %s", summaryRec.Code, summaryRec.Body.String())
+	}
+	summaryBody := strings.ReplaceAll(summaryRec.Body.String(), " ", "")
+	for _, needle := range []string{`"proposal_count":1`, `"decision_count":1`, `"unbound_task_count":2`, `"suggested_doing_count":1`, `"suggested_done_count":1`} {
+		if !strings.Contains(summaryBody, needle) {
+			t.Fatalf("expected %q in decision-room summary body, got %q", needle, summaryBody)
+		}
+	}
+
+	messages, err := store.LoadMessages("decision-room-team", "main", 20)
+	if err != nil {
+		t.Fatalf("LoadMessages error = %v", err)
+	}
+	decisionMessageID := ""
+	for _, msg := range messages {
+		if msg.MessageType == "decision" {
+			decisionMessageID = msg.MessageID
+			break
+		}
+	}
+	if decisionMessageID == "" {
+		t.Fatalf("expected decision-room decision message id, got %#v", messages)
+	}
+
+	distillReq := httptest.NewRequest(http.MethodPost, "/api/teams/decision-room-team/r/decision-room/distill", strings.NewReader(`{
+  "channel_id":"main",
+  "message_id":"`+decisionMessageID+`",
+  "actor_agent_id":"agent://pc75/live-alpha"
+}`))
+	distillReq.RemoteAddr = "127.0.0.1:12345"
+	distillReq.Header.Set("Content-Type", "application/json")
+	distillRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(distillRec, distillReq)
+	if distillRec.Code != http.StatusCreated {
+		t.Fatalf("decision-room distill status = %d, body = %s", distillRec.Code, distillRec.Body.String())
+	}
+	if !strings.Contains(distillRec.Body.String(), `"artifact_kind":"decision-note"`) && !strings.Contains(distillRec.Body.String(), `"artifact_kind": "decision-note"`) {
+		t.Fatalf("unexpected decision-room distill body: %q", distillRec.Body.String())
+	}
+
+	syncAllReq := httptest.NewRequest(http.MethodPost, "/api/teams/decision-room-team/r/decision-room/task-sync-all", strings.NewReader(`{
+  "channel_id":"main",
+  "actor_agent_id":"agent://pc75/live-alpha"
+}`))
+	syncAllReq.RemoteAddr = "127.0.0.1:12345"
+	syncAllReq.Header.Set("Content-Type", "application/json")
+	syncAllRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(syncAllRec, syncAllReq)
+	if syncAllRec.Code != http.StatusOK {
+		t.Fatalf("decision-room task-sync-all status = %d, body = %s", syncAllRec.Code, syncAllRec.Body.String())
+	}
+	syncAllBody := strings.ReplaceAll(syncAllRec.Body.String(), " ", "")
+	for _, needle := range []string{`"status":"synced"`, `"synced_items":2`, `"task_created":2`} {
+		if !strings.Contains(syncAllBody, needle) {
+			t.Fatalf("expected %q in decision-room task-sync-all body, got %q", needle, syncAllBody)
+		}
+	}
+
+	summaryAfterSyncReq := httptest.NewRequest(http.MethodGet, "/api/teams/decision-room-team/r/decision-room/summary?channel_id=main", nil)
+	summaryAfterSyncRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(summaryAfterSyncRec, summaryAfterSyncReq)
+	if summaryAfterSyncRec.Code != http.StatusOK {
+		t.Fatalf("decision-room summary-after-sync status = %d, body = %s", summaryAfterSyncRec.Code, summaryAfterSyncRec.Body.String())
+	}
+	summaryAfterSyncBody := strings.ReplaceAll(summaryAfterSyncRec.Body.String(), " ", "")
+	for _, needle := range []string{`"bound_task_count":2`, `"unbound_task_count":0`} {
+		if !strings.Contains(summaryAfterSyncBody, needle) {
+			t.Fatalf("expected %q in decision-room summary-after-sync body, got %q", needle, summaryAfterSyncBody)
+		}
+	}
+
+	webReq := httptest.NewRequest(http.MethodGet, "/teams/decision-room-team/r/decision-room/?channel_id=main&actor_agent_id=agent://pc75/live-alpha", nil)
+	webRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(webRec, webReq)
+	if webRec.Code != http.StatusOK {
+		t.Fatalf("decision-room web status = %d, body = %s", webRec.Code, webRec.Body.String())
+	}
+	webBody := webRec.Body.String()
+	for _, needle := range []string{"Decision Room", "Summary API", "迁移 Team 默认流程到 decision-room", "决定先按 10% 节点灰度切换", "提炼为 Decision Note", "打开 Decision Note", "批量同步全部消息到任务", "最近批处理结果", "打开新建任务", "打开绑定任务"} {
+		if !strings.Contains(webBody, needle) {
+			t.Fatalf("decision-room web body missing %q: %q", needle, webBody)
+		}
+	}
+
+	channelReq := httptest.NewRequest(http.MethodGet, "/api/teams/decision-room-team/channels/main", nil)
+	channelRec := httptest.NewRecorder()
+	site.Handler.ServeHTTP(channelRec, channelReq)
+	if channelRec.Code != http.StatusOK {
+		t.Fatalf("channel api status = %d, body = %s", channelRec.Code, channelRec.Body.String())
+	}
+	if !strings.Contains(channelRec.Body.String(), `"decision-room"`) {
+		t.Fatalf("expected decision-room in available room plugins, got %q", channelRec.Body.String())
 	}
 }
 

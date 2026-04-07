@@ -114,6 +114,8 @@ type reviewRoomDecisionThreadDigest struct {
 	BoundTaskLink       string    `json:"bound_task_link,omitempty"`
 	BoundArtifactID     string    `json:"bound_artifact_id,omitempty"`
 	BoundArtifactLink   string    `json:"bound_artifact_link,omitempty"`
+	WorkflowState       string    `json:"workflow_state,omitempty"`
+	WorkflowLabel       string    `json:"workflow_label,omitempty"`
 	SuggestedTaskStatus string    `json:"suggested_task_status,omitempty"`
 	TaskSearchLink      string    `json:"task_search_link,omitempty"`
 	ArtifactSearchLink  string    `json:"artifact_search_link,omitempty"`
@@ -145,35 +147,51 @@ type reviewRoomSummary struct {
 }
 
 type reviewRoomThreadWorkbench struct {
-	TotalThreads            int                              `json:"total_threads"`
-	BoundTaskCount          int                              `json:"bound_task_count"`
-	BoundArtifactCount      int                              `json:"bound_artifact_count"`
-	MissingTaskCount        int                              `json:"missing_task_count"`
-	MissingArtifactCount    int                              `json:"missing_artifact_count"`
-	SuggestedBlockedCount   int                              `json:"suggested_blocked_count"`
-	SuggestedDoingCount     int                              `json:"suggested_doing_count"`
-	SuggestedDoneCount      int                              `json:"suggested_done_count"`
-	AutoCreateTaskThreads   []reviewRoomDecisionThreadDigest `json:"auto_create_task_threads,omitempty"`
-	MissingArtifactThreads  []reviewRoomDecisionThreadDigest `json:"missing_artifact_threads,omitempty"`
-	SuggestedBlockedThreads []reviewRoomDecisionThreadDigest `json:"suggested_blocked_threads,omitempty"`
-	SuggestedDoingThreads   []reviewRoomDecisionThreadDigest `json:"suggested_doing_threads,omitempty"`
-	SuggestedDoneThreads    []reviewRoomDecisionThreadDigest `json:"suggested_done_threads,omitempty"`
+	TotalThreads               int                              `json:"total_threads"`
+	BoundTaskCount             int                              `json:"bound_task_count"`
+	BoundArtifactCount         int                              `json:"bound_artifact_count"`
+	MissingTaskCount           int                              `json:"missing_task_count"`
+	MissingArtifactCount       int                              `json:"missing_artifact_count"`
+	NeedsRiskFollowupCount     int                              `json:"needs_risk_followup_count"`
+	NeedsReviewCount           int                              `json:"needs_review_count"`
+	ReadyToDistillCount        int                              `json:"ready_to_distill_count"`
+	DistilledUnassignedCount   int                              `json:"distilled_unassigned_count"`
+	CompletedCount             int                              `json:"completed_count"`
+	SuggestedBlockedCount      int                              `json:"suggested_blocked_count"`
+	SuggestedDoingCount        int                              `json:"suggested_doing_count"`
+	SuggestedDoneCount         int                              `json:"suggested_done_count"`
+	AutoCreateTaskThreads      []reviewRoomDecisionThreadDigest `json:"auto_create_task_threads,omitempty"`
+	MissingArtifactThreads     []reviewRoomDecisionThreadDigest `json:"missing_artifact_threads,omitempty"`
+	NeedsRiskFollowupThreads   []reviewRoomDecisionThreadDigest `json:"needs_risk_followup_threads,omitempty"`
+	NeedsReviewThreads         []reviewRoomDecisionThreadDigest `json:"needs_review_threads,omitempty"`
+	ReadyToDistillThreads      []reviewRoomDecisionThreadDigest `json:"ready_to_distill_threads,omitempty"`
+	DistilledUnassignedThreads []reviewRoomDecisionThreadDigest `json:"distilled_unassigned_threads,omitempty"`
+	CompletedThreads           []reviewRoomDecisionThreadDigest `json:"completed_threads,omitempty"`
+	SuggestedBlockedThreads    []reviewRoomDecisionThreadDigest `json:"suggested_blocked_threads,omitempty"`
+	SuggestedDoingThreads      []reviewRoomDecisionThreadDigest `json:"suggested_doing_threads,omitempty"`
+	SuggestedDoneThreads       []reviewRoomDecisionThreadDigest `json:"suggested_done_threads,omitempty"`
 }
 
 type reviewRoomBatchRun struct {
-	CreatedAt             time.Time `json:"created_at"`
-	ActorAgentID          string    `json:"actor_agent_id,omitempty"`
-	SyncedThreads         int       `json:"synced_threads"`
-	TaskCreated           int       `json:"task_created"`
-	ArtifactCreated       int       `json:"artifact_created"`
-	TotalThreads          int       `json:"total_threads"`
-	SuggestedBlockedCount int       `json:"suggested_blocked_count"`
-	SuggestedDoingCount   int       `json:"suggested_doing_count"`
-	SuggestedDoneCount    int       `json:"suggested_done_count"`
-	CreatedTaskIDs        []string  `json:"created_task_ids,omitempty"`
-	CreatedArtifactIDs    []string  `json:"created_artifact_ids,omitempty"`
-	CreatedTaskLinks      []string  `json:"created_task_links,omitempty"`
-	CreatedArtifactLinks  []string  `json:"created_artifact_links,omitempty"`
+	CreatedAt                time.Time `json:"created_at"`
+	ActorAgentID             string    `json:"actor_agent_id,omitempty"`
+	SyncedThreads            int       `json:"synced_threads"`
+	TaskCreated              int       `json:"task_created"`
+	ArtifactCreated          int       `json:"artifact_created"`
+	TotalThreads             int       `json:"total_threads"`
+	SuggestedBlockedCount    int       `json:"suggested_blocked_count"`
+	SuggestedDoingCount      int       `json:"suggested_doing_count"`
+	SuggestedDoneCount       int       `json:"suggested_done_count"`
+	NeedsRiskFollowupCount   int       `json:"needs_risk_followup_count"`
+	NeedsReviewCount         int       `json:"needs_review_count"`
+	ReadyToDistillCount      int       `json:"ready_to_distill_count"`
+	DistilledUnassignedCount int       `json:"distilled_unassigned_count"`
+	CompletedCount           int       `json:"completed_count"`
+	HistoryLink              string    `json:"history_link,omitempty"`
+	CreatedTaskIDs           []string  `json:"created_task_ids,omitempty"`
+	CreatedArtifactIDs       []string  `json:"created_artifact_ids,omitempty"`
+	CreatedTaskLinks         []string  `json:"created_task_links,omitempty"`
+	CreatedArtifactLinks     []string  `json:"created_artifact_links,omitempty"`
 }
 
 type reviewRoomChannelLink struct {
@@ -756,6 +774,22 @@ func handleSyncAllReviewRoomThreads(store *teamcore.Store, teamID string, w http
 			}
 		}
 	}
+	messages, err = store.LoadAllMessagesCtx(r.Context(), teamID, req.ChannelID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	artifacts, err = store.LoadArtifactsCtx(r.Context(), teamID, 200)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	history, err = store.LoadHistoryCtx(r.Context(), teamID, 200)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	updated := buildReviewRoomPageData(teamID, req.ChannelID, req.ActorAgentID, "", "", messages, filterReviewRoomMessages(messages, ""), artifacts, history)
 	_ = store.AppendHistoryCtx(r.Context(), teamID, teamcore.ChangeEvent{
 		TeamID:       teamID,
 		Scope:        "room",
@@ -765,18 +799,23 @@ func handleSyncAllReviewRoomThreads(store *teamcore.Store, teamID string, w http
 		ActorAgentID: req.ActorAgentID,
 		Source:       "review-room",
 		Metadata: map[string]any{
-			"channel_id":              req.ChannelID,
-			"message_scope":           "review-room",
-			"batch_action":            "thread-sync-all",
-			"synced_threads":          synced,
-			"task_created":            taskCreated,
-			"artifact_created":        artifactCreated,
-			"created_task_ids":        createdTaskIDs,
-			"created_artifact_ids":    createdArtifactIDs,
-			"total_threads":           data.ThreadWorkbench.TotalThreads,
-			"suggested_blocked_count": data.ThreadWorkbench.SuggestedBlockedCount,
-			"suggested_doing_count":   data.ThreadWorkbench.SuggestedDoingCount,
-			"suggested_done_count":    data.ThreadWorkbench.SuggestedDoneCount,
+			"channel_id":                 req.ChannelID,
+			"message_scope":              "review-room",
+			"batch_action":               "thread-sync-all",
+			"synced_threads":             synced,
+			"task_created":               taskCreated,
+			"artifact_created":           artifactCreated,
+			"created_task_ids":           createdTaskIDs,
+			"created_artifact_ids":       createdArtifactIDs,
+			"total_threads":              updated.ThreadWorkbench.TotalThreads,
+			"suggested_blocked_count":    updated.ThreadWorkbench.SuggestedBlockedCount,
+			"suggested_doing_count":      updated.ThreadWorkbench.SuggestedDoingCount,
+			"suggested_done_count":       updated.ThreadWorkbench.SuggestedDoneCount,
+			"needs_risk_followup_count":  updated.ThreadWorkbench.NeedsRiskFollowupCount,
+			"needs_review_count":         updated.ThreadWorkbench.NeedsReviewCount,
+			"ready_to_distill_count":     updated.ThreadWorkbench.ReadyToDistillCount,
+			"distilled_unassigned_count": updated.ThreadWorkbench.DistilledUnassignedCount,
+			"completed_count":            updated.ThreadWorkbench.CompletedCount,
 		},
 		CreatedAt: time.Now().UTC(),
 	})
@@ -1028,6 +1067,11 @@ func limitReviewRoomDecisionThreads(items []reviewRoomDecisionThreadDigest, limi
 func limitReviewRoomThreadWorkbench(workbench reviewRoomThreadWorkbench, limit int) reviewRoomThreadWorkbench {
 	workbench.AutoCreateTaskThreads = limitReviewRoomDecisionThreads(workbench.AutoCreateTaskThreads, limit)
 	workbench.MissingArtifactThreads = limitReviewRoomDecisionThreads(workbench.MissingArtifactThreads, limit)
+	workbench.NeedsRiskFollowupThreads = limitReviewRoomDecisionThreads(workbench.NeedsRiskFollowupThreads, limit)
+	workbench.NeedsReviewThreads = limitReviewRoomDecisionThreads(workbench.NeedsReviewThreads, limit)
+	workbench.ReadyToDistillThreads = limitReviewRoomDecisionThreads(workbench.ReadyToDistillThreads, limit)
+	workbench.DistilledUnassignedThreads = limitReviewRoomDecisionThreads(workbench.DistilledUnassignedThreads, limit)
+	workbench.CompletedThreads = limitReviewRoomDecisionThreads(workbench.CompletedThreads, limit)
 	workbench.SuggestedBlockedThreads = limitReviewRoomDecisionThreads(workbench.SuggestedBlockedThreads, limit)
 	workbench.SuggestedDoingThreads = limitReviewRoomDecisionThreads(workbench.SuggestedDoingThreads, limit)
 	workbench.SuggestedDoneThreads = limitReviewRoomDecisionThreads(workbench.SuggestedDoneThreads, limit)
@@ -1209,7 +1253,7 @@ func buildReviewRoomDecisionThreads(cards []reviewRoomCardView) []reviewRoomDeci
 	out := make([]reviewRoomDecisionThreadDigest, 0, len(order))
 	for _, key := range order {
 		item := byDecision[key]
-		out = append(out, reviewRoomDecisionThreadDigest{
+		thread := reviewRoomDecisionThreadDigest{
 			Decision:          item.decision,
 			Title:             item.title,
 			DecisionCount:     item.decisionCount,
@@ -1233,7 +1277,10 @@ func buildReviewRoomDecisionThreads(cards []reviewRoomCardView) []reviewRoomDeci
 				PendingReview:  item.pendingReview,
 				DistilledCount: item.distilledCount,
 			}),
-		})
+		}
+		thread.WorkflowState = reviewRoomWorkflowState(thread)
+		thread.WorkflowLabel = reviewRoomWorkflowLabel(thread.WorkflowState)
+		out = append(out, thread)
 	}
 	return out
 }
@@ -1254,6 +1301,23 @@ func buildReviewRoomThreadWorkbench(threads []reviewRoomDecisionThreadDigest) re
 		} else {
 			workbench.MissingArtifactCount++
 			workbench.MissingArtifactThreads = append(workbench.MissingArtifactThreads, thread)
+		}
+		switch strings.TrimSpace(thread.WorkflowState) {
+		case "needs-risk-followup":
+			workbench.NeedsRiskFollowupCount++
+			workbench.NeedsRiskFollowupThreads = append(workbench.NeedsRiskFollowupThreads, thread)
+		case "needs-review":
+			workbench.NeedsReviewCount++
+			workbench.NeedsReviewThreads = append(workbench.NeedsReviewThreads, thread)
+		case "ready-to-distill":
+			workbench.ReadyToDistillCount++
+			workbench.ReadyToDistillThreads = append(workbench.ReadyToDistillThreads, thread)
+		case "distilled-unassigned":
+			workbench.DistilledUnassignedCount++
+			workbench.DistilledUnassignedThreads = append(workbench.DistilledUnassignedThreads, thread)
+		case "completed":
+			workbench.CompletedCount++
+			workbench.CompletedThreads = append(workbench.CompletedThreads, thread)
 		}
 		switch strings.TrimSpace(thread.SuggestedTaskStatus) {
 		case "blocked":
@@ -1496,23 +1560,58 @@ func reviewRoomSuggestedTaskStatus(thread reviewRoomDecisionThreadDigest) string
 	}
 }
 
+func reviewRoomWorkflowState(thread reviewRoomDecisionThreadDigest) string {
+	switch {
+	case thread.OpenRiskCount > 0:
+		return "needs-risk-followup"
+	case thread.PendingReview > 0:
+		return "needs-review"
+	case thread.DecisionCount > 0 && thread.DistilledCount == 0:
+		return "ready-to-distill"
+	case thread.DistilledCount > 0 && strings.TrimSpace(thread.BoundTaskID) == "":
+		return "distilled-unassigned"
+	case thread.DistilledCount > 0 && strings.TrimSpace(thread.SuggestedTaskStatus) == "done":
+		return "completed"
+	default:
+		return "active"
+	}
+}
+
+func reviewRoomWorkflowLabel(state string) string {
+	switch strings.TrimSpace(state) {
+	case "needs-risk-followup":
+		return "待风险跟进"
+	case "needs-review":
+		return "待评审"
+	case "ready-to-distill":
+		return "待沉淀"
+	case "distilled-unassigned":
+		return "已沉淀待挂接"
+	case "completed":
+		return "已完成"
+	default:
+		return "进行中"
+	}
+}
+
 func reviewRoomApplyThreadArtifactBindings(teamID, channelID string, threads []reviewRoomDecisionThreadDigest, artifacts []teamcore.Artifact) []reviewRoomDecisionThreadDigest {
 	for i := range threads {
 		artifact, ok := reviewRoomDecisionArtifact(channelID, threads[i].Decision, artifacts)
-		if !ok {
-			continue
+		if ok {
+			if threads[i].BoundTaskID == "" && strings.TrimSpace(artifact.TaskID) != "" {
+				threads[i].BoundTaskID = strings.TrimSpace(artifact.TaskID)
+				threads[i].BoundTaskLink = reviewRoomTaskLink(teamID, threads[i].BoundTaskID)
+			}
+			if threads[i].BoundArtifactID == "" && strings.TrimSpace(artifact.ArtifactID) != "" {
+				threads[i].BoundArtifactID = strings.TrimSpace(artifact.ArtifactID)
+				threads[i].BoundArtifactLink = reviewRoomArtifactLink(teamID, threads[i].BoundArtifactID)
+			}
+			if threads[i].LatestArtifact == "" {
+				threads[i].LatestArtifact = reviewRoomArtifactLink(teamID, artifact.ArtifactID)
+			}
 		}
-		if threads[i].BoundTaskID == "" && strings.TrimSpace(artifact.TaskID) != "" {
-			threads[i].BoundTaskID = strings.TrimSpace(artifact.TaskID)
-			threads[i].BoundTaskLink = reviewRoomTaskLink(teamID, threads[i].BoundTaskID)
-		}
-		if threads[i].BoundArtifactID == "" && strings.TrimSpace(artifact.ArtifactID) != "" {
-			threads[i].BoundArtifactID = strings.TrimSpace(artifact.ArtifactID)
-			threads[i].BoundArtifactLink = reviewRoomArtifactLink(teamID, threads[i].BoundArtifactID)
-		}
-		if threads[i].LatestArtifact == "" {
-			threads[i].LatestArtifact = reviewRoomArtifactLink(teamID, artifact.ArtifactID)
-		}
+		threads[i].WorkflowState = reviewRoomWorkflowState(threads[i])
+		threads[i].WorkflowLabel = reviewRoomWorkflowLabel(threads[i].WorkflowState)
 	}
 	return threads
 }
@@ -1673,17 +1772,23 @@ func buildReviewRoomBatchRuns(teamID, channelID string, history []teamcore.Chang
 			continue
 		}
 		out = append(out, reviewRoomBatchRun{
-			CreatedAt:             event.CreatedAt,
-			ActorAgentID:          strings.TrimSpace(event.ActorAgentID),
-			SyncedThreads:         intMetadata(event.Metadata, "synced_threads"),
-			TaskCreated:           intMetadata(event.Metadata, "task_created"),
-			ArtifactCreated:       intMetadata(event.Metadata, "artifact_created"),
-			TotalThreads:          intMetadata(event.Metadata, "total_threads"),
-			SuggestedBlockedCount: intMetadata(event.Metadata, "suggested_blocked_count"),
-			SuggestedDoingCount:   intMetadata(event.Metadata, "suggested_doing_count"),
-			SuggestedDoneCount:    intMetadata(event.Metadata, "suggested_done_count"),
-			CreatedTaskIDs:        stringSliceMetadata(event.Metadata, "created_task_ids"),
-			CreatedArtifactIDs:    stringSliceMetadata(event.Metadata, "created_artifact_ids"),
+			CreatedAt:                event.CreatedAt,
+			ActorAgentID:             strings.TrimSpace(event.ActorAgentID),
+			SyncedThreads:            intMetadata(event.Metadata, "synced_threads"),
+			TaskCreated:              intMetadata(event.Metadata, "task_created"),
+			ArtifactCreated:          intMetadata(event.Metadata, "artifact_created"),
+			TotalThreads:             intMetadata(event.Metadata, "total_threads"),
+			SuggestedBlockedCount:    intMetadata(event.Metadata, "suggested_blocked_count"),
+			SuggestedDoingCount:      intMetadata(event.Metadata, "suggested_doing_count"),
+			SuggestedDoneCount:       intMetadata(event.Metadata, "suggested_done_count"),
+			NeedsRiskFollowupCount:   intMetadata(event.Metadata, "needs_risk_followup_count"),
+			NeedsReviewCount:         intMetadata(event.Metadata, "needs_review_count"),
+			ReadyToDistillCount:      intMetadata(event.Metadata, "ready_to_distill_count"),
+			DistilledUnassignedCount: intMetadata(event.Metadata, "distilled_unassigned_count"),
+			CompletedCount:           intMetadata(event.Metadata, "completed_count"),
+			HistoryLink:              reviewRoomBatchHistoryLink(teamID, channelID),
+			CreatedTaskIDs:           stringSliceMetadata(event.Metadata, "created_task_ids"),
+			CreatedArtifactIDs:       stringSliceMetadata(event.Metadata, "created_artifact_ids"),
 		})
 		last := &out[len(out)-1]
 		last.CreatedTaskLinks = buildReviewRoomTaskLinks(teamID, last.CreatedTaskIDs)
@@ -1710,6 +1815,14 @@ func buildReviewRoomArtifactLinks(teamID string, artifactIDs []string) []string 
 		}
 	}
 	return out
+}
+
+func reviewRoomBatchHistoryLink(teamID, channelID string) string {
+	channelID = strings.TrimSpace(channelID)
+	if teamID == "" || channelID == "" {
+		return ""
+	}
+	return fmt.Sprintf("/teams/%s/history?scope=room&q=%s", teamID, url.QueryEscape(channelID))
 }
 
 func stringMetadata(metadata map[string]any, key string) string {

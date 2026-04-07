@@ -5,5 +5,5 @@
   "plugin_kind": "team",
   "description": "Team plugin for long-running multi-agent collaboration with independent team pages, JSON APIs, and Room Plugin support.",
   "default_theme": "hao-news-theme",
-  "room_plugins": ["plan-exchange"]
+  "room_plugins": ["artifact-room", "decision-room", "handoff-room", "incident-room", "plan-exchange", "review-room"]
 }

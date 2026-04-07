@@ -1,0 +1,155 @@
+{{define "channel.html"}}
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Artifact Room</title>
+  <style>
+    body { font-family: monospace; max-width: 960px; margin: 0 auto; padding: 20px; background: #fafafa; color: #222; }
+    .links, .filters { display: flex; gap: 10px; flex-wrap: wrap; margin: 10px 0 16px; }
+    .links a, .filters a { color: #2563eb; text-decoration: none; }
+    .card { border: 1px solid #ddd; background: #fff; padding: 12px; margin: 12px 0; }
+    .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 18px 0; }
+    .panel { border: 1px solid #ddd; background: #fff; padding: 12px; }
+    .meta { color: #666; font-size: 12px; margin-bottom: 8px; }
+    textarea, input, select { width: 100%; box-sizing: border-box; margin-top: 4px; }
+    label { display: block; margin: 10px 0; }
+    .notice { background: #eff6ff; border-left: 3px solid #2563eb; padding: 8px 12px; margin: 12px 0; }
+    .structured { white-space: pre-wrap; background: #f4f4f4; padding: 8px; }
+  </style>
+</head>
+<body>
+  <h1>Artifact Room / {{.TeamID}} / {{.ChannelID}}</h1>
+  <div class="links">
+    <a href="/teams/{{.TeamID}}/channels/{{.ChannelID}}">返回频道</a>
+    <a href="/api/teams/{{.TeamID}}/r/artifact-room/?channel_id={{.ChannelID}}">Room API</a>
+    <a href="/api/teams/{{.TeamID}}/r/artifact-room/summary?channel_id={{.ChannelID}}">Summary API</a>
+    <a href="{{.ArtifactLink}}">查看 Artifact Brief</a>
+    <a href="{{.HistoryLink}}">查看 Team 历史</a>
+  </div>
+  {{if .Notice}}<div class="notice">{{.Notice}}</div>{{end}}
+  <div class="filters">
+    <span>proposal {{.ProposalCount}}</span>
+    <span>revision {{.RevisionCount}}</span>
+    <span>publish {{.PublishCount}}</span>
+    <span>distilled {{.DistilledCount}}</span>
+    <span>绑定任务 {{.BoundTaskCount}}</span>
+    <span>待挂任务 {{.UnboundTaskCount}}</span>
+    <span>建议 doing {{.SuggestedDoingCount}}</span>
+    <span>建议 done {{.SuggestedDoneCount}}</span>
+  </div>
+  <div class="filters">
+    <a href="/teams/{{.TeamID}}/r/artifact-room/?channel_id={{.ChannelID}}&actor_agent_id={{.ActorAgentID}}">全部</a>
+    <a href="/teams/{{.TeamID}}/r/artifact-room/?channel_id={{.ChannelID}}&kind=proposal&actor_agent_id={{.ActorAgentID}}">Proposal</a>
+    <a href="/teams/{{.TeamID}}/r/artifact-room/?channel_id={{.ChannelID}}&kind=revision&actor_agent_id={{.ActorAgentID}}">Revision</a>
+    <a href="/teams/{{.TeamID}}/r/artifact-room/?channel_id={{.ChannelID}}&kind=publish&actor_agent_id={{.ActorAgentID}}">Publish</a>
+  </div>
+  <div class="links">
+    <form method="post" action="/teams/{{.TeamID}}/r/artifact-room/task-sync-all">
+      <input type="hidden" name="channel_id" value="{{.ChannelID}}">
+      <input type="hidden" name="actor_agent_id" value="{{.ActorAgentID}}">
+      <button type="submit">批量同步全部消息到任务</button>
+    </form>
+  </div>
+
+  <section class="grid">
+    <article class="panel">
+      <h2>提交 Proposal</h2>
+      <form method="post" action="/teams/{{.TeamID}}/r/artifact-room/messages">
+        <input type="hidden" name="channel_id" value="{{.ChannelID}}">
+        <input type="hidden" name="actor_agent_id" value="{{.ActorAgentID}}">
+        <input type="hidden" name="kind" value="proposal">
+        <label>标题<input name="title"></label>
+        <label>Artifact Kind<input name="artifact_kind" placeholder="例如：spec / report / memo"></label>
+        <label>Task ID<input name="task_id"></label>
+        <label>Owner<input name="owner"></label>
+        <label>摘要<textarea name="summary" rows="3"></textarea></label>
+        <label>Outline<textarea name="outline" rows="4"></textarea></label>
+        <button type="submit">发送 Proposal</button>
+      </form>
+    </article>
+    <article class="panel">
+      <h2>提交 Revision</h2>
+      <form method="post" action="/teams/{{.TeamID}}/r/artifact-room/messages">
+        <input type="hidden" name="channel_id" value="{{.ChannelID}}">
+        <input type="hidden" name="actor_agent_id" value="{{.ActorAgentID}}">
+        <input type="hidden" name="kind" value="revision">
+        <label>标题<input name="title"></label>
+        <label>Artifact Kind<input name="artifact_kind"></label>
+        <label>Task ID<input name="task_id"></label>
+        <label>Owner<input name="owner"></label>
+        <label>摘要<textarea name="summary" rows="3"></textarea></label>
+        <label>Changes<textarea name="changes" rows="4"></textarea></label>
+        <button type="submit">发送 Revision</button>
+      </form>
+    </article>
+    <article class="panel">
+      <h2>提交 Publish</h2>
+      <form method="post" action="/teams/{{.TeamID}}/r/artifact-room/messages">
+        <input type="hidden" name="channel_id" value="{{.ChannelID}}">
+        <input type="hidden" name="actor_agent_id" value="{{.ActorAgentID}}">
+        <input type="hidden" name="kind" value="publish">
+        <label>标题<input name="title"></label>
+        <label>Artifact Kind<input name="artifact_kind"></label>
+        <label>Task ID<input name="task_id"></label>
+        <label>Owner<input name="owner"></label>
+        <label>摘要<textarea name="summary" rows="3"></textarea></label>
+        <label>Result<textarea name="result" rows="3"></textarea></label>
+        <label>Followups<textarea name="followups" rows="4"></textarea></label>
+        <button type="submit">发送 Publish</button>
+      </form>
+    </article>
+  </section>
+
+  {{if .RecentBatchRuns}}
+    <section class="panel">
+      <h2>最近批处理结果</h2>
+      {{range .RecentBatchRuns}}
+        <article class="card">
+          <div class="meta">{{.CreatedAt.Format "2006-01-02 15:04"}} · {{.ActorAgentID}}</div>
+          <p>已同步 {{.SyncedItems}} / {{.TotalMessages}} 条，新增任务 {{.TaskCreated}}，新增产物 {{.ArtifactCreated}}。</p>
+          <p>建议状态：doing {{.SuggestedDoingCount}} · done {{.SuggestedDoneCount}}</p>
+          <div class="links">
+            {{if .HistoryLink}}<a href="{{.HistoryLink}}">查看本轮批处理历史</a>{{end}}
+            {{range .CreatedTaskLinks}}<a href="{{.}}">打开新建任务</a>{{end}}
+            {{range .CreatedArtifactLinks}}<a href="{{.}}">打开新建 Artifact Brief</a>{{end}}
+          </div>
+        </article>
+      {{end}}
+    </section>
+  {{end}}
+
+  {{range .Cards}}
+    <article class="card">
+      <div class="meta">{{.CreatedAt.Format "2006-01-02 15:04"}} · {{.AuthorAgentID}} · {{.KindLabel}}</div>
+      <strong>{{if .Title}}{{.Title}}{{else}}{{.Content}}{{end}}</strong>
+      {{if .Owner}}<p><strong>Owner：</strong>{{.Owner}}</p>{{end}}
+      {{if .ArtifactKind}}<p><strong>Artifact Kind：</strong>{{.ArtifactKind}}</p>{{end}}
+      {{if .TaskLink}}<p><a href="{{.TaskLink}}">打开绑定任务</a></p>{{end}}
+      {{if .Summary}}<p>{{.Summary}}</p>{{end}}
+      <form method="post" action="/teams/{{$.TeamID}}/r/artifact-room/task-sync">
+        <input type="hidden" name="channel_id" value="{{$.ChannelID}}">
+        <input type="hidden" name="message_id" value="{{.MessageID}}">
+        <input type="hidden" name="task_id" value="{{.TaskID}}">
+        <input type="hidden" name="actor_agent_id" value="{{$.ActorAgentID}}">
+        <button type="submit">同步到任务</button>
+      </form>
+      {{if .Distilled}}
+        <p><a href="{{.DistillArtifact}}">打开 Artifact Brief{{if .DistillTitle}}：{{.DistillTitle}}{{end}}</a></p>
+      {{else}}
+        <form method="post" action="/teams/{{$.TeamID}}/r/artifact-room/distill">
+          <input type="hidden" name="channel_id" value="{{$.ChannelID}}">
+          <input type="hidden" name="message_id" value="{{.MessageID}}">
+          <input type="hidden" name="actor_agent_id" value="{{$.ActorAgentID}}">
+          <button type="submit">提炼为 Artifact Brief</button>
+        </form>
+      {{end}}
+      {{if .StructuredJSON}}<pre class="structured">{{.StructuredJSON}}</pre>{{end}}
+    </article>
+  {{else}}
+    <p>当前还没有 artifact-room 消息。</p>
+  {{end}}
+</body>
+</html>
+{{end}}

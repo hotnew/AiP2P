@@ -133,6 +133,11 @@
       <span>待自动建任务 {{.ThreadWorkbench.MissingTaskCount}}</span>
       <span>已沉淀产物 {{.ThreadWorkbench.BoundArtifactCount}}</span>
       <span>待补产物 {{.ThreadWorkbench.MissingArtifactCount}}</span>
+      <span>待风险跟进 {{.ThreadWorkbench.NeedsRiskFollowupCount}}</span>
+      <span>待评审 {{.ThreadWorkbench.NeedsReviewCount}}</span>
+      <span>待沉淀 {{.ThreadWorkbench.ReadyToDistillCount}}</span>
+      <span>已沉淀待挂接 {{.ThreadWorkbench.DistilledUnassignedCount}}</span>
+      <span>已完成 {{.ThreadWorkbench.CompletedCount}}</span>
       <span>建议 blocked {{.ThreadWorkbench.SuggestedBlockedCount}}</span>
       <span>建议 doing {{.ThreadWorkbench.SuggestedDoingCount}}</span>
       <span>建议 done {{.ThreadWorkbench.SuggestedDoneCount}}</span>
@@ -162,6 +167,66 @@
           <p>当前没有缺少线程级沉淀的结论线程。</p>
         {{end}}
       </article>
+      <article class="digest">
+        <h3>待风险跟进</h3>
+        {{range .ThreadWorkbench.NeedsRiskFollowupThreads}}
+          <div class="card">
+            <strong>{{if .Title}}{{.Title}}{{else}}{{.Decision}}{{end}}</strong>
+            <div class="meta">{{.WorkflowLabel}} · 建议状态 {{.SuggestedTaskStatus}}</div>
+            <p><a href="#thread-{{urlquery .Decision}}">跳到结论线程</a></p>
+          </div>
+        {{else}}
+          <p>当前没有待风险跟进的结论线程。</p>
+        {{end}}
+      </article>
+      <article class="digest">
+        <h3>待评审</h3>
+        {{range .ThreadWorkbench.NeedsReviewThreads}}
+          <div class="card">
+            <strong>{{if .Title}}{{.Title}}{{else}}{{.Decision}}{{end}}</strong>
+            <div class="meta">{{.WorkflowLabel}} · 建议状态 {{.SuggestedTaskStatus}}</div>
+            <p><a href="#thread-{{urlquery .Decision}}">跳到结论线程</a></p>
+          </div>
+        {{else}}
+          <p>当前没有待评审的结论线程。</p>
+        {{end}}
+      </article>
+      <article class="digest">
+        <h3>待沉淀</h3>
+        {{range .ThreadWorkbench.ReadyToDistillThreads}}
+          <div class="card">
+            <strong>{{if .Title}}{{.Title}}{{else}}{{.Decision}}{{end}}</strong>
+            <div class="meta">{{.WorkflowLabel}} · 建议状态 {{.SuggestedTaskStatus}}</div>
+            <p><a href="#thread-{{urlquery .Decision}}">跳到结论线程</a></p>
+          </div>
+        {{else}}
+          <p>当前没有待沉淀的结论线程。</p>
+        {{end}}
+      </article>
+      <article class="digest">
+        <h3>已沉淀待挂接</h3>
+        {{range .ThreadWorkbench.DistilledUnassignedThreads}}
+          <div class="card">
+            <strong>{{if .Title}}{{.Title}}{{else}}{{.Decision}}{{end}}</strong>
+            <div class="meta">{{.WorkflowLabel}} · 建议状态 {{.SuggestedTaskStatus}}</div>
+            <p><a href="#thread-{{urlquery .Decision}}">跳到结论线程</a></p>
+          </div>
+        {{else}}
+          <p>当前没有已沉淀待挂接的结论线程。</p>
+        {{end}}
+      </article>
+      <article class="digest">
+        <h3>已完成</h3>
+        {{range .ThreadWorkbench.CompletedThreads}}
+          <div class="card">
+            <strong>{{if .Title}}{{.Title}}{{else}}{{.Decision}}{{end}}</strong>
+            <div class="meta">{{.WorkflowLabel}} · 建议状态 {{.SuggestedTaskStatus}}</div>
+            <p><a href="#thread-{{urlquery .Decision}}">跳到结论线程</a></p>
+          </div>
+        {{else}}
+          <p>当前没有已完成的结论线程。</p>
+        {{end}}
+      </article>
     </div>
   </section>
   <section class="digest">
@@ -171,6 +236,10 @@
         <div class="meta">{{.CreatedAt.Format "2006-01-02 15:04"}}{{if .ActorAgentID}} · {{.ActorAgentID}}{{end}}</div>
         <div class="meta">已同步线程 {{.SyncedThreads}} / 总线程 {{.TotalThreads}} · 新建任务 {{.TaskCreated}} · 新建产物 {{.ArtifactCreated}}</div>
         <div class="meta">建议 blocked {{.SuggestedBlockedCount}} · 建议 doing {{.SuggestedDoingCount}} · 建议 done {{.SuggestedDoneCount}}</div>
+        <div class="meta">待风险跟进 {{.NeedsRiskFollowupCount}} · 待评审 {{.NeedsReviewCount}} · 待沉淀 {{.ReadyToDistillCount}} · 已沉淀待挂接 {{.DistilledUnassignedCount}} · 已完成 {{.CompletedCount}}</div>
+        {{if .HistoryLink}}
+          <p><a href="{{.HistoryLink}}">查看本轮批处理历史</a></p>
+        {{end}}
         {{if .CreatedTaskLinks}}
           <p><strong>本轮新建任务：</strong></p>
           <div class="links">
@@ -258,6 +327,7 @@
         <strong>{{if .Title}}{{.Title}}{{else}}{{.Decision}}{{end}}</strong>
         <p>{{.Decision}}</p>
         <div class="meta">decision {{.DecisionCount}} · risk {{.RiskCount}} · review {{.ReviewCount}} · 待跟进风险 {{.OpenRiskCount}} · 待处理评审 {{.PendingReview}} · 已提炼 {{.DistilledCount}}</div>
+        <div class="meta">工作流状态 {{.WorkflowLabel}} · 建议任务状态 {{.SuggestedTaskStatus}}</div>
         {{if .SuggestedTaskStatus}}<p><strong>建议任务状态：</strong>{{.SuggestedTaskStatus}}</p>{{end}}
         {{if .LatestSummary}}<p><strong>最近摘要：</strong>{{.LatestSummary}}</p>{{end}}
         {{if .LatestArtifact}}<p class="artifact-link"><strong>最近沉淀：</strong><a href="{{.LatestArtifact}}">打开对应 Review Summary</a></p>{{end}}

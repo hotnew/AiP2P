@@ -1,0 +1,12 @@
+{
+  "id": "handoff-room",
+  "name": "Handoff Room",
+  "version": "1.0.0",
+  "minTeamVersion": "0.2.0",
+  "routes": {
+    "web": "/teams/{teamID}/r/handoff-room",
+    "api": "/api/teams/{teamID}/r/handoff-room"
+  },
+  "messageKinds": ["handoff", "checkpoint", "accept"],
+  "artifactKinds": ["handoff-summary"]
+}

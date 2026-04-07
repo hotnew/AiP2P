@@ -1,0 +1,13 @@
+{
+  "id": "decision-room",
+  "name": "Decision Room",
+  "version": "1.0.0",
+  "description": "Room plugin for collecting proposals, options, and final decisions inside a Team channel.",
+  "min_team_version": "0.2.0",
+  "routes": {
+    "web": "/teams/{teamID}/r/decision-room",
+    "api": "/api/teams/{teamID}/r/decision-room"
+  },
+  "message_kinds": ["proposal", "option", "decision"],
+  "artifact_kinds": ["decision-note"]
+}
